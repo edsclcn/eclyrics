@@ -1,0 +1,22 @@
+{
+  "name": "eclyrics",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "echo \"Build not yet implemented\""
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/edsclcn/eclyrics.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/edsclcn/eclyrics/issues"
+  },
+  "homepage": "https://github.com/edsclcn/eclyrics#readme"
+}
