@@ -1,0 +1,356 @@
+@font-face {
+    font-family: 'Got';
+    src: url('../fonts/GOT.ttf') format('truetype');
+}
+
+/* General Reset */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+#name {
+    user-select: none;
+    font-family: 'Got';
+}
+
+/* Body Styling */
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #121212;
+    color: #ffffff;
+    margin: 0;
+    /* padding-bottom: 60px; Reserve space for the fixed footer */
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh; /* Ensure body takes full height */
+    overflow-x: hidden;
+    scrollbar-color: #555 #1f1f1f;
+    scrollbar-width: thin;
+}
+
+/* Dashboard Layout */
+.dashboard {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1; /* Allow content to grow and push footer down */
+}
+
+/* Navbar */
+.navbar {
+    background-color: #1f1f1f;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    position: relative;
+}
+
+.navbar-content {
+    display: flex;
+    align-items: center;
+}
+
+.navbar-content h2 {
+    font-size: 1.5rem;
+    color: #fff;
+    margin-right: 20px;
+}
+
+.navbar-content nav {
+    display: flex;
+    align-items: center;
+}
+
+#tabs-list {
+    list-style-type: none;
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+}
+
+.tab {
+    background-color: #333;
+    color: #bbb;
+    padding: 10px 22px 10px 10px;
+    border-radius: 5px;
+    cursor: pointer;
+    position: relative;
+    text-align: center;
+    align-items: center;
+    user-select: none;
+    font-family: 'Got';
+    font-size: 15px;
+}
+
+.tab span:hover {
+    align-self: center;
+    font-weight: bolder;
+    color: #f1948a;
+}
+
+.tab:hover {
+    background-color: #444;
+}
+
+.tab.active {
+    background-color: #306030;
+    color: #fff;
+}
+
+.close-btn {
+    position: absolute;
+    top: 7px;
+    right: 5px;
+    text-align: center;
+    font-size: 18px;
+    color: #bbb;
+    cursor: pointer;
+}
+
+#add-tab-btn {
+    user-select: none;
+    margin-left: 10px;
+    background-color: #306030;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+#button-div {
+    user-select: none;
+    margin-left: 20px;
+    position: absolute;
+    right: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.port-button {
+    user-select: none;
+    background-color: #306030;
+    color: white;
+    font-size: 16px;
+    border: none;
+    padding: 10px 10px;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+/* Main Content */
+.main-content {
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto;
+}
+
+.header {
+    margin-bottom: 20px;
+}
+
+.header h1 {
+    font-size: 2rem;
+    color: #fff;
+}
+
+/* Tab Content */
+.tab-pane {
+    display: none;
+    background-color: #1f1f1f;
+    padding: 20px;
+    border-radius: 8px;
+    margin-top: 20px;
+}
+
+/* Textareas Container */
+.textareas-container {
+    display: flex;
+    gap: 15px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.textareas-row {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+}
+
+.textarea-item {
+    flex: 1;
+    min-width: 150px;
+    max-width: 300px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.textarea-item textarea {
+    width: 230px;
+    height: 300px;
+    padding: 10px;
+    font-size: 14px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    background-color: #333;
+    color: #fff;
+    resize: none;
+    line-height: 1.5;
+}
+
+/* Buttons */
+.textarea-item .button-container {
+    display: flex;
+    justify-content: space-between;
+    gap: 5px;
+    user-select: none;
+}
+
+.textarea-item button {
+    padding: 10px;
+    font-size: 14px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-family: 'Got';
+}
+
+.textarea-item button:first-of-type {
+    background-color: #306030;
+    color: white;
+    flex: 80%;
+}
+
+.textarea-item .reset-scroll-btn {
+    background-color: #4C956C;
+    color: white;
+    flex: 20%;
+}
+
+/* Add Set Button */
+.add-set-btn {
+    user-select: none;
+    font-size: 15px;
+    background-color: #306030;
+    color: white;
+    padding: 13px;
+    margin-top: 20px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+/* Dark Mode Scrollbars */
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+::-webkit-scrollbar-track {
+    background: #1f1f1f;
+    border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #555;
+    border-radius: 5px;
+    border: 2px solid #1f1f1f;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #777;
+}
+
+.remove-set-btn-wrapper {
+    position: absolute;
+    top: 0;
+    right: -40px;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    width: 100%;
+    z-index: 1;
+}
+
+.remove-set-btn {
+    user-select: none;
+    background-color: #B00707;
+    width: 30px;
+    height: 30px;
+    border: none;
+    color: white;
+    border-radius: 7px;
+    font-size: 15px;
+    cursor: pointer;
+    z-index: 2;
+}
+
+/* FOOTER */
+/* Footer styles */
+.footer {
+    background-color: #222;
+    color: #fff;
+    text-align: center;
+    padding: 20px 0;
+    border-top: 1px solid #444;
+    position: relative;
+    width: 100%;
+}
+
+/* Footer content styles */
+.footer-content p {
+    margin: 0;
+    font-size: 14px;
+}
+
+.footer .social-links {
+    list-style: none;
+    padding: 0;
+    margin: 10px 0 0 0;
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+}
+
+.footer .social-links li {
+    display: inline-block;
+}
+
+.footer .social-links a {
+    color: #fff;
+    text-decoration: none;
+    font-size: 20px;
+    transition: color 0.3s ease;
+}
+
+.footer .social-links a:hover {
+    color: #00aced;
+}
+
+@media (max-width: 768px) {
+    .navbar {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .navbar-content {
+        width: 100%;
+        display: block;
+    }
+
+    #tabs-list {
+        flex-direction: column;
+    }
+}
+
+@media (max-width: 480px) {
+    .header h1 {
+        font-size: 1.5rem;
+    }
+}

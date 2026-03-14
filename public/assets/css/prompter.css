@@ -1,0 +1,230 @@
+@font-face {
+    font-family: 'Gara';
+    src: url('../fonts/GARA.TTF') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'Gara';
+    src: url('../fonts/GARABD.TTF') format('truetype');
+    font-weight: bold;
+    font-style: normal;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+}
+
+.text_area {
+    height: 25em;
+    background-color: #000;
+    color: #fff;
+    resize: none;
+}
+
+.text_area:focus {
+    background-color: #040404;
+    border: 3px solid #ffe100;
+    box-shadow: none;
+    color: #fff;
+}
+
+.text_area::placeholder {
+    color: #777;
+}
+
+.prompterCon {
+    height: 100vh;
+    width: 100%;
+    overflow: hidden;
+}
+
+#bgPrompter {
+    position: relative;
+}
+
+#bgPrompter.lyricsPrompter {
+    /*  
+        Original background
+        Replaced by identical manual linear gradient
+        background: linear-gradient(to right, rgb(74, 193, 254) 1%, rgb(78, 194, 255) 2%, rgb(82, 196, 255) 3%, rgb(87, 198, 254) 4%, rgb(93, 200, 254) 5%, rgb(99, 202, 254) 6%, rgb(106, 204, 254) 7%, rgb(113, 206, 254) 8%, rgb(121, 208, 254) 9%, rgb(128, 211, 254) 10%, rgb(134, 214, 254) 11%, rgb(143, 216, 254) 12%, rgb(150, 219, 254) 13%, rgb(157, 222, 254) 14%, rgb(165, 224, 254) 15%, rgb(172, 227, 254) 16%, rgb(176, 228, 254) 17%, rgb(180, 229, 254) 18%, rgb(184, 230, 254) 19%, rgb(186, 232, 255) 20%, rgb(190, 233, 254) 21%, rgb(194, 234, 254) 22%, rgb(198, 235, 254) 23%, rgb(200, 236, 254) 24%, rgb(204, 237, 254) 25%, rgb(207, 239, 254) 26%, rgb(211, 240, 254) 27%, rgb(214, 241, 253) 28%, rgb(217, 241, 254) 29%, rgb(220, 243, 255) 30%, rgb(223, 244, 254) 31%, rgb(226, 244, 253) 32%, rgb(228, 246, 254) 33%, rgb(231, 246, 255) 34%, rgb(234, 248, 254) 35%, rgb(236, 248, 254) 36%, rgb(239, 249, 254) 37%, rgb(241, 250, 254) 38%, rgb(241, 251, 253) 39%, rgb(244, 251, 254) 40%, rgb(247, 251, 255) 41%, rgb(248, 252, 255) 42%, rgb(249, 253, 255) 43%, rgb(251, 253, 254) 44%, rgb(252, 253, 255) 45%, rgb(253, 254, 254) 46%, rgb(254, 254, 254) 47%, rgb(254, 254, 254) 48%, rgb(255, 255, 255) 49%, rgb(255, 255, 255) 50%, rgb(255, 255, 255) 51%, rgb(255, 255, 255) 52%, rgb(254, 254, 254) 53%, rgb(254, 254, 254) 54%, rgb(253, 254, 254) 55%, rgb(252, 253, 255) 56%, rgb(251, 253, 254) 57%, rgb(249, 253, 255) 58%, rgb(248, 252, 255) 59%, rgb(247, 251, 255) 60%, rgb(244, 251, 254) 61%, rgb(241, 251, 253) 62%, rgb(241, 250, 254) 63%, rgb(239, 249, 254) 64%, rgb(236, 248, 254) 65%, rgb(234, 248, 254) 66%, rgb(231, 246, 255) 67%, rgb(228, 246, 254) 68%, rgb(226, 244, 253) 69%, rgb(223, 244, 254) 70%, rgb(220, 243, 255) 71%, rgb(217, 241, 254) 72%, rgb(214, 241, 253) 73%, rgb(211, 240, 254) 74%, rgb(207, 239, 254) 75%, rgb(204, 237, 254) 76%, rgb(200, 236, 254) 77%, rgb(198, 235, 254) 78%, rgb(194, 234, 254) 79%, rgb(190, 233, 254) 80%, rgb(186, 232, 255) 81%, rgb(184, 230, 254) 82%, rgb(180, 229, 254) 83%, rgb(176, 228, 254) 84%, rgb(172, 227, 254) 85%, rgb(165, 224, 254) 86%, rgb(157, 222, 254) 87%, rgb(150, 219, 254) 88%, rgb(143, 216, 254) 89%, rgb(134, 214, 254) 90%, rgb(128, 211, 254) 91%, rgb(121, 208, 254) 92%, rgb(113, 206, 254) 93%, rgb(106, 204, 254) 94%, rgb(99, 202, 254) 95%, rgb(93, 200, 254) 96%, rgb(87, 198, 254) 97%, rgb(82, 196, 255) 98%, rgb(78, 194, 255) 99%, rgb(74, 193, 254) 100%);
+
+        Appeals background
+        font-family: Calibri, sans-serif
+        background: linear-gradient(to right, rgb(219, 205, 162) 0%, rgb(219, 206, 166) 1%, rgb(220, 206, 168) 2%, rgb(221, 207, 167) 3%, rgb(223, 208, 166) 4%, rgb(223, 208, 166) 5%, rgb(222, 208, 169) 6%, rgb(221, 209, 173) 7%, rgb(220, 210, 174) 8%, rgb(220, 210, 174) 9%, rgb(221, 211, 175) 10%, rgb(222, 211, 177) 11%, rgb(223, 212, 177) 12%, rgb(223, 212, 177) 13%, rgb(223, 212, 179) 14%, rgb(224, 213, 181) 15%, rgb(224, 213, 181) 16%, rgb(225, 214, 184) 17%, rgb(225, 214, 186) 18%, rgb(226, 215, 188) 19%, rgb(227, 216, 190) 20%, rgb(227, 216, 190) 21%, rgb(227, 216, 192) 22%, rgb(228, 217, 193) 23%, rgb(228, 217, 195) 24%, rgb(228, 217, 195) 25%, rgb(229, 218, 196) 26%, rgb(229, 218, 198) 27%, rgb(230, 218, 198) 28%, rgb(230, 219, 199) 29%, rgb(230, 219, 201) 30%, rgb(230, 219, 203) 31%, rgb(230, 219, 203) 32%, rgb(230, 219, 204) 33%, rgb(231, 220, 204) 34%, rgb(231, 220, 205) 35%, rgb(231, 220, 207) 36%, rgb(232, 221, 207) 37%, rgb(232, 221, 208) 38%, rgb(232, 221, 210) 39%, rgb(232, 221, 210) 40%, rgb(233, 222, 211) 41%, rgb(233, 222, 213) 42%, rgb(233, 222, 213) 43%, rgb(233, 222, 213) 44%, rgb(234, 223, 214) 45%, rgb(234, 223, 215) 46%, rgb(234, 223, 217) 47%, rgb(234, 223, 217) 48%, rgb(234, 223, 217) 49%, rgb(234, 223, 217) 50%,rgb(234, 223, 217) 51%, rgb(234, 223, 217) 52%, rgb(234, 223, 215) 53%, rgb(234, 223, 214) 54%, rgb(233, 222, 213) 55%, rgb(233, 222, 213) 56%, rgb(233, 222, 213) 57%, rgb(233, 222, 211) 58%, rgb(232, 221, 210) 59%, rgb(232, 221, 210) 60%, rgb(232, 221, 208) 61%, rgb(232, 221, 207) 62%, rgb(231, 220, 207) 63%, rgb(231, 220, 205) 64%, rgb(231, 220, 204) 65%, rgb(230, 219, 204) 66%, rgb(230, 219, 203) 67%, rgb(230, 219, 203) 68%, rgb(230, 219, 201) 69%, rgb(230, 219, 199) 70%, rgb(229, 218, 198) 71%, rgb(229, 218, 198) 72%, rgb(228, 217, 196) 73%, rgb(228, 217, 195) 74%, rgb(228, 217, 195) 75%, rgb(227, 216, 193) 76%, rgb(227, 216, 192) 77%, rgb(227, 216, 190) 78%, rgb(226, 215, 190) 79%, rgb(225, 214, 188) 80%, rgb(225, 214, 186) 81%, rgb(224, 213, 184) 82%, rgb(224, 213, 181) 83%, rgb(224, 213, 181) 84%, rgb(223, 212, 179) 85%, rgb(223, 212, 177) 86%, rgb(223, 212, 177) 87%, rgb(222, 211, 175) 88%, rgb(220, 210, 174) 89%, rgb(220, 210, 174) 90%, rgb(221, 209, 173) 91%, rgb(222, 208, 169) 92%, rgb(223, 208, 166) 93%, rgb(223, 208, 166) 94%, rgb(221, 207, 167) 95%, rgb(220, 206, 168) 96%, rgb(219, 206, 166) 97%, rgb(219, 205, 162) 98%, rgb(219, 205, 162) 100%);
+    */
+    background-image: url('../images/lyricsBg.png');
+    background-repeat: no-repeat;
+    background-size: cover;
+}
+
+#bgPrompter.blackwhite {
+    background-color: #000;
+}
+
+#prompter-content {
+    position: absolute;
+    left: 0;
+    right: 0;
+    margin-left: auto;
+    margin-right: auto;
+    padding: 2px;
+    font-size: 100px;
+    line-height: 1.2em;
+    text-align: center;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+    user-select: none;
+    white-space: pre-line;
+    word-wrap: break-word;
+    width: 70vw;
+    max-width: 100vw;
+}
+
+.lyricsPrompter #prompter-content {
+    font-family: 'Gara' !important;
+    font-weight: 900;
+    letter-spacing: 2.5px;
+    color: #000;
+}
+
+.blackwhite #prompter-content {
+    font-family: Arial, Helvetica, sans-serif;
+    font-weight: 600;
+    color: #fff;
+}
+
+.hidden {
+    display: none !important;
+}
+
+.browse_image {
+    cursor: pointer;
+    color: #fff;
+    border-radius: 0.5em;
+}
+
+#imageContent {
+    -moz-user-select: none;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+#helpCard {
+    display: none;
+    position: absolute;
+    margin-top: 1rem;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+h5 {
+    font-size: 1.5rem;
+    font-weight: bold;
+}
+
+tr td:first-child {
+    width: 150px;
+}
+
+th {
+    font-weight: bold;
+}
+
+.form-control:focus {
+    box-shadow: none;
+    border-color: #ced4da;
+}
+
+.suggestions {
+    position: absolute;
+    background-color: #fff;
+    z-index: 100;
+    left: 0;
+    width: 85%;
+    margin-left: 1em;
+    max-height: 50%;
+    display: none;
+}
+
+.suggestions div {
+    padding: 1em 0.8em;
+    background-color: #fff;
+    cursor: pointer;
+}
+
+.suggestions div:hover {
+    background-color: #f0f0f0;
+    font-weight: bold;
+}
+
+#colorPickerPopup {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    background-color: #f0f0f0;
+    border: 1px solid #ccc;
+    padding: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.colorButton {
+    width: 50px;
+    height: 30px;
+    border: solid 1px;
+    margin: 5px;
+    cursor: pointer;
+}
+
+/* Text Formatting */
+
+.blackwhite .lyricTitle {
+    color: #ffff00;
+}
+
+span.r {
+    color: #ff0000;
+}
+
+span.g {
+    color: #00ff00;
+}
+
+span.b {
+    color: #0000ff;
+}
+
+span.y {
+    color: #ffff00;
+}
+
+span.v {
+    color: #9D00FF;
+}
+
+span.f {
+    color: #ffffff;
+}
+
+span.z {
+    color: #000000;
+}
+
+span.n {
+    font-weight: 400;
+}
+
+span.i {
+    font-style: italic;
+}
+
+span.u {
+    text-decoration: underline;
+}
