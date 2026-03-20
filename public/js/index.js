@@ -342,6 +342,10 @@ function initShell() {
     document.querySelectorAll('.sidebar-nav button').forEach((btn) => {
         btn.addEventListener('click', () => {
             const id = btn.dataset.panel;
+            if (id === 'admin') {
+                const a = window.__eclyricsAuth;
+                if (!a?.isAdmin) return;
+            }
             document.querySelectorAll('.sidebar-nav button').forEach((b) => {
                 b.classList.toggle('is-active', b === btn);
             });
@@ -352,6 +356,9 @@ function initShell() {
                 if (b === btn) b.setAttribute('aria-current', 'page');
                 else b.removeAttribute('aria-current');
             });
+            if (id === 'admin' && typeof window.eclyricsLoadAdminPanel === 'function') {
+                window.eclyricsLoadAdminPanel();
+            }
         });
     });
 
