@@ -7,39 +7,170 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link rel="stylesheet" href="assets/css/index.css">
     <link rel="icon" type="image/png" href="assets/images/logo.png">
-
-    <title>EC Prompter</title>
+    <title>EC Lyrics</title>
 </head>
 
 <body>
-    <div class="dashboard">
-        <header class="navbar">
-            <div class="navbar-content">
-                <h2 id="name">EC Prompter</h2>
-                <nav>
-                    <ul id="tabs-list"></ul>
-                    <button id="add-tab-btn" title="Add new tab">+</button>
-                    <div id="button-div">
-                        <button class="port-button" id="csv-btn" onclick="exportCSV()" title="Export titles to CSV"><i class="fa-solid fa-file-csv"></i></button>
-                        <button class="port-button" id="export-btn" onclick="exportLineup()" title="Export tab to Clipboard"><i class="fa-solid fa-download"></i></button>
-                        <button class="port-button" id="import-btn" onclick="importLineup()" title="Import Clipboard to tab"><i class="fa-solid fa-upload"></i></button>
+    <div class="app-shell" id="app-shell">
+        <aside class="sidebar" id="sidebar" aria-label="Main navigation">
+            <div class="sidebar-brand">
+                <div class="sidebar-brand-row">
+                    <div class="sidebar-brand-text">
+                        <h1>EC Lyrics</h1>
+                        <p class="sidebar-tagline">Lyric prompts and stage preview.</p>
                     </div>
-                </nav>
+                    <button type="button" class="sidebar-pin-btn" id="sidebar-toggle" title="Collapse sidebar"
+                        aria-expanded="true" aria-controls="sidebar">
+                        <i class="fa-solid fa-angles-left" aria-hidden="true"></i>
+                    </button>
+                </div>
             </div>
-        </header>
-        <main class="main-content">
-            <section class="tab-content" id="tab-content"></section>
-        </main>
-        <footer class="footer">
-            <div class="footer-content">
-                <p>&copy; MCGI Productions EDSA Caloocan. Intended for God's works.</p>
-                <p style="color: gray;">Jeremias 9:24</p>
-                <ul class="social-links">
-                    <li><a href="https://github.com/edsclcn" target="_blank" aria-label="github"><i class="fa-brands fa-github"></i></a></li>
-                </ul>
+            <nav class="sidebar-nav" role="navigation">
+                <button type="button" class="is-active" data-panel="text" aria-current="page"
+                    aria-label="Text Lyrics">
+                    <span class="nav-icon" aria-hidden="true"><i class="fa-solid fa-align-left"></i></span>
+                    <span class="nav-label">Text Lyrics</span>
+                </button>
+                <button type="button" data-panel="image" aria-label="Image Lyrics">
+                    <span class="nav-icon" aria-hidden="true"><i class="fa-solid fa-image"></i></span>
+                    <span class="nav-label">Image Lyrics</span>
+                </button>
+                <button type="button" data-panel="video" aria-label="Video Lyrics">
+                    <span class="nav-icon" aria-hidden="true"><i class="fa-solid fa-clapperboard"></i></span>
+                    <span class="nav-label">Video Lyrics</span>
+                </button>
+                <button type="button" data-panel="event" aria-label="Event Prompter">
+                    <span class="nav-icon" aria-hidden="true"><i class="fa-solid fa-bullhorn"></i></span>
+                    <span class="nav-label">Event Prompter</span>
+                </button>
+                <button type="button" data-panel="admin" aria-label="Admin">
+                    <span class="nav-icon" aria-hidden="true"><i class="fa-solid fa-shield"></i></span>
+                    <span class="nav-label">Admin</span>
+                </button>
+            </nav>
+            <div class="sidebar-footer">
+                <button type="button" class="theme-toggle" id="theme-toggle" aria-pressed="false">
+                    <i class="fa-solid fa-moon" aria-hidden="true"></i>
+                    <span id="theme-toggle-label">Dark mode</span>
+                </button>
             </div>
-        </footer>
+        </aside>
+
+        <div class="app-column">
+            <div class="app-main">
+                <section id="panel-text" class="panel is-active" aria-labelledby="panel-text-title">
+                    <h2 id="panel-text-title" class="visually-hidden">Text Lyrics</h2>
+                    <div class="workspace" id="workspace">
+                        <div class="workspace-editor">
+                            <div class="lyrics-toolbar">
+                                <div class="tabs-toolbar-row">
+                                    <ul id="tabs-list"></ul>
+                                    <button type="button" id="add-tab-btn" title="Add another song tab">+</button>
+                                    <div id="button-div">
+                                        <button type="button" class="port-button" id="csv-btn" onclick="exportCSV()"
+                                            title="Download first-line titles as CSV"><i
+                                                class="fa-solid fa-file-csv"></i></button>
+                                        <button type="button" class="port-button" id="export-btn"
+                                            onclick="exportLineup()" title="Download full lineup as a text file"><i
+                                                class="fa-solid fa-download"></i></button>
+                                        <button type="button" class="port-button" id="import-btn"
+                                            onclick="importLineup()" title="Load lineup from a text file"><i
+                                                class="fa-solid fa-upload"></i></button>
+                                    </div>
+                                </div>
+                                <div class="block-toolbar">
+                                    <span class="block-toolbar-label">Active block: <span
+                                            id="selected-block-title">—</span></span>
+                                    <div class="toolbar-actions">
+                                        <button type="button" class="btn-toolbar btn-toolbar-primary btn-toolbar-cta"
+                                            id="send-prompter-btn"
+                                            title="Send this tab to the lyric prompter window">
+                                            SEND TO PROMPTER
+                                        </button>
+                                        <button type="button" class="btn-toolbar" id="scroll-block-btn"
+                                            title="Scroll the selected block to the top">
+                                            Top
+                                        </button>
+                                    </div>
+                                    <p class="hint-inline">Select a block to edit. The narrow column is the full lyric;
+                                        the 16∶9 strip above tracks what the live prompter is showing.</p>
+                                </div>
+                            </div>
+                            <section id="tab-content" aria-label="Lyric blocks"></section>
+                        </div>
+                        <aside class="workspace-preview" aria-label="Stage preview">
+                            <div class="preview-header">Stage preview</div>
+                            <div class="preview-frame">
+                                <div class="preview-viewfinder-label">Live prompter view (16∶9)</div>
+                                <div class="preview-viewfinder-16x9" aria-hidden="true">
+                                    <div class="preview-viewfinder-stage-bg" aria-hidden="true"></div>
+                                    <div class="preview-viewfinder-clip">
+                                        <div class="preview-viewfinder-pan" id="preview-viewfinder-pan">
+                                            <div id="lyrics-preview-viewfinder" class="preview-empty"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="preview-portrait-label">Full block (scroll)</div>
+                                <div class="preview-portrait-body">
+                                    <div class="preview-bg preview-bg-portrait" id="lyrics-preview-bg">
+                                        <div id="lyrics-preview-content" class="preview-empty">Select a block to
+                                            preview formatted lyrics.</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </aside>
+                    </div>
+                </section>
+
+                <section id="panel-image" class="panel" aria-labelledby="panel-image-title">
+                    <div class="placeholder-panel">
+                        <h2 id="panel-image-title">Image Lyrics</h2>
+                        <p>Image-based lyric workflows will be available here.</p>
+                    </div>
+                </section>
+
+                <section id="panel-video" class="panel" aria-labelledby="panel-video-title">
+                    <div class="placeholder-panel">
+                        <h2 id="panel-video-title">Video Lyrics</h2>
+                        <p>Video lyric tools will be available here.</p>
+                    </div>
+                </section>
+
+                <section id="panel-event" class="panel" aria-labelledby="panel-event-title">
+                    <div class="placeholder-panel">
+                        <h2 id="panel-event-title">Event Prompter</h2>
+                        <p>Event prompting will be available here.</p>
+                    </div>
+                </section>
+
+                <section id="panel-admin" class="panel" aria-labelledby="panel-admin-title">
+                    <div class="placeholder-panel">
+                        <h2 id="panel-admin-title">Admin</h2>
+                        <p>Admin tools will be available here.</p>
+                    </div>
+                </section>
+            </div>
+
+            <footer class="app-footer">
+                <p>&copy; MCGI Productions EDSA Caloocan · Jeremias 9:24 · <a href="https://github.com/edsclcn"
+                        target="_blank" rel="noopener noreferrer">GitHub</a></p>
+            </footer>
+        </div>
     </div>
+
+    <style>
+        .visually-hidden {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+    </style>
     <script src="js/index.js"></script>
     <script src="js/port.js"></script>
     <script src="js/textformatting.js"></script>

@@ -1,0 +1,128 @@
+/* ─── EC Lyrics design tokens (light + dark) ─────────────────────────── */
+
+@font-face {
+    font-family: 'Satoshi';
+    src:
+        url('../fonts/Satoshi-Variable.woff2') format('woff2'),
+        url('../fonts/Satoshi-Variable.woff') format('woff'),
+        url('../fonts/Satoshi-Variable.ttf') format('truetype');
+    font-weight: 300 900;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Satoshi';
+    src:
+        url('../fonts/Satoshi-VariableItalic.woff2') format('woff2'),
+        url('../fonts/Satoshi-VariableItalic.woff') format('woff'),
+        url('../fonts/Satoshi-VariableItalic.ttf') format('truetype');
+    font-weight: 300 900;
+    font-style: italic;
+    font-display: swap;
+}
+
+/* Stage / preview — matches prompter.html lyric face when GARA files exist */
+@font-face {
+    font-family: 'Gara';
+    src: url('../fonts/GARA.TTF') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'Gara';
+    src: url('../fonts/GARABD.TTF') format('truetype');
+    font-weight: bold;
+    font-style: normal;
+}
+
+:root {
+    /* Brand blues */
+    --blue-pale: #bcd2e8;
+    --blue-mid: #73a5c6;
+    --blue-deep: #2e5984;
+
+    /* Grays (provided scale) */
+    --gray-lighter: #ddd;
+    --gray-lightest: #f5f5f5;
+    --gray-1: #3c3a3b;
+    --gray-2: #5f5d5e;
+    --gray-3: #898989;
+    --gray-4: #e0e0e0;
+    --gray-5: #f3f3f4;
+    --gray-6: #ededed;
+    --gray-900: #191b1b;
+
+    /* Semantic */
+    --background: #ffffff;
+    --background-subtle: var(--gray-5);
+    --foreground: var(--gray-900);
+    --foreground-muted: var(--gray-3);
+    --card: #ffffff;
+    --card-elevated: var(--gray-lightest);
+    --border: var(--gray-4);
+    --border-strong: var(--gray-lighter);
+
+    --primary: var(--blue-deep);
+    --primary-hover: #245078;
+    --primary-fg: #ffffff;
+    --accent: var(--blue-mid);
+    --accent-soft: var(--blue-pale);
+
+    --sidebar-bg: #ffffff;
+    --sidebar-border: var(--gray-4);
+    --nav-active-bg: linear-gradient(90deg, var(--blue-pale) 0%, rgba(188, 210, 232, 0.55) 100%);
+    --nav-hover-bg: var(--gray-6);
+
+    /* Main canvas: flat white; blue gradients live on toolbars, buttons, active nav */
+    --shell-bg: #ffffff;
+    --panel-bg: #ffffff;
+    --preview-chrome: var(--gray-6);
+    --chrome-gradient: linear-gradient(135deg, var(--blue-pale) 0%, #ffffff 45%, var(--blue-pale) 100%);
+
+    --danger: #c62828;
+    --danger-hover: #a32020;
+
+    --shadow-sm: 0 1px 2px rgba(46, 89, 132, 0.06);
+    --shadow-md: 0 8px 24px rgba(46, 89, 132, 0.1);
+
+    --font-sans: 'Satoshi', system-ui, -apple-system, sans-serif;
+    --font-stage: 'Gara', 'Times New Roman', Times, serif;
+
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+
+    --sidebar-width: 248px;
+    --sidebar-rail: 56px;
+}
+
+.dark {
+    --background: #000000;
+    --background-subtle: #0f0f0f;
+    --foreground: #f5f5f5;
+    --foreground-muted: #9a9a9a;
+    --card: #121212;
+    --card-elevated: #1a1a1a;
+    --border: #2a2a2a;
+    --border-strong: #333333;
+
+    --primary: var(--blue-mid);
+    --primary-hover: #8bb8d4;
+    --primary-fg: #0a0a0a;
+    --accent: var(--blue-pale);
+    --accent-soft: rgba(115, 165, 198, 0.2);
+
+    --sidebar-bg: #000000;
+    --sidebar-border: #1f1f1f;
+    --nav-active-bg: linear-gradient(90deg, rgba(46, 89, 132, 0.5) 0%, rgba(115, 165, 198, 0.25) 100%);
+    --nav-hover-bg: #141414;
+
+    --shell-bg: #000000;
+    --panel-bg: #000000;
+    --preview-chrome: #141414;
+    --chrome-gradient: linear-gradient(135deg, #0d1520 0%, #000000 50%, #0a1622 100%);
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+    --shadow-md: 0 12px 32px rgba(0, 0, 0, 0.55);
+}

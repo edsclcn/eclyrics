@@ -6,7 +6,12 @@ function exportLineup() {
         return;
     }
 
-    const tabId = document.getElementById('tabs-list').getElementsByClassName('active')[0].dataset.tabId;
+    const activeTabEl = document.querySelector('#tabs-list .tab.active');
+    if (!activeTabEl) {
+        alert('No selected tab!');
+        return;
+    }
+    const tabId = activeTabEl.dataset.tabId;
     const tab = document.getElementById(`tab-${tabId}`);
     const textareas = tab.querySelectorAll('textarea');
 
@@ -24,7 +29,7 @@ function exportLineup() {
 
     if (data) {
         download(
-            now.toISOString().slice(0, 10).replace(/-/g, '')  + "_" + document.getElementById('tabs-list').getElementsByClassName('active')[0].firstChild.textContent + '_line_up.txt',
+            now.toISOString().slice(0, 10).replace(/-/g, '')  + "_" + document.querySelector('#tabs-list .tab.active').firstChild.textContent + '_line_up.txt',
             data
         )
     } else alert('Lineup is empty! Export was unsuccessful.');
@@ -32,13 +37,15 @@ function exportLineup() {
 
 function importLineup() {
     let importBtn = document.getElementById('import-btn');
-    importBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    importBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
 
     upload()
         .then(values => {
             if (!values) return;
 
-            const tabId = parseInt(document.getElementById('tabs-list').getElementsByClassName('active')[0].dataset.tabId);
+            const activeImp = document.querySelector('#tabs-list .tab.active');
+            if (!activeImp) return;
+            const tabId = parseInt(activeImp.dataset.tabId, 10);
             const addBtn = document.getElementById(`add-set-${tabId}`);
             let current = 0;
             for (let i = 1; true; i++) {
@@ -56,6 +63,10 @@ function importLineup() {
                     current++;
                 }
             }
+            if (typeof refreshAllBlockLabelsInTab === 'function') refreshAllBlockLabelsInTab(tabId);
+            if (typeof refreshPreviewVisibility === 'function') refreshPreviewVisibility();
+            if (typeof updatePreview === 'function') updatePreview();
+            if (typeof updateActiveBlockToolbar === 'function') updateActiveBlockToolbar();
         })
         .catch(err => {
             alert(`Failed to import lineup: ${err}`);
@@ -113,7 +124,11 @@ function upload() {
 }
 
 function exportCSV() {
-    let currentTab = document.getElementsByClassName('active')[0];
+    const currentTab = document.querySelector('#tabs-list .tab.active');
+    if (!currentTab) {
+        alert('No tab selected.');
+        return;
+    }
 
     let dataString = "";
     for (let i = 1; true; i++){
