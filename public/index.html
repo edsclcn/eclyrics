@@ -11,6 +11,16 @@
 </head>
 
 <body>
+    <div id="auth-gate" class="auth-gate" role="dialog" aria-modal="true" aria-labelledby="auth-gate-title">
+        <div class="auth-gate-card">
+            <h2 id="auth-gate-title" class="auth-gate-title">Sign in</h2>
+            <p id="auth-error" class="auth-gate-error" role="alert"></p>
+            <button type="button" id="auth-sign-in-google" class="auth-gate-google-btn">
+                <i class="fa-brands fa-google" aria-hidden="true"></i> Continue with Google
+            </button>
+        </div>
+    </div>
+
     <div class="app-shell" id="app-shell">
         <aside class="sidebar" id="sidebar" aria-label="Main navigation">
             <div class="sidebar-brand">
@@ -43,12 +53,19 @@
                     <span class="nav-icon" aria-hidden="true"><i class="fa-solid fa-bullhorn"></i></span>
                     <span class="nav-label">Event Prompter</span>
                 </button>
-                <button type="button" data-panel="admin" aria-label="Admin">
+                <button type="button" data-panel="admin" aria-label="Admin" id="sidebar-nav-admin" hidden>
                     <span class="nav-icon" aria-hidden="true"><i class="fa-solid fa-shield"></i></span>
                     <span class="nav-label">Admin</span>
                 </button>
             </nav>
             <div class="sidebar-footer">
+                <div class="sidebar-auth" id="sidebar-auth">
+                    <span class="sidebar-auth-user" id="auth-user-label" aria-live="polite"></span>
+                    <button type="button" class="sidebar-auth-out" id="auth-sign-out" hidden title="Sign out">
+                        <i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i>
+                        <span class="nav-label">Sign out</span>
+                    </button>
+                </div>
                 <button type="button" class="theme-toggle" id="theme-toggle" aria-pressed="false">
                     <i class="fa-solid fa-moon" aria-hidden="true"></i>
                     <span id="theme-toggle-label">Dark mode</span>
@@ -146,7 +163,10 @@
                 <section id="panel-admin" class="panel" aria-labelledby="panel-admin-title">
                     <div class="placeholder-panel">
                         <h2 id="panel-admin-title">Admin</h2>
-                        <p>Admin tools will be available here.</p>
+                        <p>Admin-only tools and data. Access is enforced in Firestore rules (<code>admins</code> /
+                            <code>admin_data</code>).</p>
+                        <p class="admin-rbac-lead"><strong>admin_data/welcome</strong> (read test, admins only):</p>
+                        <pre id="admin-panel-firestore-sample" class="admin-firestore-sample" aria-live="polite"></pre>
                     </div>
                 </section>
             </div>
@@ -171,9 +191,15 @@
             border: 0;
         }
     </style>
-    <script src="js/index.js"></script>
-    <script src="js/port.js"></script>
-    <script src="js/textformatting.js"></script>
+    <!-- gstatic CDN: works on any host. /__/firebase/... only works on Firebase Hosting. -->
+    <script defer src="https://www.gstatic.com/firebasejs/12.10.0/firebase-app-compat.js"></script>
+    <script defer src="https://www.gstatic.com/firebasejs/12.10.0/firebase-auth-compat.js"></script>
+    <script defer src="https://www.gstatic.com/firebasejs/12.10.0/firebase-firestore-compat.js"></script>
+    <script defer src="js/firebase-config.js"></script>
+    <script defer src="js/auth.js"></script>
+    <script defer src="js/index.js"></script>
+    <script defer src="js/port.js"></script>
+    <script defer src="js/textformatting.js"></script>
 </body>
 
 </html>
