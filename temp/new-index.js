@@ -1,23 +1,109 @@
 const AREA_PER_ROW = 5;
 const SESSION_ID = Math.random().toString().substring(2);
-
+const PREVIEW_UNLOCK_KEY = 'eclyrics-preview-unlocked';
 const PROMPTER_POPUP_W = 1920;
 const PROMPTER_POPUP_H = 1080;
-
-const bcast = new BroadcastChannel("eclyrics-" + SESSION_ID);
+const PROMPTER_BC_NAME = 'eclyrics-prompter';
+/** Single reused popup name so Send never opens a second window while the first is open. */
+const PROMPTER_WINDOW_NAME = 'eclyricsPrompter';
 
 let tabCount = 0;
+let prompterBroadcast = null;
+let lastPrompterSync = null;
+let prompterPopupWindow = null;
 let activeTabs = [];
-let prompterWindow = null;
-let selectedTextArea = null;
 let textNum = {};
 
-const BLOCK_TITLE_MAX_LEN = 25;
+function isPreviewUnlocked() {
+    return localStorage.getItem(PREVIEW_UNLOCK_KEY) === '1';
+}
+
+function unlockPreviewPanel() {
+    localStorage.setItem(PREVIEW_UNLOCK_KEY, '1');
+}
+
+function anyBlockHasText() {
+    return [...document.querySelectorAll('#tab-content textarea')].some((t) => t.value.trim().length > 0);
+}
+
+function refreshPreviewVisibility() {
+    const w = document.getElementById('workspace');
+    if (!w) return;
+    const shouldShow = isPreviewUnlocked() || anyBlockHasText();
+    if (shouldShow) {
+        if (!isPreviewUnlocked() && anyBlockHasText()) unlockPreviewPanel();
+        w.classList.add('preview-ready');
+    } else {
+        w.classList.remove('preview-ready');
+    }
+}
+
+function defaultPrompterSync() {
+    const fs = parseFloat(localStorage.getItem('eclyrics-prompter-fontSize'));
+    const cw = parseFloat(localStorage.getItem('eclyrics-prompter-width'));
+    return {
+        type: 'eclyrics-prompter-sync',
+        top: 0,
+        vw: PROMPTER_POPUP_W,
+        vh: PROMPTER_POPUP_H,
+        fs: !Number.isNaN(fs) ? fs : 138,
+        cw: !Number.isNaN(cw) ? cw : PROMPTER_POPUP_W * 0.7,
+    };
+}
+
+function applyViewfinderFromPrompterSync() {
+    const wrap = document.querySelector('.preview-viewfinder-16x9');
+    const pan = document.getElementById('preview-viewfinder-pan');
+    const inner = document.getElementById('lyrics-preview-viewfinder');
+    if (!wrap || !pan || !inner) return;
+
+    if (inner.classList.contains('preview-empty')) {
+        inner.style.width = '';
+        inner.style.fontSize = '';
+        inner.style.letterSpacing = '';
+        pan.style.transform = 'translate(-50%, 0)';
+        return;
+    }
+
+    const data = lastPrompterSync || defaultPrompterSync();
+    const vw = data.vw || PROMPTER_POPUP_W;
+    const k = Math.max(0.04, wrap.clientWidth / vw);
+    const top = typeof data.top === 'number' ? data.top : 0;
+    const fs = data.fs || 138;
+    const cw = data.cw || vw * 0.7;
+
+    inner.style.width = `${cw * k}px`;
+    inner.style.fontSize = `${fs * k}px`;
+    inner.style.letterSpacing = `${2.5 * k}px`;
+    pan.style.transform = `translate(-50%, ${top * k}px)`;
+}
+
+function initPrompterBroadcast() {
+    try {
+        prompterBroadcast = new BroadcastChannel(PROMPTER_BC_NAME);
+    } catch (e) {
+        prompterBroadcast = null;
+    }
+    if (!prompterBroadcast) return;
+
+    prompterBroadcast.onmessage = (ev) => {
+        if (!ev.data || ev.data.type !== 'eclyrics-prompter-sync') return;
+        lastPrompterSync = ev.data;
+        applyViewfinderFromPrompterSync();
+    };
+
+    const wrap = document.querySelector('.preview-viewfinder-16x9');
+    if (wrap && typeof ResizeObserver !== 'undefined') {
+        new ResizeObserver(() => applyViewfinderFromPrompterSync()).observe(wrap);
+    }
+}
 
 function getActiveTabId() {
     const t = document.querySelector('#tabs-list .tab.active');
     return t ? parseInt(t.dataset.tabId, 10) : null;
 }
+
+const BLOCK_TITLE_MAX_LEN = 52;
 
 function getCustomBlockTitle(textarea) {
     return (textarea.dataset.blockTitle || '').trim();
@@ -76,7 +162,7 @@ function updateActiveBlockToolbar() {
         return;
     }
 
-    if (titleEl) titleEl.textContent = getBlockTitleDisplay(ta).toUpperCase();
+    if (titleEl) titleEl.textContent = getBlockTitleDisplay(ta);
 
     const cell = ta.closest('.textarea-cell');
     const isLive = cell?.classList.contains('is-live');
@@ -97,7 +183,8 @@ function renameBlockLabel(textarea) {
     if (trimmed === '') delete textarea.dataset.blockTitle;
     else textarea.dataset.blockTitle = trimmed;
     updateBlockCellLabel(textarea);
-    if (selectedTextArea === textarea) updateActiveBlockToolbar();
+    const cur = textNum[getActiveTabId()?.toString()]?.[2];
+    if (cur === textarea) updateActiveBlockToolbar();
 }
 
 function selectTextarea(textarea) {
@@ -112,19 +199,62 @@ function selectTextarea(textarea) {
     const cell = textarea.closest('.textarea-cell');
     if (cell) cell.classList.add('is-selected');
 
-    selectedTextArea = textarea;
+    textNum[tabId][2] = textarea;
     updateActiveBlockToolbar();
+    updatePreview();
 }
 
 function getSelectedTextareaForActiveTab() {
     const tabId = getActiveTabId();
-    if (!tabId) return null;
+    if (!tabId || !textNum[tabId.toString()]) return null;
 
-    if (selectedTextArea && document.body.contains(selectedTextArea)) return selectedTextArea;
+    let ta = textNum[tabId.toString()][2];
+    if (ta && document.body.contains(ta)) return ta;
 
     const first = document.querySelector(`#tab-${tabId} textarea`);
     if (first) selectTextarea(first);
     return first;
+}
+
+function updatePreview() {
+    const el = document.getElementById('lyrics-preview-content');
+    const vf = document.getElementById('lyrics-preview-viewfinder');
+    if (!el) return;
+
+    const tabId = getActiveTabId();
+    const ta = tabId && textNum[tabId.toString()] ? textNum[tabId.toString()][2] : null;
+
+    if (!ta || !document.body.contains(ta)) {
+        el.className = 'preview-empty';
+        el.textContent = 'Select a block to preview formatted lyrics.';
+        if (vf) {
+            vf.className = 'preview-empty';
+            vf.textContent = el.textContent;
+        }
+        applyViewfinderFromPrompterSync();
+        return;
+    }
+
+    const raw = ta.value;
+    if (!raw.trim()) {
+        el.className = 'preview-empty';
+        el.textContent = 'Empty block — lyrics will appear here.';
+        if (vf) {
+            vf.className = 'preview-empty';
+            vf.textContent = el.textContent;
+        }
+        applyViewfinderFromPrompterSync();
+        return;
+    }
+
+    const html = formatText(raw);
+    el.className = '';
+    el.innerHTML = html;
+    if (vf) {
+        vf.className = '';
+        vf.innerHTML = html;
+    }
+    applyViewfinderFromPrompterSync();
 }
 
 function syncThemeToggle(dark) {
@@ -173,6 +303,9 @@ function initSidebarCollapse() {
 
 function initShell() {
     initSidebarCollapse();
+    refreshPreviewVisibility();
+    initPrompterBroadcast();
+    applyViewfinderFromPrompterSync();
 
     window.addEventListener('storage', (e) => {
         if (e.key === 'eclyrics-prompter-fontSize' || e.key === 'eclyrics-prompter-width') {
@@ -187,6 +320,7 @@ function initShell() {
             }
             lastPrompterSync = base;
             applyViewfinderFromPrompterSync();
+            updatePreview();
         }
     });
 
@@ -254,11 +388,13 @@ function initShell() {
         });
         tc.addEventListener('input', (e) => {
             if (!e.target.matches || !e.target.matches('textarea')) return;
+            refreshPreviewVisibility();
             const m = e.target.id.match(/^textarea-(\d+)-/);
             const tid = m ? parseInt(m[1], 10) : null;
             if (tid != null) refreshAllBlockLabelsInTab(tid);
-            const sel = tid != null && selectedTextArea;
+            const sel = tid != null && textNum[tid.toString()] ? textNum[tid.toString()][2] : null;
             if (tid === getActiveTabId() && sel === e.target) {
+                updatePreview();
                 updateActiveBlockToolbar();
             }
         });
@@ -273,7 +409,7 @@ function addTab() {
 
     tabCount++;
     activeTabs.push(tabCount);
-    textNum[tabCount.toString()] = 0;
+    textNum[tabCount.toString()] = [0, null, null];
 
     const tab = document.createElement('li');
     tab.classList.add('tab');
@@ -328,7 +464,7 @@ function createTextareasRow(container, tabId) {
     rowContainer.classList.add('textareas-row');
 
     for (let i = 1; i <= AREA_PER_ROW; i++) {
-        const textId = ++textNum[tabId.toString()];
+        const textId = ++textNum[tabId.toString()][0];
 
         const cell = document.createElement('div');
         cell.classList.add('textarea-cell');
@@ -354,9 +490,10 @@ function createTextareasRow(container, tabId) {
                 const mid = textarea.id.match(/^textarea-(\d+)-/);
                 const tid = mid ? parseInt(mid[1], 10) : null;
                 if (tid != null) refreshAllBlockLabelsInTab(tid);
-                const sel = tid != null && selectedTextArea;
+                const sel = tid != null && textNum[tid.toString()] ? textNum[tid.toString()][2] : null;
                 if (tid === getActiveTabId() && sel === textarea) {
                     updateActiveBlockToolbar();
+                    updatePreview();
                 }
             }, 0);
         });
@@ -379,6 +516,7 @@ function createTextareasRow(container, tabId) {
         if (first) selectTextarea(first);
         else {
             updateActiveBlockToolbar();
+            updatePreview();
         }
     };
 
@@ -403,7 +541,9 @@ function showTabContent(tabId) {
         if (first) selectTextarea(first);
         else {
             updateActiveBlockToolbar();
+            updatePreview();
         }
+        refreshPreviewVisibility();
     }
 }
 
@@ -411,7 +551,7 @@ function rearrangeTextAreas(tabId) {
     const tab = document.getElementById(`tab-${tabId}`);
     const textareas = tab.querySelectorAll('textarea');
     const newTextAreaCount = textareas.length;
-    textNum[tabId.toString()] = newTextAreaCount;
+    textNum[tabId.toString()][0] = newTextAreaCount;
 
     let newTextId = 0;
     for (const textarea of textareas) {
@@ -436,6 +576,8 @@ function handleTabClose(tab) {
         if (activeTabs.length > 0) showTabContent(activeTabs[activeTabs.length - 1]);
         else {
             updateActiveBlockToolbar();
+            updatePreview();
+            refreshPreviewVisibility();
         }
     }
 }
@@ -446,20 +588,64 @@ function renameTab(tab) {
 }
 
 function sendPrompt(tabId, textId) {
-    let data = [];
-    for (let i = 1; true; i++){
+    const data = [];
+    for (let i = 1; true; i++) {
         const textarea = document.getElementById(`textarea-${tabId}-${i}`);
         if (!textarea) break;
-        data.push("\n" + formatText(textarea.value));
+        data.push('\n' + formatText(textarea.value));
     }
 
-    const title = `${SESSION_ID}`;
-    localStorage.setItem(title, JSON.stringify(data));
-    localStorage.setItem(title + "-current", textId-1);
-    if (!prompterWindow || prompterWindow.closed) prompterWindow = window.open(`prompter.html?title=${encodeURIComponent(title)}`, title, 'width=1920,height=1080');
-    else {
-        bcast.postMessage("current_change")
+    const lineupKey = `${SESSION_ID}-${tabId}`;
+    localStorage.setItem(lineupKey, JSON.stringify(data));
+
+    document.querySelectorAll(`#tab-${tabId} .textarea-cell`).forEach((c) => c.classList.remove('is-live'));
+
+    const activeTa = document.getElementById(`textarea-${tabId}-${textId}`);
+    if (activeTa) {
+        const cell = activeTa.closest('.textarea-cell');
+        if (cell) cell.classList.add('is-live');
+        textNum[tabId.toString()][2] = activeTa;
+        document.querySelectorAll(`#tab-${tabId} .textarea-cell.is-selected`).forEach((c) => c.classList.remove('is-selected'));
+        if (cell) cell.classList.add('is-selected');
+        updateActiveBlockToolbar();
     }
+
+    const payload = {
+        type: 'eclyrics-prompter-load',
+        lineupKey,
+        currentIndex: textId - 1,
+    };
+
+    const targetOrigin =
+        window.location.origin && window.location.origin !== 'null' ? window.location.origin : '*';
+
+    if (prompterPopupWindow && !prompterPopupWindow.closed) {
+        try {
+            prompterPopupWindow.postMessage(payload, targetOrigin);
+            prompterPopupWindow.focus();
+            textNum[tabId.toString()][1] = prompterPopupWindow;
+            updatePreview();
+            return;
+        } catch (e) {
+            prompterPopupWindow = null;
+        }
+    }
+
+    const left = Math.max(0, Math.round((window.screen.availWidth - PROMPTER_POPUP_W) / 2));
+    const top = Math.max(0, Math.round((window.screen.availHeight - PROMPTER_POPUP_H) / 2));
+    const popupFeatures = [
+        'popup=yes',
+        `width=${PROMPTER_POPUP_W}`,
+        `height=${PROMPTER_POPUP_H}`,
+        `left=${left}`,
+        `top=${top}`,
+    ].join(',');
+
+    const url = `prompter.html?title=${encodeURIComponent(lineupKey)}&current=${textId - 1}`;
+    prompterPopupWindow = window.open(url, PROMPTER_WINDOW_NAME, popupFeatures);
+    textNum[tabId.toString()][1] = prompterPopupWindow;
+    if (prompterPopupWindow) prompterPopupWindow.focus();
+    updatePreview();
 }
 
 document.getElementById('add-tab-btn').addEventListener('click', addTab);
@@ -473,12 +659,12 @@ document.getElementById('tabs-list').addEventListener('click', (e) => {
 document.addEventListener('DOMContentLoaded', initShell);
 window.onload = () => {
     addTab();
+    refreshPreviewVisibility();
+    applyViewfinderFromPrompterSync();
 };
 
 window.addEventListener('beforeunload', function () {
-    const title = `${SESSION_ID}`;
     for (let i = 1; i <= tabCount; i++) {
-        this.localStorage.removeItem(title);
-        this.localStorage.removeItem(title + "-current");
+        this.localStorage.removeItem(`${SESSION_ID}-${i}`);
     }
 });

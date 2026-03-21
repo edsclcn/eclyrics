@@ -2,29 +2,53 @@ const DOUBLE_CLICK_INTERVAL = 500;
 const TOP_SPEED = 6.5;
 const SPEED_CONTROL = 0.1;
 
+/** Sync font/width to localStorage so the main app preview can match the prompter window. */
+function syncPreviewMetricsFromSession() {
+    const fs = sessionStorage.getItem('fontSize');
+    const w = sessionStorage.getItem('prompterWidth');
+    if (fs) localStorage.setItem('eclyrics-prompter-fontSize', fs);
+    if (w) localStorage.setItem('eclyrics-prompter-width', w);
+}
+
+let prompterBroadcastChannel = null;
+try {
+    prompterBroadcastChannel = new BroadcastChannel('eclyrics-prompter');
+} catch (e) {
+    prompterBroadcastChannel = null;
+}
+
+function broadcastPrompterState() {
+    if (!prompterBroadcastChannel || !prompterContent) return;
+    const fs = parseFloat(window.getComputedStyle(prompterContent).fontSize);
+    prompterBroadcastChannel.postMessage({
+        type: 'eclyrics-prompter-sync',
+        top: scrollPosition,
+        vw: window.innerWidth,
+        vh: window.innerHeight,
+        fs: Number.isNaN(fs) ? 138 : fs,
+        cw: prompterContent.offsetWidth,
+    });
+}
+
+let scrollBroadcastTick = 0;
+
 const prompterContainer = document.getElementById("bgPrompter");
 const prompterContent = document.getElementById("prompter-content");
-const title = getUrlParameter('title');
-
-const bcast = new BroadcastChannel("eclyrics-" + title);
-
-let data = JSON.parse(localStorage.getItem(title));
-let currentIndex = localStorage.getItem(title + '-current');
-let lastPressed = [0, 0];
-let toChangeContent = false;
-
-bcast.onmessage = (event) => {
-    console.log(event)
-    data = JSON.parse(localStorage.getItem(title));
-    if (event.data == "current_change") {
-        currentIndex = localStorage.getItem(title + '-current');
-        toChangeContent = true;
+let lineupKey = getUrlParameter('title');
+let data = null;
+if (lineupKey) {
+    const stored = localStorage.getItem(lineupKey);
+    if (stored) {
+        try {
+            data = JSON.parse(stored);
+        } catch (e) {
+            data = null;
+        }
     }
-};
-
-//setInterval(() => {
-//    if (toChangeContent) setText(currentIndex);
-//}, 32); // ~60 FPS
+}
+let currentIndex = parseInt(getUrlParameter('current'), 10);
+if (Number.isNaN(currentIndex)) currentIndex = 0;
+let lastPressed = [0, 0];
 
 function getUrlParameter(name) {
     name = name.replace(/[\[]/, '\\[').replace(/[\]]/, '\\]');
@@ -34,18 +58,25 @@ function getUrlParameter(name) {
 }
 
 window.onload = function () {
-    var title = getUrlParameter('title');
-    if (title) document.title = title;
+    var t = getUrlParameter('title');
+    if (t) document.title = t;
+    broadcastPrompterState();
+    setTimeout(tryInitialPrompterFullscreen, 150);
 };
 
-//Font size
+//Font size (default 138px matches 1920-wide stage; synced for main-app preview)
 let fontSize = sessionStorage.getItem('fontSize');
 if (fontSize) prompterContent.style.fontSize = fontSize + 'px';
-else prompterContent.style.fontSize = '138px';
+else {
+    prompterContent.style.fontSize = '138px';
+    sessionStorage.setItem('fontSize', '138');
+}
+syncPreviewMetricsFromSession();
 
 //Prompter width
 let prompterWidth = sessionStorage.getItem('prompterWidth');
 if (prompterWidth) prompterContent.style.width = prompterWidth + "px";
+syncPreviewMetricsFromSession();
 
 //Scrolling
 prompterContent.style.top = "0px";
@@ -57,6 +88,7 @@ let scrollSpeed = 0.5;
 function scrollScript() {
     scrollPosition -= scrollSpeed;
     prompterContent.style.top = scrollPosition + "px";
+    if (scrollBroadcastTick++ % 2 === 0) broadcastPrompterState();
     animationLoop = requestAnimationFrame(scrollScript);
 }
 
@@ -78,11 +110,38 @@ function pauseScroll() {
 setText(currentIndex);
 
 function setText(index) {
+    const i = parseInt(index, 10);
+    if (Number.isNaN(i)) return;
+    currentIndex = i;
     if (scrollingNow) pauseScroll();
     scrollPosition = 0;
     prompterContent.style.top = "0px";
-    prompterContent.innerHTML = data ? data[index] : '\nNo content. Close the window.';
+    prompterContent.innerHTML = data && data[currentIndex] != null ? data[currentIndex] : '\nNo content. Close the window.';
+    broadcastPrompterState();
 }
+
+window.addEventListener('message', (event) => {
+    const msg = event.data;
+    if (!msg || msg.type !== 'eclyrics-prompter-load') return;
+    if (window.opener && event.source !== window.opener) return;
+    const key = msg.lineupKey;
+    const idx = parseInt(msg.currentIndex, 10);
+    if (!key || Number.isNaN(idx)) return;
+    const raw = localStorage.getItem(key);
+    if (!raw) return;
+    lineupKey = key;
+    data = JSON.parse(raw);
+    setText(idx);
+    document.title = key;
+    try {
+        const u = new URL(window.location.href);
+        u.searchParams.set('title', key);
+        u.searchParams.set('current', String(idx));
+        history.replaceState(null, '', u.pathname + u.search);
+    } catch (e) {
+        /* file:// or older browsers */
+    }
+});
 
 //Initial theme
 if (sessionStorage.getItem('prompterType') === 'LYRICS_PROMPTER') {
@@ -171,12 +230,14 @@ var keydownListener = function (event) {
             pauseScroll();
             scrollPosition = prompterContent.offsetTop > -50 ? 0 : scrollPosition + 50;
             prompterContent.style.top = scrollPosition + "px";
+            broadcastPrompterState();
             break;
         case 'ArrowDown':
             event.preventDefault();
             pauseScroll();
             scrollPosition -= 50;
             prompterContent.style.top = scrollPosition + "px";
+            broadcastPrompterState();
             break;
         case 'F11': case 'KeyF':
             event.preventDefault();
@@ -191,12 +252,16 @@ var keydownListener = function (event) {
             var newSize = parseInt(window.getComputedStyle(prompterContent).fontSize) - 2;
             prompterContent.style.fontSize = newSize + 'px';
             sessionStorage.setItem('fontSize', newSize);
+            localStorage.setItem('eclyrics-prompter-fontSize', String(newSize));
+            broadcastPrompterState();
             break;
         case 'BracketRight': case 'F9':
             event.preventDefault();
             var newSize = parseInt(window.getComputedStyle(prompterContent).fontSize) + 2;
             prompterContent.style.fontSize = newSize + 'px';
             sessionStorage.setItem('fontSize', newSize);
+            localStorage.setItem('eclyrics-prompter-fontSize', String(newSize));
+            broadcastPrompterState();
             break;
         case 'Minus':
             event.preventDefault();
@@ -204,6 +269,8 @@ var keydownListener = function (event) {
             if (currentWidth >= screen.availWidth / 3) {
                 prompterContent.style.width = currentWidth + "px";
                 sessionStorage.setItem('prompterWidth', currentWidth);
+                localStorage.setItem('eclyrics-prompter-width', String(currentWidth));
+                broadcastPrompterState();
             }
             break;
         case 'Equal':
@@ -212,6 +279,8 @@ var keydownListener = function (event) {
             if (currentWidth <= screen.availWidth) {
                 prompterContent.style.width = currentWidth + "px";
                 sessionStorage.setItem('prompterWidth', currentWidth);
+                localStorage.setItem('eclyrics-prompter-width', String(currentWidth));
+                broadcastPrompterState();
             }
             break;
         case 'KeyT':
@@ -219,6 +288,7 @@ var keydownListener = function (event) {
             if (scrollingNow) break;
             scrollPosition = 0;
             prompterContent.style.top = "0px";
+            broadcastPrompterState();
             break;
         case 'NumpadSubtract':
             event.preventDefault();
@@ -242,7 +312,7 @@ var keydownListener = function (event) {
             text[1] = `<span class='lyricTitle'>${text[1]}</span>`;
             prompterContent.innerHTML = text.join('\n');
             data[currentIndex] = prompterContent.innerHTML;
-            localStorage.setItem(title, JSON.stringify(data));
+            localStorage.setItem(lineupKey, JSON.stringify(data));
             break;
     }
 };
@@ -256,7 +326,7 @@ window.addEventListener('keydown', function (event) {
         if (prompterContent.contentEditable === "true") {
             prompterContent.contentEditable = "false";
             data[currentIndex] = prompterContent.innerHTML;
-            localStorage.setItem(title, JSON.stringify(data));
+            localStorage.setItem(lineupKey, JSON.stringify(data));
             notEditable();
         } else {
             prompterContent.contentEditable = "true";
@@ -286,19 +356,28 @@ var wheelListener = function (event) {
             var newSize = parseInt(window.getComputedStyle(prompterContent).fontSize) + 2;
             prompterContent.style.fontSize = newSize + 'px';
             sessionStorage.setItem('fontSize', newSize);
+            localStorage.setItem('eclyrics-prompter-fontSize', String(newSize));
+            broadcastPrompterState();
         } else {
             var newSize = parseInt(window.getComputedStyle(prompterContent).fontSize) - 2;
             prompterContent.style.fontSize = newSize + 'px';
             sessionStorage.setItem('fontSize', newSize);
+            localStorage.setItem('eclyrics-prompter-fontSize', String(newSize));
+            broadcastPrompterState();
         }
     } else { //Unsure whether to enable when non editable, also the amount
         pauseScroll();
         if (event.deltaY < 0) scrollPosition = prompterContent.offsetTop > -100 ? 0 : scrollPosition + 100;
         else scrollPosition -= 100;
         prompterContent.style.top = scrollPosition + "px";
+        broadcastPrompterState();
     }
 };
 document.addEventListener('wheel', wheelListener);
+
+window.addEventListener('resize', () => {
+    broadcastPrompterState();
+});
 
 //Double click function
 function isDoubleClick(type) {
@@ -374,3 +453,12 @@ function setColor(color) {
 }
 
 document.addEventListener('contextmenu', event => event.preventDefault());
+
+/** Try fullscreen once loaded (may be blocked without a direct user gesture on some browsers). */
+function tryInitialPrompterFullscreen() {
+    const root = document.documentElement;
+    const req = root.requestFullscreen || root.webkitRequestFullscreen || root.webkitEnterFullscreen;
+    if (req) {
+        req.call(root).catch(() => {});
+    }
+}

@@ -5,26 +5,9 @@ const SPEED_CONTROL = 0.1;
 const prompterContainer = document.getElementById("bgPrompter");
 const prompterContent = document.getElementById("prompter-content");
 const title = getUrlParameter('title');
-
-const bcast = new BroadcastChannel("eclyrics-" + title);
-
 let data = JSON.parse(localStorage.getItem(title));
-let currentIndex = localStorage.getItem(title + '-current');
+let currentIndex = getUrlParameter('current');
 let lastPressed = [0, 0];
-let toChangeContent = false;
-
-bcast.onmessage = (event) => {
-    console.log(event)
-    data = JSON.parse(localStorage.getItem(title));
-    if (event.data == "current_change") {
-        currentIndex = localStorage.getItem(title + '-current');
-        toChangeContent = true;
-    }
-};
-
-//setInterval(() => {
-//    if (toChangeContent) setText(currentIndex);
-//}, 32); // ~60 FPS
 
 function getUrlParameter(name) {
     name = name.replace(/[\[]/, '\\[').replace(/[\]]/, '\\]');
