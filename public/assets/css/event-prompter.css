@@ -1,0 +1,432 @@
+/* Event Prompter — Letter 8.5×11, Tahoma 12 bold, line-height 1.0, WYSIWYG */
+
+#panel-event .workspace {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  gap: 1rem;
+  align-items: stretch;
+  overflow: hidden;
+}
+
+#panel-event .workspace-editor {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  overflow: hidden;
+}
+
+.ep-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.ep-toolbar-select {
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  color: var(--foreground);
+  min-width: 120px;
+}
+
+.ep-toolbar-btns {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.ep-toolbar button,
+.ep-toolbar-btns button {
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  color: var(--foreground);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+}
+
+.ep-toolbar button:hover,
+.ep-toolbar-btns button:hover {
+  border-color: var(--blue-mid);
+  background: var(--background-subtle);
+}
+
+.ep-toolbar-btns button.ep-primary {
+  background: var(--blue-deep);
+  color: var(--primary-fg);
+  border-color: var(--blue-deep);
+}
+
+.ep-toolbar-btns button.ep-primary:hover {
+  background: var(--blue-mid);
+  border-color: var(--blue-mid);
+}
+
+.ep-doc-light { --ep-doc-bg: #ffffff; --ep-doc-fg: #000000; }
+.ep-doc-dark-mode { --ep-doc-bg: #1a1a1a; --ep-doc-fg: #ffffff; }
+
+.ep-editor-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 1rem;
+  background: var(--background-subtle);
+}
+
+.ep-form-doc {
+  width: 8.5in;
+  min-height: 11in;
+  margin: 0 auto;
+  padding: 0.5in;
+  background: var(--ep-doc-bg);
+  color: var(--ep-doc-fg);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  font-family: 'Tahoma', Geneva, sans-serif;
+  font-size: 12pt;
+  font-weight: bold;
+  line-height: 1.0;
+}
+
+/* Event info — no border after */
+.ep-event-info {
+  margin-bottom: 0.75rem;
+}
+
+.ep-event-info input {
+  font-family: 'Tahoma', Geneva, sans-serif;
+  width: 100%;
+  border: none;
+  border-bottom: 1px solid transparent;
+  padding: 0.25rem 0;
+  font-size: 1rem;
+  font-weight: bold;
+  background: transparent;
+  color: inherit;
+}
+
+.ep-event-info input:hover,
+.ep-event-info input:focus {
+  border-bottom-color: var(--border);
+  outline: none;
+}
+
+/* Event name: #0070C0, Tahoma, bold always */
+.ep-event-name {
+  font-weight: bold;
+  font-size: 18pt;
+  color: #0070C0 !important;
+}
+
+.ep-event-datetime {
+  font-size: 12pt;
+  font-weight: bold;
+}
+
+/* Two-column — no divider between cols */
+.ep-two-col-editor {
+  display: flex;
+  gap: 0;
+  margin-top: 0.5rem;
+}
+
+.ep-col-editor {
+  flex: 1;
+  min-width: 0;
+  padding: 0 0.5rem;
+}
+
+/* Take block — draggable via handle, 1.0 spacing between takes */
+.ep-take-card {
+  margin-bottom: 1em;
+  line-height: 1.0;
+}
+
+.ep-take-card.ep-dragging {
+  opacity: 0.5;
+}
+
+.ep-take-card.ep-drag-over {
+  outline: 2px dashed var(--blue-mid);
+  outline-offset: 2px;
+}
+
+.ep-take-head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 2px 6px;
+  background: #FFC000;
+  color: #000;
+  font-family: 'Tahoma', Geneva, sans-serif;
+  font-weight: bold;
+  font-size: 11pt;
+  line-height: 1.0;
+}
+
+.ep-drag-handle {
+  color: rgba(0,0,0,0.4);
+  font-size: 0.7rem;
+  letter-spacing: -0.15em;
+  cursor: grab;
+  user-select: none;
+}
+
+.ep-take-head input {
+  font-family: 'Tahoma', Geneva, sans-serif;
+  font-weight: bold;
+  width: 3rem;
+  padding: 2px 4px;
+  border: 1px solid rgba(0,0,0,0.15);
+  font-size: 0.85rem;
+  background: #fff;
+  color: #000;
+}
+
+.ep-take-head .take-timestamp {
+  flex: 1;
+  min-width: 4rem;
+}
+
+.ep-take-delete {
+  width: 1.4rem;
+  height: 1.4rem;
+  padding: 0;
+  border: none;
+  background: rgba(0,0,0,0.08);
+  color: #000;
+  cursor: pointer;
+  font-size: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+}
+
+.ep-take-delete:hover {
+  background: rgba(0,0,0,0.15);
+}
+
+/* Sections — user-selectable green/blue */
+.ep-sections-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5em;
+}
+
+.ep-section-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  line-height: 1.0;
+}
+
+.ep-section-block[data-bg="green"] .ep-section-header {
+  background: #D9F2D0;
+}
+
+.ep-section-block[data-bg="blue"] .ep-section-header {
+  background: #CAEDFB;
+}
+
+.ep-doc-dark-mode .ep-section-block[data-bg="green"] .ep-section-header {
+  background: #1e3a1e;
+}
+
+.ep-doc-dark-mode .ep-section-block[data-bg="blue"] .ep-section-header {
+  background: #0e2a3a;
+}
+
+.ep-section-header {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 2px 6px;
+}
+
+.ep-section-input {
+  flex: 1;
+  min-width: 0;
+  padding: 2px 6px;
+  border: none;
+  font-family: 'Tahoma', Geneva, sans-serif;
+  font-size: 11pt;
+  font-weight: bold;
+  color: #0070C0;
+  background: transparent;
+}
+
+.ep-section-bg {
+  font-family: var(--font-sans);
+  font-size: 0.7rem;
+  padding: 2px 4px;
+  border: 1px solid rgba(0,0,0,0.15);
+  border-radius: 2px;
+  background: rgba(255,255,255,0.6);
+  min-width: 4rem;
+}
+
+.ep-section-content {
+  width: 100%;
+  min-height: 2.5em;
+  padding: 0.25rem 0.35rem;
+  border: none;
+  border-bottom: 1px solid transparent;
+  font-family: 'Tahoma', Geneva, sans-serif !important;
+  font-size: 12pt !important;
+  font-weight: bold !important;
+  line-height: 1.0 !important;
+  background: transparent;
+  color: var(--ep-doc-fg) !important;
+  resize: vertical;
+}
+
+.ep-section-content:hover,
+.ep-section-content:focus {
+  border-bottom-color: var(--border);
+  outline: none;
+}
+
+.ep-section-content::placeholder {
+  color: var(--foreground-muted);
+}
+
+.ep-delete-section {
+  width: 1.2rem;
+  height: 1.2rem;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--foreground-muted);
+  cursor: pointer;
+  font-size: 0.9rem;
+  flex-shrink: 0;
+}
+
+.ep-delete-section:hover {
+  color: var(--danger);
+}
+
+.ep-add-section {
+  font-size: 0.75rem;
+  padding: 0.2rem 0.4rem;
+  border: none;
+  background: transparent;
+  color: var(--foreground-muted);
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+.ep-add-section:hover {
+  color: var(--accent);
+}
+
+.ep-add-take,
+.ep-add-end-block {
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  padding: 0.4rem 0.75rem;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--foreground-muted);
+  cursor: pointer;
+  margin-top: 0.5rem;
+}
+
+.ep-add-take:hover,
+.ep-add-end-block:hover {
+  border-color: var(--blue-mid);
+  color: var(--accent);
+}
+
+/* End block — fits in column, same styling */
+.ep-end-block-editor {
+  margin-top: 0.75rem;
+  padding: 0.5rem;
+  background: #002060;
+  border-radius: 4px;
+}
+
+.ep-end-block-editor input {
+  width: 100%;
+  font-family: 'Tahoma', Geneva, sans-serif;
+  font-weight: bold;
+  font-size: 12pt;
+  padding: 0.3rem 0.5rem;
+  border: none;
+  background: transparent;
+  color: #fff;
+}
+
+/* Block styles for preview/export — Tahoma 12 bold, line-height 1.0 */
+.ep-block-title { font-size: 18pt; font-weight: bold; color: #0070C0; margin-bottom: 0.5rem; line-height: 1.0; }
+.ep-block-take { background: #FFC000; color: #000; font-weight: bold; font-size: 11pt; padding: 4px 8px; line-height: 1.0; }
+.ep-block-section { font-weight: bold; font-size: 11pt; padding: 4px 8px; line-height: 1.0; }
+.ep-block-subitem { font-size: 12pt; font-weight: bold; padding-left: 0; margin: 0; line-height: 1.0; }
+.ep-block-end { background: #002060; color: #fff; font-weight: bold; font-size: 12pt; padding: 8px; text-align: center; line-height: 1.0; }
+
+/* Preview */
+#panel-event .workspace-preview {
+  flex: 0 0 min(38vw, 380px);
+  max-width: 420px;
+  min-width: 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-height: 0;
+}
+
+.ep-preview-header {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--blue-deep);
+}
+
+.ep-preview-frame {
+  flex: 1;
+  min-height: 0;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  overflow: hidden;
+  background: #000;
+  display: flex;
+  flex-direction: column;
+}
+
+.ep-strip-body {
+  flex: 1;
+  min-height: 160px;
+  overflow-y: auto;
+  padding: 0.65rem;
+}
+
+.ep-strip-content {
+  font-family: 'Tahoma', Geneva, sans-serif;
+  font-size: 12pt;
+  font-weight: bold;
+  line-height: 1.0;
+  color: #fff;
+}
+
+.ep-strip-content .ep-block-subitem { color: #fff; }
+.ep-strip-empty { font-size: 0.8rem; color: var(--foreground-muted); padding: 1rem; text-align: center; }
+
+@media print {
+  .ep-toolbar, .workspace-preview { display: none !important; }
+}

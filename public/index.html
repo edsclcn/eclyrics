@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link rel="stylesheet" href="assets/css/index.css">
+    <link rel="stylesheet" href="assets/css/event-prompter.css">
     <link rel="icon" type="image/png" href="assets/images/logo.png">
     <title>EC Lyrics</title>
 </head>
@@ -154,10 +155,8 @@
                 </section>
 
                 <section id="panel-event" class="panel" aria-labelledby="panel-event-title">
-                    <div class="placeholder-panel">
-                        <h2 id="panel-event-title">Event Prompter</h2>
-                        <p>Event prompting will be available here.</p>
-                    </div>
+                    <h2 id="panel-event-title" class="visually-hidden">Event Prompter</h2>
+                    <!-- Event Prompter workspace injected by event-prompter.js -->
                 </section>
 
                 <section id="panel-admin" class="panel" aria-labelledby="panel-admin-title">
@@ -200,6 +199,7 @@
     <script defer src="js/index.js"></script>
     <script defer src="js/port.js"></script>
     <script defer src="js/textformatting.js"></script>
+    <script defer src="js/event-prompter.js"></script>
 </body>
 
 </html>
