@@ -610,21 +610,22 @@ a {
     display: flex;
     flex-direction: column;
     gap: 1rem;
+    padding: 0.35rem 0 0.5rem;
 }
 
 .textareas-row {
-    position: relative;
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: 10px;
     justify-content: center;
     align-items: stretch;
-    padding: 0.5rem 0 0.25rem;
-    border-bottom: 1px solid var(--border);
+    width: 100%;
 }
 
-.textareas-row:last-of-type {
-    border-bottom: none;
+.textareas-row .textarea-cell {
+    flex: 1 1 0;
+    min-width: 0;
+    max-width: 220px;
 }
 
 .textarea-cell {
@@ -641,6 +642,38 @@ a {
     align-items: center;
     justify-content: space-between;
     gap: 6px;
+    min-height: 1.5rem;
+}
+
+.textarea-cell-remove {
+    flex-shrink: 0;
+    width: 1.35rem;
+    height: 1.35rem;
+    padding: 0;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--foreground-muted);
+    opacity: 0.4;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.72rem;
+    transition:
+        opacity 0.15s ease,
+        background 0.15s ease,
+        color 0.15s ease;
+}
+
+.textarea-cell-remove:hover:not([hidden]) {
+    opacity: 1;
+    background: color-mix(in srgb, var(--danger) 12%, transparent);
+    color: var(--danger);
+}
+
+.textarea-cell-remove[hidden] {
+    display: none !important;
 }
 
 .textarea-cell-label {
@@ -699,7 +732,7 @@ a {
     box-shadow: 0 0 0 2px rgba(46, 89, 132, 0.35);
 }
 
-.add-set-btn {
+.add-block-btn {
     font-family: inherit;
     font-size: 0.85rem;
     font-weight: 600;
@@ -717,40 +750,128 @@ a {
     margin-right: auto;
 }
 
-.add-set-btn:hover {
+.add-block-btn:hover {
     background: var(--blue-mid);
     border-color: var(--blue-mid);
     color: var(--gray-900);
 }
 
-.remove-set-btn-wrapper {
-    position: absolute;
-    top: 0;
-    right: 0;
-    z-index: 1;
-}
-
-.remove-set-btn {
-    font-family: inherit;
-    width: 28px;
-    height: 28px;
-    border: 1px solid #8b0000;
-    border-radius: var(--radius-sm);
-    font-size: 1rem;
-    line-height: 1;
-    cursor: pointer;
-    color: #fff;
-    background: var(--danger);
-}
-
-.remove-set-btn:hover {
-    background: #b71c1c;
-}
-
 /* ─── Preview storyboard (Interface Craft)
  *   ① 16∶9 viewfinder — live crop synced from prompter (BroadcastChannel)
  *   ② Portrait column — full block context, independent scroll
+ *   THEME: .preview-stage--lyrics | .preview-stage--bw (mirrors prompter P / BroadcastChannel)
+ *   TIMING: stage bg / text cross-fade ~200ms
  * ─── */
+
+/* Stage mirrors prompter window: blue lyrics vs black & white */
+.workspace-preview.preview-stage--lyrics .preview-viewfinder-stage-bg,
+.workspace-preview.preview-stage--lyrics .preview-bg-portrait {
+    background-color: #8ecae6;
+    background-image: url('../images/lyricsBg.png'), url('../images/lyricsBg.svg');
+    background-repeat: no-repeat, no-repeat;
+    background-size: cover, cover;
+    background-position: center, center;
+}
+
+.workspace-preview.preview-stage--bw .preview-viewfinder-stage-bg,
+.workspace-preview.preview-stage--bw .preview-bg-portrait {
+    background-color: #0a0a0a;
+    background-image: none;
+}
+
+.workspace-preview.preview-stage--lyrics #lyrics-preview-viewfinder:not(.preview-empty),
+.workspace-preview.preview-stage--lyrics #lyrics-preview-content:not(.preview-empty) {
+    font-family: var(--font-stage);
+    font-weight: 900;
+    letter-spacing: 0.04em;
+    color: #0a0a0a;
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+.workspace-preview.preview-stage--bw #lyrics-preview-viewfinder:not(.preview-empty),
+.workspace-preview.preview-stage--bw #lyrics-preview-content:not(.preview-empty) {
+    font-family: Arial, Helvetica, sans-serif;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: #f2f2f2;
+    text-shadow: none;
+}
+
+.workspace-preview.preview-stage--bw #lyrics-preview-viewfinder span.z,
+.workspace-preview.preview-stage--bw #lyrics-preview-content span.z {
+    color: #d4d4d4;
+}
+
+.workspace-preview .preview-viewfinder-stage-bg,
+.workspace-preview .preview-bg-portrait,
+.workspace-preview #lyrics-preview-viewfinder:not(.preview-empty),
+.workspace-preview #lyrics-preview-content:not(.preview-empty) {
+    transition:
+        background-color 0.22s ease,
+        color 0.2s ease,
+        border-color 0.2s ease,
+        box-shadow 0.2s ease;
+}
+
+.workspace-preview.preview-stage--lyrics .preview-viewfinder-16x9 {
+    border-color: rgba(46, 89, 132, 0.4);
+    box-shadow:
+        inset 0 0 0 1px rgba(255, 255, 255, 0.1),
+        0 1px 4px rgba(46, 89, 132, 0.2);
+}
+
+.workspace-preview.preview-stage--bw .preview-viewfinder-16x9 {
+    border-color: rgba(255, 255, 255, 0.18);
+    background: #111;
+    box-shadow:
+        inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+        0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+.dark .workspace-preview.preview-stage--lyrics .preview-viewfinder-16x9 {
+    border-color: rgba(100, 190, 240, 0.45);
+    background: rgba(30, 55, 72, 0.35);
+    box-shadow:
+        inset 0 0 0 1px rgba(100, 190, 240, 0.2),
+        0 0 0 1px rgba(74, 193, 254, 0.15);
+}
+
+.dark .workspace-preview.preview-stage--bw .preview-viewfinder-16x9 {
+    border-color: rgba(255, 255, 255, 0.22);
+    background: #080808;
+    box-shadow:
+        inset 0 0 0 1px rgba(255, 255, 255, 0.1),
+        0 2px 12px rgba(0, 0, 0, 0.65);
+}
+
+.dark .workspace-preview.preview-stage--lyrics .preview-portrait-body {
+    border-color: rgba(100, 190, 240, 0.35);
+}
+
+.dark .workspace-preview.preview-stage--bw .preview-portrait-body {
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+.dark .workspace-preview.preview-stage--lyrics .preview-frame {
+    border-color: rgba(115, 165, 198, 0.4);
+    background: color-mix(in srgb, var(--preview-chrome) 92%, rgb(74, 193, 254) 8%);
+}
+
+.dark .workspace-preview.preview-stage--bw .preview-frame {
+    border-color: rgba(255, 255, 255, 0.1);
+    background: color-mix(in srgb, var(--preview-chrome) 96%, #1a1a1a 4%);
+}
+
+.dark .workspace-preview.preview-stage--lyrics #lyrics-preview-content:not(.preview-empty),
+.dark .workspace-preview.preview-stage--lyrics #lyrics-preview-viewfinder:not(.preview-empty) {
+    color: #0a0a0a;
+}
+
+.dark .workspace-preview.preview-stage--bw #lyrics-preview-content:not(.preview-empty),
+.dark .workspace-preview.preview-stage--bw #lyrics-preview-viewfinder:not(.preview-empty) {
+    color: #f0f0f0;
+}
+
 /* Preview column — hidden until first lyric text (see .preview-ready) */
 .workspace-preview {
     flex: 0 0 min(38vw, 380px);
@@ -792,6 +913,161 @@ a {
     flex-direction: column;
     gap: 8px;
     padding: 10px;
+}
+
+/* Live prompter dock — migrated controls from the prompter popup */
+.preview-prompter-dock {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 2px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+    transition: opacity 0.2s ease;
+}
+
+.preview-prompter-dock.is-inactive {
+    opacity: 0.55;
+}
+
+.preview-shortcuts-strip {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px 10px;
+    padding: 8px 10px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border);
+    background: var(--background-subtle);
+    cursor: pointer;
+    font-size: 0.68rem;
+    color: var(--foreground-muted);
+    outline: none;
+    transition:
+        border-color 0.15s ease,
+        box-shadow 0.15s ease,
+        background 0.15s ease;
+}
+
+.preview-shortcuts-strip:hover {
+    border-color: var(--accent);
+}
+
+.preview-shortcuts-strip:focus-visible {
+    border-color: var(--blue-mid);
+    box-shadow: 0 0 0 3px rgba(115, 165, 198, 0.25);
+}
+
+.preview-shortcuts-strip-lead {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--blue-deep);
+}
+
+.dark .preview-shortcuts-strip-lead {
+    color: var(--blue-mid);
+}
+
+.preview-shortcuts-strip-lead i {
+    font-size: 0.85rem;
+    opacity: 0.9;
+}
+
+.preview-shortcuts-strip-hint {
+    font-variant-numeric: tabular-nums;
+    opacity: 0.9;
+}
+
+.preview-prompter-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 10px;
+}
+
+.preview-icon-btn {
+    flex-shrink: 0;
+    width: 2.25rem;
+    height: 2.25rem;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--card);
+    color: var(--blue-deep);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.95rem;
+    transition:
+        background 0.15s ease,
+        border-color 0.15s ease,
+        transform 0.12s ease;
+}
+
+.preview-icon-btn:hover:not(:disabled) {
+    border-color: var(--accent);
+    background: var(--nav-hover-bg);
+}
+
+.preview-icon-btn:active:not(:disabled) {
+    transform: scale(0.96);
+}
+
+.preview-icon-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.dark .preview-icon-btn {
+    color: var(--blue-pale);
+}
+
+.preview-speed-control {
+    flex: 1 1 140px;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.preview-speed-label {
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--blue-deep);
+    flex-shrink: 0;
+}
+
+.dark .preview-speed-label {
+    color: var(--blue-mid);
+}
+
+.preview-speed-control input[type='range'] {
+    flex: 1 1 auto;
+    min-width: 0;
+    accent-color: var(--blue-deep);
+}
+
+.preview-speed-value {
+    flex-shrink: 0;
+    min-width: 2.25rem;
+    text-align: right;
+    font-size: 0.75rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--foreground);
+}
+
+.preview-speed-control input[type='range']:disabled {
+    opacity: 0.45;
 }
 
 .preview-viewfinder-label,
@@ -957,10 +1233,7 @@ a {
     opacity: 0.85;
 }
 
-.dark #lyrics-preview-content,
-.dark #lyrics-preview-viewfinder:not(.preview-empty) {
-    color: #0d0d0d;
-}
+/* Lyric body color: use .preview-stage--lyrics / --bw rules above (avoids clashing B&W text in dark UI) */
 
 /* Footer */
 .app-footer {

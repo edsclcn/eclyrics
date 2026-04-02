@@ -46,7 +46,7 @@ function importLineup() {
             const activeImp = document.querySelector('#tabs-list .tab.active');
             if (!activeImp) return;
             const tabId = parseInt(activeImp.dataset.tabId, 10);
-            const addBtn = document.getElementById(`add-set-${tabId}`);
+            const addBtn = document.getElementById(`add-block-${tabId}`);
             let current = 0;
             for (let i = 1; true; i++) {
                 let value = values[current];
