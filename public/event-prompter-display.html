@@ -7,26 +7,82 @@
   <title>Event Prompter</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Tahoma', Geneva, sans-serif; background: #000; color: #fff; min-height: 100vh; overflow-x: hidden; }
-    #ep-content { padding: 1.5rem; max-width: 800px; margin: 0 auto; font-size: 12pt; font-weight: bold; line-height: 1.0; }
-    .ep-block-title { color: #0070C0; font-size: 18pt; font-weight: bold; margin-bottom: 0.5rem; }
-    .ep-block-take { background: #FFC000; color: #000; font-weight: bold; padding: 4px 8px; margin: 0.25rem 0; }
-    .ep-block-section { background: #D9F2D0; color: #0070C0; font-weight: bold; padding: 4px 8px; }
-    .ep-block-subitem { color: #fff; font-size: 12pt; font-weight: bold; padding-left: 12px; margin: 2px 0; }
-    .ep-block-notes { color: #595959; font-style: italic; padding-left: 12px; margin: 2px 0; }
-    .ep-block-oncam { color: #0070C0; font-weight: bold; padding-left: 12px; margin: 2px 0; }
-    .ep-block-back { color: #EE0000; font-weight: bold; padding-left: 12px; margin: 2px 0; }
-    .ep-block-end { background: #002060; color: #fff; font-weight: bold; padding: 12px; text-align: center; margin-top: 1rem; }
+    body {
+      font-family: Tahoma, Geneva, sans-serif;
+      background: #000;
+      color: #fff;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+    /* Single column, 36px bold — matches Event Prompter preview */
+    #ep-content.ep-strip-flow {
+      padding: 1.25rem 1.5rem 2rem;
+      max-width: 960px;
+      margin: 0 auto;
+      font-size: 36px;
+      font-weight: bold;
+      line-height: 1;
+    }
+    .ep-block-title {
+      color: #0070C0;
+      font-size: 1em;
+      font-weight: bold;
+      margin-bottom: 0.35em;
+    }
+    .ep-block-take {
+      background: #FFC000;
+      color: #000;
+      font-weight: bold;
+      font-size: 0.65em;
+      padding: 4px 8px;
+      margin: 0;
+      line-height: 1;
+      border-radius: 0;
+    }
+    .ep-block-section {
+      background: #CAEDFB;
+      color: #0070C0;
+      font-weight: bold;
+      font-size: 0.65em;
+      padding: 4px 8px;
+      line-height: 1;
+      border-radius: 0;
+      white-space: pre-wrap;
+      margin: 0;
+    }
+    .ep-block-subitem {
+      color: #fff;
+      font-size: 0.72em;
+      font-weight: bold;
+      padding-left: 0;
+      margin: 0;
+      line-height: 1;
+    }
+    .ep-block-end {
+      background: #002060;
+      color: #fff;
+      font-weight: bold;
+      font-size: 0.65em;
+      padding: 10px 12px;
+      text-align: center;
+      margin-top: 0.35em;
+      line-height: 1;
+      border-radius: 0;
+    }
+    .ep-flow-spacer {
+      height: 1em;
+      min-height: 8px;
+    }
   </style>
 </head>
 <body>
-  <div id="ep-content"></div>
+  <div id="ep-content" class="ep-strip-flow"></div>
   <script>
     (function() {
       const params = new URLSearchParams(location.search);
       const key = params.get('key');
       if (!key) {
-        document.getElementById('ep-content').innerHTML = '<p style="color:#888;padding:2rem;">No prompter data. Open from Event Prompter and click Send to Prompter.</p>';
+        document.getElementById('ep-content').innerHTML = '<p style="color:#888;padding:2rem;font-family:system-ui,sans-serif;font-size:16px;">No prompter data. Open from Event Prompter and click Send to prompter.</p>';
         return;
       }
       try {
@@ -35,10 +91,10 @@
           document.getElementById('ep-content').innerHTML = html;
           document.title = params.get('title') || 'Event Prompter';
         } else {
-          document.getElementById('ep-content').innerHTML = '<p style="color:#888;">Session expired. Reopen from Event Prompter.</p>';
+          document.getElementById('ep-content').innerHTML = '<p style="color:#888;padding:2rem;font-family:system-ui,sans-serif;font-size:16px;">Session expired. Reopen from Event Prompter.</p>';
         }
       } catch (e) {
-        document.getElementById('ep-content').innerHTML = '<p style="color:#c00;">Failed to load prompter.</p>';
+        document.getElementById('ep-content').innerHTML = '<p style="color:#c00;padding:2rem;font-family:system-ui,sans-serif;font-size:16px;">Failed to load prompter.</p>';
       }
     })();
   </script>
