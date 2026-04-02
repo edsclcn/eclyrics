@@ -17,6 +17,10 @@ try {
     prompterBroadcastChannel = null;
 }
 
+function getPrompterThemeId() {
+    return sessionStorage.getItem('prompterType') === 'LYRICS_PROMPTER' ? 'lyrics' : 'bw';
+}
+
 function broadcastPrompterState() {
     if (!prompterBroadcastChannel || !prompterContent) return;
     const fs = parseFloat(window.getComputedStyle(prompterContent).fontSize);
@@ -27,6 +31,9 @@ function broadcastPrompterState() {
         vh: window.innerHeight,
         fs: Number.isNaN(fs) ? 138 : fs,
         cw: prompterContent.offsetWidth,
+        speed: scrollSpeed,
+        playing: scrollingNow,
+        theme: getPrompterThemeId(),
     });
 }
 
@@ -84,6 +91,23 @@ let scrollingNow = false;
 let animationLoop;
 let scrollPosition = 0;
 let scrollSpeed = 0.5;
+try {
+    const savedSp = sessionStorage.getItem('eclyrics-prompter-scroll-speed');
+    if (savedSp) {
+        const n = parseFloat(savedSp);
+        if (!Number.isNaN(n) && n > 0 && n <= TOP_SPEED) scrollSpeed = n;
+    }
+} catch (e) {
+    /* ignore */
+}
+
+function persistScrollSpeed() {
+    try {
+        sessionStorage.setItem('eclyrics-prompter-scroll-speed', String(scrollSpeed));
+    } catch (e) {
+        /* ignore */
+    }
+}
 
 function scrollScript() {
     scrollPosition -= scrollSpeed;
@@ -120,9 +144,80 @@ function setText(index) {
     broadcastPrompterState();
 }
 
+function applyRemoteScrollSpeed(next) {
+    const n = typeof next === 'number' ? next : parseFloat(next);
+    if (Number.isNaN(n)) return;
+    const clamped = Math.min(TOP_SPEED, Math.max(0.1, n));
+    scrollSpeed = clamped;
+    persistScrollSpeed();
+    broadcastPrompterState();
+}
+
 window.addEventListener('message', (event) => {
     const msg = event.data;
-    if (!msg || msg.type !== 'eclyrics-prompter-load') return;
+    if (!msg || typeof msg !== 'object') return;
+
+    if (msg.type === 'eclyrics-prompter-keyup') {
+        if (!window.opener || event.source !== window.opener) return;
+        if (msg.key === 'Tab') {
+            const helpCard = document.getElementById('helpCard');
+            if (helpCard) helpCard.style.display = 'none';
+        }
+        return;
+    }
+
+    if (msg.type === 'eclyrics-prompter-key') {
+        if (!window.opener || event.source !== window.opener) return;
+        const key = msg.key || '';
+        if (key === 'Tab' || key === 'Pause' || key === 'PageUp' || key === 'PageDown') {
+            handleAuxiliaryKeydown({ key, preventDefault() {} });
+            return;
+        }
+        handleMainKeys({ code: msg.code, key, preventDefault() {} }, true);
+        return;
+    }
+
+    if (msg.type === 'eclyrics-prompter-control') {
+        if (!window.opener || event.source !== window.opener) return;
+        switch (msg.action) {
+            case 'playPause':
+                playPauseScroll();
+                broadcastPrompterState();
+                break;
+            case 'pauseOnly':
+                pauseScroll();
+                broadcastPrompterState();
+                break;
+            case 'prevBlock':
+                if (data && currentIndex > 0) {
+                    setText(currentIndex - 1);
+                }
+                break;
+            case 'nextBlock':
+                if (data && currentIndex < data.length - 1) {
+                    setText(currentIndex + 1);
+                }
+                break;
+            case 'setSpeed':
+                applyRemoteScrollSpeed(msg.speed);
+                break;
+            case 'scrollTop':
+                if (!scrollingNow) {
+                    scrollPosition = 0;
+                    prompterContent.style.top = '0px';
+                    broadcastPrompterState();
+                }
+                break;
+            case 'toggleTheme':
+                togglePrompterTheme();
+                break;
+            default:
+                break;
+        }
+        return;
+    }
+
+    if (msg.type !== 'eclyrics-prompter-load') return;
     if (window.opener && event.source !== window.opener) return;
     const key = msg.lineupKey;
     const idx = parseInt(msg.currentIndex, 10);
@@ -172,71 +267,126 @@ function exitFullscreen() {
 }
 
 //Keyboard Shortcuts
-var keydownListener = function (event) {
+function togglePrompterTheme() {
+    if (sessionStorage.getItem('prompterType') === 'LYRICS_PROMPTER') sessionStorage.setItem('prompterType', 'BLACK_AND_WHITE');
+    else sessionStorage.setItem('prompterType', 'LYRICS_PROMPTER');
+    prompterContainer.classList.toggle('lyricsPrompter');
+    prompterContainer.classList.toggle('blackwhite');
+    broadcastPrompterState();
+}
+
+function handleAuxiliaryKeydown(event) {
+    const helpCard = document.getElementById('helpCard');
+    if (event.key === 'Tab') {
+        if (helpCard) helpCard.style.display = 'block';
+        event.preventDefault();
+        return;
+    }
+    if (event.key === 'Pause') {
+        if (prompterContent.contentEditable === 'true') {
+            prompterContent.contentEditable = 'false';
+            data[currentIndex] = prompterContent.innerHTML;
+            localStorage.setItem(lineupKey, JSON.stringify(data));
+            notEditable();
+        } else {
+            prompterContent.contentEditable = 'true';
+            Editable();
+        }
+        prompterContent.focus();
+        event.preventDefault();
+        return;
+    }
+    if (event.key === 'PageUp' && prompterContent.contentEditable === 'true') {
+        showColorPicker();
+        event.preventDefault();
+    } else if (event.key === 'PageDown' && prompterContent.contentEditable === 'true') {
+        showColorPresets();
+        event.preventDefault();
+    }
+}
+
+function handleMainKeys(event, fromRemote) {
     switch (event.code) {
         case 'Space':
             event.preventDefault();
             playPauseScroll();
+            broadcastPrompterState();
             break;
         case 'Digit1':
             event.preventDefault();
             scrollSpeed = 0.5;
+            persistScrollSpeed();
+            broadcastPrompterState();
             break;
         case 'Digit2':
             event.preventDefault();
             scrollSpeed = 1;
+            persistScrollSpeed();
+            broadcastPrompterState();
             break;
         case 'Digit3':
             event.preventDefault();
             scrollSpeed = 1.5;
+            persistScrollSpeed();
+            broadcastPrompterState();
             break;
         case 'Digit4':
             event.preventDefault();
             scrollSpeed = 2;
+            persistScrollSpeed();
+            broadcastPrompterState();
             break;
         case 'Digit5':
             event.preventDefault();
             scrollSpeed = 2.5;
+            persistScrollSpeed();
+            broadcastPrompterState();
             break;
         case 'Digit6':
             event.preventDefault();
             scrollSpeed = 3;
+            persistScrollSpeed();
+            broadcastPrompterState();
             break;
         case 'Digit7':
             event.preventDefault();
             scrollSpeed = 3.5;
+            persistScrollSpeed();
+            broadcastPrompterState();
             break;
         case 'Digit8':
             event.preventDefault();
             scrollSpeed = 4;
+            persistScrollSpeed();
+            broadcastPrompterState();
             break;
         case 'Digit9':
             event.preventDefault();
             scrollSpeed = 4.5;
+            persistScrollSpeed();
+            broadcastPrompterState();
             break;
         case 'Digit0':
             event.preventDefault();
             pauseScroll();
+            broadcastPrompterState();
             break;
         case 'KeyP':
             event.preventDefault();
-            if (sessionStorage.getItem('prompterType') === 'LYRICS_PROMPTER') sessionStorage.setItem('prompterType', 'BLACK_AND_WHITE');
-            else sessionStorage.setItem('prompterType', 'LYRICS_PROMPTER');
-            prompterContainer.classList.toggle('lyricsPrompter');
-            prompterContainer.classList.toggle('blackwhite');
+            togglePrompterTheme();
             break;
         case 'ArrowUp':
             event.preventDefault();
             pauseScroll();
             scrollPosition = prompterContent.offsetTop > -50 ? 0 : scrollPosition + 50;
-            prompterContent.style.top = scrollPosition + "px";
+            prompterContent.style.top = scrollPosition + 'px';
             broadcastPrompterState();
             break;
         case 'ArrowDown':
             event.preventDefault();
             pauseScroll();
             scrollPosition -= 50;
-            prompterContent.style.top = scrollPosition + "px";
+            prompterContent.style.top = scrollPosition + 'px';
             broadcastPrompterState();
             break;
         case 'F11': case 'KeyF':
@@ -249,37 +399,37 @@ var keydownListener = function (event) {
             break;
         case 'BracketLeft': case 'F8':
             event.preventDefault();
-            var newSize = parseInt(window.getComputedStyle(prompterContent).fontSize) - 2;
-            prompterContent.style.fontSize = newSize + 'px';
-            sessionStorage.setItem('fontSize', newSize);
-            localStorage.setItem('eclyrics-prompter-fontSize', String(newSize));
+            var newSizeL = parseInt(window.getComputedStyle(prompterContent).fontSize, 10) - 2;
+            prompterContent.style.fontSize = newSizeL + 'px';
+            sessionStorage.setItem('fontSize', String(newSizeL));
+            localStorage.setItem('eclyrics-prompter-fontSize', String(newSizeL));
             broadcastPrompterState();
             break;
         case 'BracketRight': case 'F9':
             event.preventDefault();
-            var newSize = parseInt(window.getComputedStyle(prompterContent).fontSize) + 2;
-            prompterContent.style.fontSize = newSize + 'px';
-            sessionStorage.setItem('fontSize', newSize);
-            localStorage.setItem('eclyrics-prompter-fontSize', String(newSize));
+            var newSizeR = parseInt(window.getComputedStyle(prompterContent).fontSize, 10) + 2;
+            prompterContent.style.fontSize = newSizeR + 'px';
+            sessionStorage.setItem('fontSize', String(newSizeR));
+            localStorage.setItem('eclyrics-prompter-fontSize', String(newSizeR));
             broadcastPrompterState();
             break;
         case 'Minus':
             event.preventDefault();
-            var currentWidth = parseInt(window.getComputedStyle(prompterContent).width, 10) - 50;
-            if (currentWidth >= screen.availWidth / 3) {
-                prompterContent.style.width = currentWidth + "px";
-                sessionStorage.setItem('prompterWidth', currentWidth);
-                localStorage.setItem('eclyrics-prompter-width', String(currentWidth));
+            var currentWidthMinus = parseInt(window.getComputedStyle(prompterContent).width, 10) - 50;
+            if (currentWidthMinus >= screen.availWidth / 3) {
+                prompterContent.style.width = currentWidthMinus + 'px';
+                sessionStorage.setItem('prompterWidth', String(currentWidthMinus));
+                localStorage.setItem('eclyrics-prompter-width', String(currentWidthMinus));
                 broadcastPrompterState();
             }
             break;
         case 'Equal':
             event.preventDefault();
-            var currentWidth = parseInt(window.getComputedStyle(prompterContent).width, 10) + 50;
-            if (currentWidth <= screen.availWidth) {
-                prompterContent.style.width = currentWidth + "px";
-                sessionStorage.setItem('prompterWidth', currentWidth);
-                localStorage.setItem('eclyrics-prompter-width', String(currentWidth));
+            var currentWidthEq = parseInt(window.getComputedStyle(prompterContent).width, 10) + 50;
+            if (currentWidthEq <= screen.availWidth) {
+                prompterContent.style.width = currentWidthEq + 'px';
+                sessionStorage.setItem('prompterWidth', String(currentWidthEq));
+                localStorage.setItem('eclyrics-prompter-width', String(currentWidthEq));
                 broadcastPrompterState();
             }
             break;
@@ -287,65 +437,69 @@ var keydownListener = function (event) {
             event.preventDefault();
             if (scrollingNow) break;
             scrollPosition = 0;
-            prompterContent.style.top = "0px";
+            prompterContent.style.top = '0px';
             broadcastPrompterState();
             break;
         case 'NumpadSubtract':
             event.preventDefault();
             if (scrollSpeed - SPEED_CONTROL > 0) scrollSpeed -= SPEED_CONTROL;
             else pauseScroll();
+            persistScrollSpeed();
+            broadcastPrompterState();
             break;
         case 'NumpadAdd':
             event.preventDefault();
             if (scrollSpeed + SPEED_CONTROL <= TOP_SPEED) scrollSpeed += SPEED_CONTROL;
             if (!scrollingNow) playScroll();
+            persistScrollSpeed();
+            broadcastPrompterState();
             break;
         case 'ArrowLeft':
-            if (isDoubleClick(0) && currentIndex > 0) setText(--currentIndex);
+            if (fromRemote) {
+                event.preventDefault();
+                if (currentIndex > 0) setText(currentIndex - 1);
+            } else if (isDoubleClick(0) && currentIndex > 0) {
+                setText(--currentIndex);
+            }
             break;
         case 'ArrowRight':
-            if (isDoubleClick(1) && currentIndex < data.length - 1) setText(++currentIndex);
+            if (fromRemote) {
+                event.preventDefault();
+                if (data && currentIndex < data.length - 1) setText(currentIndex + 1);
+            } else if (isDoubleClick(1) && data && currentIndex < data.length - 1) {
+                setText(++currentIndex);
+            }
             break;
         case 'Numpad0':
             if (prompterContent.getElementsByClassName('lyricTitle').length > 0) break;
-            let text = prompterContent.innerHTML.split('\n');
-            text[1] = `<span class='lyricTitle'>${text[1]}</span>`;
-            prompterContent.innerHTML = text.join('\n');
+            event.preventDefault();
+            var textLines = prompterContent.innerHTML.split('\n');
+            textLines[1] = `<span class='lyricTitle'>${textLines[1]}</span>`;
+            prompterContent.innerHTML = textLines.join('\n');
             data[currentIndex] = prompterContent.innerHTML;
             localStorage.setItem(lineupKey, JSON.stringify(data));
             break;
     }
-};
+}
 
-var helpCard = document.getElementById("helpCard");
-window.addEventListener('keydown', function (event) {
-    if (event.key === 'Tab') {
-        helpCard.style.display = "block";
-        event.preventDefault();
-    } else if (event.key === 'Pause') {
-        if (prompterContent.contentEditable === "true") {
-            prompterContent.contentEditable = "false";
-            data[currentIndex] = prompterContent.innerHTML;
-            localStorage.setItem(lineupKey, JSON.stringify(data));
-            notEditable();
-        } else {
-            prompterContent.contentEditable = "true";
-            Editable();
-        }
-        prompterContent.focus();
-        event.preventDefault();
-    } else if (event.key === 'PageUp' && prompterContent.contentEditable === "true") {
-        showColorPicker();
-        event.preventDefault();
-    } else if (event.key === 'PageDown' && prompterContent.contentEditable === "true") {
-        showColorPresets();
-        event.preventDefault();
+function routePrompterKeydown(event) {
+    if (
+        event.key === 'Tab' ||
+        event.key === 'Pause' ||
+        (event.key === 'PageUp' && prompterContent.contentEditable === 'true') ||
+        (event.key === 'PageDown' && prompterContent.contentEditable === 'true')
+    ) {
+        handleAuxiliaryKeydown(event);
+        return;
     }
-});
+    handleMainKeys(event, false);
+}
+
+var helpCard = document.getElementById('helpCard');
 
 window.addEventListener('keyup', function (event) {
-    if (event.key === 'Tab') {
-        helpCard.style.display = "none";
+    if (event.key === 'Tab' && helpCard) {
+        helpCard.style.display = 'none';
     }
 });
 
@@ -393,12 +547,12 @@ function isDoubleClick(type) {
 
 //Text edit states
 function notEditable() {
-    document.addEventListener('keydown', keydownListener);
+    document.addEventListener('keydown', routePrompterKeydown);
 }
 
 function Editable() {
     document.getElementById('search-modal');
-    document.removeEventListener('keydown', keydownListener);
+    document.removeEventListener('keydown', routePrompterKeydown);
 }
 notEditable();
 

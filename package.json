@@ -2,10 +2,12 @@
   "name": "eclyrics",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "electron/main.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "echo \"Build not yet implemented\""
+    "build": "echo \"Build not yet implemented\"",
+    "electron": "electron .",
+    "electron:local": "ECLYRICS_APP_URL=http://127.0.0.1:5500 electron ."
   },
   "repository": {
     "type": "git",
@@ -18,5 +20,8 @@
   "bugs": {
     "url": "https://github.com/edsclcn/eclyrics/issues"
   },
-  "homepage": "https://github.com/edsclcn/eclyrics#readme"
+  "homepage": "https://github.com/edsclcn/eclyrics#readme",
+  "devDependencies": {
+    "electron": "^41.1.1"
+  }
 }

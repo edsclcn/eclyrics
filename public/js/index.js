@@ -1,5 +1,21 @@
-const AREA_PER_ROW = 5;
+/** Initial lyric blocks when a tab is created (add inserts one at a time). */
+const INITIAL_BLOCK_COUNT = 5;
+/** Hard wrap: row 1 holds blocks 1–5, row 2 holds 6–10, etc. */
+const MAX_BLOCKS_PER_ROW = 5;
 const SESSION_ID = Math.random().toString().substring(2);
+const PREVIEW_PROMPTER_SPEED_KEY = 'eclyrics-preview-prompter-speed';
+const PREVIEW_STAGE_THEME_KEY = 'eclyrics-preview-stage-theme';
+
+/* ─────────────────────────────────────────────────────────
+ * PREVIEW PROMPTER DOCK — controls the opened prompter window
+ *   (play, speed, blocks; focus strip forwards keyboard shortcuts)
+ * ───────────────────────────────────────────────────────── */
+const PREVIEW_PROMPTER = {
+    speedMin: 0.1,
+    speedMax: 6.5,
+    speedStep: 0.1,
+    defaultSpeed: 0.5,
+};
 const PREVIEW_UNLOCK_KEY = 'eclyrics-preview-unlocked';
 const PROMPTER_POPUP_W = 1920;
 const PROMPTER_POPUP_H = 1080;
@@ -41,6 +57,9 @@ function refreshPreviewVisibility() {
 function defaultPrompterSync() {
     const fs = parseFloat(localStorage.getItem('eclyrics-prompter-fontSize'));
     const cw = parseFloat(localStorage.getItem('eclyrics-prompter-width'));
+    const sp = parseFloat(localStorage.getItem(PREVIEW_PROMPTER_SPEED_KEY));
+    const storedTheme = localStorage.getItem(PREVIEW_STAGE_THEME_KEY);
+    const theme = storedTheme === 'bw' || storedTheme === 'lyrics' ? storedTheme : 'lyrics';
     return {
         type: 'eclyrics-prompter-sync',
         top: 0,
@@ -48,7 +67,18 @@ function defaultPrompterSync() {
         vh: PROMPTER_POPUP_H,
         fs: !Number.isNaN(fs) ? fs : 138,
         cw: !Number.isNaN(cw) ? cw : PROMPTER_POPUP_W * 0.7,
+        speed: !Number.isNaN(sp) ? sp : PREVIEW_PROMPTER.defaultSpeed,
+        playing: false,
+        theme,
     };
+}
+
+function applyPreviewStageTheme(theme) {
+    const wp = document.querySelector('.workspace-preview');
+    if (!wp || (theme !== 'lyrics' && theme !== 'bw')) return;
+    wp.classList.remove('preview-stage--lyrics', 'preview-stage--bw');
+    wp.classList.add(theme === 'lyrics' ? 'preview-stage--lyrics' : 'preview-stage--bw');
+    wp.dataset.stageTheme = theme;
 }
 
 function applyViewfinderFromPrompterSync() {
@@ -78,6 +108,200 @@ function applyViewfinderFromPrompterSync() {
     pan.style.transform = `translate(-50%, ${top * k}px)`;
 }
 
+function getPrompterTargetOrigin() {
+    return window.location.origin && window.location.origin !== 'null' ? window.location.origin : '*';
+}
+
+function postPrompterControl(payload) {
+    if (!prompterPopupWindow || prompterPopupWindow.closed) return false;
+    try {
+        prompterPopupWindow.postMessage({ type: 'eclyrics-prompter-control', ...payload }, getPrompterTargetOrigin());
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+
+function postPrompterKey(code, key) {
+    if (!prompterPopupWindow || prompterPopupWindow.closed) return false;
+    try {
+        prompterPopupWindow.postMessage(
+            { type: 'eclyrics-prompter-key', code, key: key || '' },
+            getPrompterTargetOrigin(),
+        );
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+
+function postPrompterKeyUp(key) {
+    if (!prompterPopupWindow || prompterPopupWindow.closed) return false;
+    try {
+        prompterPopupWindow.postMessage({ type: 'eclyrics-prompter-keyup', key }, getPrompterTargetOrigin());
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+
+function isPrompterWindowOpen() {
+    return !!(prompterPopupWindow && !prompterPopupWindow.closed);
+}
+
+function updatePreviewPrompterDock() {
+    const open = isPrompterWindowOpen();
+    const dock = document.getElementById('preview-prompter-dock');
+    if (dock) {
+        dock.classList.toggle('is-inactive', !open);
+        dock.tabIndex = open ? 0 : -1;
+    }
+    ['preview-btn-play', 'preview-btn-prev', 'preview-btn-next', 'preview-btn-theme', 'preview-prompter-speed'].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) el.disabled = !open;
+    });
+}
+
+function updatePreviewDockFromSync(data) {
+    if (!data || typeof data !== 'object') return;
+    const speedEl = document.getElementById('preview-prompter-speed');
+    const valEl = document.getElementById('preview-prompter-speed-val');
+    const playBtn = document.getElementById('preview-btn-play');
+    const themeBtn = document.getElementById('preview-btn-theme');
+    if (typeof data.speed === 'number' && !Number.isNaN(data.speed) && speedEl) {
+        speedEl.value = String(
+            Math.min(PREVIEW_PROMPTER.speedMax, Math.max(PREVIEW_PROMPTER.speedMin, data.speed)),
+        );
+        if (valEl) valEl.textContent = data.speed.toFixed(1);
+    }
+    if (playBtn && typeof data.playing === 'boolean') {
+        playBtn.setAttribute('aria-pressed', data.playing ? 'true' : 'false');
+        const icon = playBtn.querySelector('i');
+        if (icon) icon.className = data.playing ? 'fa-solid fa-pause' : 'fa-solid fa-play';
+    }
+    if (data.theme === 'lyrics' || data.theme === 'bw') {
+        try {
+            localStorage.setItem(PREVIEW_STAGE_THEME_KEY, data.theme);
+        } catch (e) {
+            /* ignore */
+        }
+        applyPreviewStageTheme(data.theme);
+    }
+    if (themeBtn && (data.theme === 'lyrics' || data.theme === 'bw')) {
+        themeBtn.setAttribute('aria-pressed', data.theme === 'lyrics' ? 'true' : 'false');
+        const ti = themeBtn.querySelector('i');
+        if (ti) {
+            ti.className =
+                data.theme === 'lyrics' ? 'fa-solid fa-droplet' : 'fa-solid fa-circle-half-stroke';
+        }
+        themeBtn.title =
+            data.theme === 'lyrics' ? 'Stage: blue lyrics (P) — click for black & white' : 'Stage: black & white (P) — click for blue lyrics';
+    }
+}
+
+function readSavedPreviewSpeed() {
+    const raw = localStorage.getItem(PREVIEW_PROMPTER_SPEED_KEY);
+    const n = parseFloat(raw);
+    if (!Number.isNaN(n) && n >= PREVIEW_PROMPTER.speedMin && n <= PREVIEW_PROMPTER.speedMax) return n;
+    return PREVIEW_PROMPTER.defaultSpeed;
+}
+
+function applySavedSpeedToSlider() {
+    const v = readSavedPreviewSpeed();
+    const speedEl = document.getElementById('preview-prompter-speed');
+    const valEl = document.getElementById('preview-prompter-speed-val');
+    if (speedEl) speedEl.value = String(v);
+    if (valEl) valEl.textContent = v.toFixed(1);
+}
+
+function handlePreviewDockKeydown(event) {
+    if (!isPrompterWindowOpen()) return;
+    if (event.ctrlKey || event.metaKey) return;
+    event.preventDefault();
+    postPrompterKey(event.code, event.key);
+}
+
+function handlePreviewDockKeyup(event) {
+    if (!isPrompterWindowOpen()) return;
+    if (event.key === 'Tab') {
+        event.preventDefault();
+        postPrompterKeyUp('Tab');
+    }
+}
+
+function goToAdjacentBlockAndSend(delta) {
+    const tabId = getActiveTabId();
+    if (!tabId) return;
+    const ta = getSelectedTextareaForActiveTab();
+    if (!ta) return;
+    const m = ta.id.match(/^textarea-\d+-(\d+)$/);
+    if (!m) return;
+    const textId = parseInt(m[1], 10) + delta;
+    const nextTa = document.getElementById(`textarea-${tabId}-${textId}`);
+    if (!nextTa) return;
+    selectTextarea(nextTa);
+    sendPrompt(tabId, textId);
+}
+
+function initPreviewPrompterDock() {
+    applySavedSpeedToSlider();
+    updatePreviewPrompterDock();
+
+    const dock = document.getElementById('preview-prompter-dock');
+    const playBtn = document.getElementById('preview-btn-play');
+    const prevBtn = document.getElementById('preview-btn-prev');
+    const nextBtn = document.getElementById('preview-btn-next');
+    const themeBtn = document.getElementById('preview-btn-theme');
+    const speedEl = document.getElementById('preview-prompter-speed');
+    const valEl = document.getElementById('preview-prompter-speed-val');
+
+    if (playBtn) {
+        playBtn.addEventListener('click', () => {
+            if (playBtn.disabled) return;
+            postPrompterControl({ action: 'playPause' });
+        });
+    }
+    if (prevBtn) {
+        prevBtn.addEventListener('click', () => {
+            if (prevBtn.disabled) return;
+            goToAdjacentBlockAndSend(-1);
+        });
+    }
+    if (nextBtn) {
+        nextBtn.addEventListener('click', () => {
+            if (nextBtn.disabled) return;
+            goToAdjacentBlockAndSend(1);
+        });
+    }
+    if (themeBtn) {
+        themeBtn.addEventListener('click', () => {
+            if (themeBtn.disabled) return;
+            postPrompterControl({ action: 'toggleTheme' });
+        });
+    }
+    if (speedEl) {
+        speedEl.addEventListener('input', () => {
+            const v = parseFloat(speedEl.value);
+            if (Number.isNaN(v)) return;
+            if (valEl) valEl.textContent = v.toFixed(1);
+            localStorage.setItem(PREVIEW_PROMPTER_SPEED_KEY, String(v));
+            postPrompterControl({ action: 'setSpeed', speed: v });
+        });
+    }
+    if (dock) {
+        dock.addEventListener('mousedown', (e) => {
+            if (dock.classList.contains('is-inactive')) return;
+            if (e.target.closest('input[type="range"], button')) return;
+            dock.focus({ preventScroll: true });
+        });
+        dock.addEventListener('keydown', handlePreviewDockKeydown, true);
+        dock.addEventListener('keyup', handlePreviewDockKeyup, true);
+    }
+
+    window.addEventListener('focus', () => updatePreviewPrompterDock());
+    updatePreviewDockFromSync(lastPrompterSync || defaultPrompterSync());
+}
+
 function initPrompterBroadcast() {
     try {
         prompterBroadcast = new BroadcastChannel(PROMPTER_BC_NAME);
@@ -90,6 +314,7 @@ function initPrompterBroadcast() {
         if (!ev.data || ev.data.type !== 'eclyrics-prompter-sync') return;
         lastPrompterSync = ev.data;
         applyViewfinderFromPrompterSync();
+        updatePreviewDockFromSync(ev.data);
     };
 
     const wrap = document.querySelector('.preview-viewfinder-16x9');
@@ -305,6 +530,7 @@ function initShell() {
     initSidebarCollapse();
     refreshPreviewVisibility();
     initPrompterBroadcast();
+    initPreviewPrompterDock();
     applyViewfinderFromPrompterSync();
 
     window.addEventListener('storage', (e) => {
@@ -373,14 +599,6 @@ function initShell() {
         });
     }
 
-    const scrollBtn = document.getElementById('scroll-block-btn');
-    if (scrollBtn) {
-        scrollBtn.addEventListener('click', () => {
-            const ta = getSelectedTextareaForActiveTab();
-            if (ta) ta.scrollTop = 0;
-        });
-    }
-
     const tc = document.getElementById('tab-content');
     if (tc) {
         tc.addEventListener('focusin', (e) => {
@@ -442,90 +660,129 @@ function addTabContent(tabId) {
     const container = document.createElement('div');
     container.classList.add('textareas-container');
 
-    createTextareasRow(container, tabId);
+    for (let b = 0; b < INITIAL_BLOCK_COUNT; b++) {
+        addSingleBlock(container, tabId);
+    }
 
-    const addSetButton = document.createElement('button');
-    addSetButton.classList.add('add-set-btn');
-    addSetButton.id = `add-set-${tabId}`;
-    addSetButton.title = 'Add new row of lyric blocks';
-    addSetButton.type = 'button';
-    addSetButton.innerHTML = '<i class="fa-solid fa-layer-group"></i> Add row of blocks';
-    addSetButton.onclick = function () {
-        createTextareasRow(container, tabId);
-    };
+    const addBlockButton = document.createElement('button');
+    addBlockButton.classList.add('add-block-btn');
+    addBlockButton.id = `add-block-${tabId}`;
+    addBlockButton.title = 'Add one lyric block';
+    addBlockButton.type = 'button';
+    addBlockButton.innerHTML = '<i class="fa-solid fa-plus"></i> Add block';
+    addBlockButton.addEventListener('click', () => {
+        addSingleBlock(container, tabId);
+    });
 
     content.appendChild(container);
-    content.appendChild(addSetButton);
+    content.appendChild(addBlockButton);
     tabContent.appendChild(content);
 }
 
-function createTextareasRow(container, tabId) {
-    const rowContainer = document.createElement('div');
-    rowContainer.classList.add('textareas-row');
+function syncBlockRemoveButtons(tabId) {
+    const tab = document.getElementById(`tab-${tabId}`);
+    if (!tab) return;
+    const cells = tab.querySelectorAll('.textarea-cell');
+    const multi = cells.length > 1;
+    cells.forEach((cell) => {
+        const btn = cell.querySelector('.textarea-cell-remove');
+        if (!btn) return;
+        btn.hidden = !multi;
+    });
+}
 
-    for (let i = 1; i <= AREA_PER_ROW; i++) {
-        const textId = ++textNum[tabId.toString()][0];
-
-        const cell = document.createElement('div');
-        cell.classList.add('textarea-cell');
-
-        const head = document.createElement('div');
-        head.classList.add('textarea-cell-head');
-        const label = document.createElement('span');
-        label.classList.add('textarea-cell-label');
-        label.title = 'Double-click to rename';
-        head.appendChild(label);
-
-        const textarea = document.createElement('textarea');
-        textarea.id = `textarea-${tabId}-${textId}`;
-        textarea.placeholder = `Lyrics for block ${textId} `;
-        label.addEventListener('dblclick', (ev) => {
-            ev.preventDefault();
-            ev.stopPropagation();
-            renameBlockLabel(textarea);
-        });
-        textarea.addEventListener('paste', () => {
-            setTimeout(() => {
-                textarea.scrollTop = 0;
-                const mid = textarea.id.match(/^textarea-(\d+)-/);
-                const tid = mid ? parseInt(mid[1], 10) : null;
-                if (tid != null) refreshAllBlockLabelsInTab(tid);
-                const sel = tid != null && textNum[tid.toString()] ? textNum[tid.toString()][2] : null;
-                if (tid === getActiveTabId() && sel === textarea) {
-                    updateActiveBlockToolbar();
-                    updatePreview();
-                }
-            }, 0);
-        });
-
-        cell.appendChild(head);
-        cell.appendChild(textarea);
-        updateBlockCellLabel(textarea);
-        rowContainer.appendChild(cell);
+function removeBlockCell(cell, tabId) {
+    const tab = document.getElementById(`tab-${tabId}`);
+    if (!tab || tab.querySelectorAll('.textarea-cell').length <= 1) return;
+    const row = cell.closest('.textareas-row');
+    cell.remove();
+    if (row && row.querySelectorAll('.textarea-cell').length === 0) {
+        row.remove();
     }
+    rearrangeTextAreas(tabId);
+    const first = tab.querySelector('textarea');
+    if (first) selectTextarea(first);
+    else {
+        updateActiveBlockToolbar();
+        updatePreview();
+    }
+}
 
-    const removeSetButton = document.createElement('button');
-    removeSetButton.classList.add('remove-set-btn');
-    removeSetButton.type = 'button';
-    removeSetButton.innerHTML = '×';
-    removeSetButton.title = 'Remove this row';
-    removeSetButton.onclick = function () {
-        rowContainer.remove();
-        rearrangeTextAreas(tabId);
-        const first = document.querySelector(`#tab-${tabId} textarea`);
-        if (first) selectTextarea(first);
-        else {
-            updateActiveBlockToolbar();
-            updatePreview();
-        }
-    };
+function getOrCreateRowForNewBlock(container) {
+    const rows = container.querySelectorAll(':scope > .textareas-row');
+    const last = rows[rows.length - 1];
+    if (!last) {
+        const row = document.createElement('div');
+        row.classList.add('textareas-row');
+        container.appendChild(row);
+        return row;
+    }
+    const count = last.querySelectorAll('.textarea-cell').length;
+    if (count >= MAX_BLOCKS_PER_ROW) {
+        const row = document.createElement('div');
+        row.classList.add('textareas-row');
+        container.appendChild(row);
+        return row;
+    }
+    return last;
+}
 
-    const buttonWrapper = document.createElement('div');
-    buttonWrapper.classList.add('remove-set-btn-wrapper');
-    buttonWrapper.appendChild(removeSetButton);
-    rowContainer.appendChild(buttonWrapper);
-    container.appendChild(rowContainer);
+function addSingleBlock(container, tabId) {
+    const textId = ++textNum[tabId.toString()][0];
+    const row = getOrCreateRowForNewBlock(container);
+
+    const cell = document.createElement('div');
+    cell.classList.add('textarea-cell');
+
+    const head = document.createElement('div');
+    head.classList.add('textarea-cell-head');
+    const label = document.createElement('span');
+    label.classList.add('textarea-cell-label');
+    label.title = 'Double-click to rename';
+
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.classList.add('textarea-cell-remove');
+    removeBtn.title = 'Remove this block';
+    removeBtn.setAttribute('aria-label', 'Remove this block');
+    removeBtn.innerHTML = '<i class="fa-solid fa-xmark" aria-hidden="true"></i>';
+    removeBtn.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        removeBlockCell(cell, tabId);
+    });
+
+    head.appendChild(label);
+    head.appendChild(removeBtn);
+
+    const textarea = document.createElement('textarea');
+    textarea.id = `textarea-${tabId}-${textId}`;
+    textarea.placeholder = `Lyrics for block ${textId}`;
+    label.addEventListener('dblclick', (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        renameBlockLabel(textarea);
+    });
+    textarea.addEventListener('paste', () => {
+        setTimeout(() => {
+            textarea.scrollTop = 0;
+            const mid = textarea.id.match(/^textarea-(\d+)-/);
+            const tid = mid ? parseInt(mid[1], 10) : null;
+            if (tid != null) refreshAllBlockLabelsInTab(tid);
+            const sel = tid != null && textNum[tid.toString()] ? textNum[tid.toString()][2] : null;
+            if (tid === getActiveTabId() && sel === textarea) {
+                updateActiveBlockToolbar();
+                updatePreview();
+            }
+        }, 0);
+    });
+
+    cell.appendChild(head);
+    cell.appendChild(textarea);
+    row.appendChild(cell);
+    updateBlockCellLabel(textarea);
     refreshAllBlockLabelsInTab(tabId);
+    syncBlockRemoveButtons(tabId);
 }
 
 function showTabContent(tabId) {
@@ -537,6 +794,7 @@ function showTabContent(tabId) {
         activeTab.classList.add('active');
         activeContent.style.display = 'block';
         refreshAllBlockLabelsInTab(tabId);
+        syncBlockRemoveButtons(tabId);
         const first = activeContent.querySelector('textarea');
         if (first) selectTextarea(first);
         else {
@@ -557,11 +815,12 @@ function rearrangeTextAreas(tabId) {
     for (const textarea of textareas) {
         newTextId++;
         textarea.id = `textarea-${tabId}-${newTextId}`;
-        textarea.placeholder = `Lyrics for block ${newTextId} (§ codes for color)`;
+        textarea.placeholder = `Lyrics for block ${newTextId}`;
     }
 
     refreshAllBlockLabelsInTab(tabId);
     updateActiveBlockToolbar();
+    syncBlockRemoveButtons(tabId);
 }
 
 function handleTabClose(tab) {
@@ -625,6 +884,8 @@ function sendPrompt(tabId, textId) {
             prompterPopupWindow.focus();
             textNum[tabId.toString()][1] = prompterPopupWindow;
             updatePreview();
+            updatePreviewPrompterDock();
+            postPrompterControl({ action: 'setSpeed', speed: readSavedPreviewSpeed() });
             return;
         } catch (e) {
             prompterPopupWindow = null;
@@ -646,6 +907,10 @@ function sendPrompt(tabId, textId) {
     textNum[tabId.toString()][1] = prompterPopupWindow;
     if (prompterPopupWindow) prompterPopupWindow.focus();
     updatePreview();
+    updatePreviewPrompterDock();
+    setTimeout(() => {
+        postPrompterControl({ action: 'setSpeed', speed: readSavedPreviewSpeed() });
+    }, 120);
 }
 
 document.getElementById('add-tab-btn').addEventListener('click', addTab);
