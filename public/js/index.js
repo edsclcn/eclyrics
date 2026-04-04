@@ -328,7 +328,7 @@ function getActiveTabId() {
     return t ? parseInt(t.dataset.tabId, 10) : null;
 }
 
-const BLOCK_TITLE_MAX_LEN = 52;
+const BLOCK_TITLE_MAX_LEN = 25;
 
 function getCustomBlockTitle(textarea) {
     return (textarea.dataset.blockTitle || '').trim();
@@ -387,7 +387,7 @@ function updateActiveBlockToolbar() {
         return;
     }
 
-    if (titleEl) titleEl.textContent = getBlockTitleDisplay(ta);
+    if (titleEl) titleEl.textContent = getBlockTitleDisplay(ta).toUpperCase();
 
     const cell = ta.closest('.textarea-cell');
     const isLive = cell?.classList.contains('is-live');
@@ -472,7 +472,7 @@ function updatePreview() {
         return;
     }
 
-    const html = formatText(raw);
+    const html = '\n' + formatText(raw);
     el.className = '';
     el.innerHTML = html;
     if (vf) {
