@@ -97,27 +97,23 @@
                                     </div>
                                 </div>
                                 <div class="block-toolbar">
-                                    <span class="block-toolbar-label">Active block: <span
+                                    <span class="block-toolbar-label">Editing: <span
                                             id="selected-block-title">—</span></span>
-                                    <div class="toolbar-actions">
-                                        <button type="button" class="btn-toolbar btn-toolbar-primary btn-toolbar-cta"
-                                            id="send-prompter-btn"
-                                            title="Send this tab to the lyric prompter window">
-                                            SEND TO PROMPTER
-                                        </button>
-                                    </div>
-                                    <p class="hint-inline">Select a block to edit. The 16∶9 strip shows the live
-                                        prompter crop; the column below is the full block. Use the preview dock for
-                                        play, speed, and blocks when the prompter window is open.</p>
+                                    <p class="hint-inline hint-inline--toolbar">Lyric blocks live
+                                        here. The right panel shows the <strong>selected</strong> block in full and a
+                                        <strong>live</strong> 16∶9 strip that mirrors the <strong>actual</strong> prompter window.</p>
                                 </div>
                             </div>
                             <section id="tab-content" aria-label="Lyric blocks"></section>
                         </div>
-                        <aside class="workspace-preview preview-stage--lyrics" data-stage-theme="lyrics" aria-label="Stage preview">
+                        <aside class="workspace-preview preview-stage--lyrics" data-stage-theme="lyrics"
+                            id="workspace-preview-panel"
+                            aria-label="Stage preview and prompter controls">
                             <div class="preview-header">Stage preview</div>
                             <div class="preview-frame">
-                                <div class="preview-viewfinder-label">Live prompter view (16∶9)</div>
-                                <div class="preview-viewfinder-16x9" aria-hidden="true">
+                                <div class="preview-viewfinder-label">Live on prompter (16∶9)</div>
+                                <div class="preview-viewfinder-16x9" aria-hidden="true" id="preview-viewfinder-stage"
+                                    title="Scroll or pinch-scroll adjusts the prompter when it is open (Ctrl+scroll: text size)">
                                     <div class="preview-viewfinder-stage-bg" aria-hidden="true"></div>
                                     <div class="preview-viewfinder-clip">
                                         <div class="preview-viewfinder-pan" id="preview-viewfinder-pan">
@@ -125,25 +121,49 @@
                                         </div>
                                     </div>
                                 </div>
-                                <div class="preview-prompter-dock" id="preview-prompter-dock" aria-label="Live prompter controls" tabindex="-1">
-                                    <div class="preview-shortcuts-strip" id="preview-prompter-keys"
-                                        role="group"
-                                        aria-label="Focus this panel (click background), then use the same keys as the prompter window.">
+                                <div class="preview-prompter-dock" id="preview-prompter-dock" aria-label="Live prompter controls">
+                                    <button type="button" class="preview-shortcuts-strip" id="preview-shortcuts-help-btn"
+                                        aria-haspopup="dialog"
+                                        aria-controls="preview-shortcuts-dialog"
+                                        aria-expanded="false"
+                                        title="Prompter keyboard shortcuts and tips">
                                         <span class="preview-shortcuts-strip-lead"><i class="fa-solid fa-keyboard" aria-hidden="true"></i><span>Shortcuts</span></span>
-                                        <span class="preview-shortcuts-strip-hint">All prompter keys — Space · 1–9 · P theme · [ ] size · T · Tab help</span>
-                                    </div>
+                                        <span class="preview-shortcuts-strip-chevron" aria-hidden="true"><i class="fa-solid fa-circle-info"></i></span>
+                                        <span class="preview-shortcuts-strip-hint"> View all keyboard shortcuts here.</span>
+                                    </button>
                                     <div class="preview-prompter-toolbar">
+                                        <button type="button" class="btn-toolbar btn-toolbar-primary btn-toolbar-cta preview-send-btn"
+                                            id="send-prompter-btn"
+                                            title="Send the active block to the prompter — ` (backtick) anywhere except in a text field">
+                                            Send to prompter
+                                        </button>
                                         <button type="button" class="preview-icon-btn" id="preview-btn-play"
                                             title="Play / Pause (Space)" aria-pressed="false" disabled>
                                             <i class="fa-solid fa-play" aria-hidden="true"></i>
                                         </button>
                                         <button type="button" class="preview-icon-btn" id="preview-btn-prev"
-                                            title="Select previous block and send to prompter" disabled>
+                                            title="Previous block on prompter" disabled>
                                             <i class="fa-solid fa-backward-step" aria-hidden="true"></i>
                                         </button>
                                         <button type="button" class="preview-icon-btn" id="preview-btn-next"
-                                            title="Select next block and send to prompter" disabled>
+                                            title="Next block on prompter" disabled>
                                             <i class="fa-solid fa-forward-step" aria-hidden="true"></i>
+                                        </button>
+                                        <button type="button" class="preview-icon-btn" id="preview-btn-scroll-up"
+                                            title="Scroll prompter up (same as ↑ in prompter)" disabled>
+                                            <i class="fa-solid fa-arrow-up" aria-hidden="true"></i>
+                                        </button>
+                                        <button type="button" class="preview-icon-btn" id="preview-btn-scroll-down"
+                                            title="Scroll prompter down (same as ↓ in prompter)" disabled>
+                                            <i class="fa-solid fa-arrow-down" aria-hidden="true"></i>
+                                        </button>
+                                        <button type="button" class="preview-icon-btn preview-icon-btn--font-sm" id="preview-btn-font-smaller"
+                                            title="Smaller text ([)" disabled>
+                                            <span class="preview-font-glyph" aria-hidden="true">A</span>
+                                        </button>
+                                        <button type="button" class="preview-icon-btn preview-icon-btn--font-lg" id="preview-btn-font-larger"
+                                            title="Larger text (])" disabled>
+                                            <span class="preview-font-glyph" aria-hidden="true">A</span>
                                         </button>
                                         <button type="button" class="preview-icon-btn" id="preview-btn-theme"
                                             title="Toggle blue lyrics vs black &amp; white (P)" aria-pressed="true" disabled>
@@ -157,12 +177,37 @@
                                         </div>
                                     </div>
                                 </div>
-                                <div class="preview-portrait-label">Full block (scroll)</div>
+                                <div class="preview-portrait-label">Selected block (full lyrics)</div>
                                 <div class="preview-portrait-body">
                                     <div class="preview-bg preview-bg-portrait" id="lyrics-preview-bg">
                                         <div id="lyrics-preview-content" class="preview-empty">Select a block to
                                             preview formatted lyrics.</div>
                                     </div>
+                                </div>
+                            </div>
+
+                            <div class="preview-shortcuts-dialog" id="preview-shortcuts-dialog" hidden role="dialog"
+                                aria-modal="true" aria-labelledby="preview-shortcuts-dialog-title">
+                                <div class="preview-shortcuts-dialog__backdrop" id="preview-shortcuts-dialog-backdrop" tabindex="-1"></div>
+                                <div class="preview-shortcuts-dialog__card">
+                                    <header class="preview-shortcuts-dialog__head">
+                                        <h3 id="preview-shortcuts-dialog-title">Prompter controls</h3>
+                                        <button type="button" class="preview-shortcuts-dialog__close" id="preview-shortcuts-dialog-close"
+                                            aria-label="Close"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
+                                    </header>
+                                    <p class="preview-shortcuts-dialog__lede">With the prompter window open, click this preview column, then use the same keys as on the projected window.</p>
+                                    <dl class="preview-shortcuts-dialog__list">
+                                        <div><dt>Send to prompter</dt><dd><kbd>`</kbd> backtick — from left or right side while Text Lyrics is open (not inside a text field)</dd></div>
+                                        <div><dt>Play / pause</dt><dd><kbd>Space</kbd></dd></div>
+                                        <div><dt>Scroll Speed</dt><dd><kbd>1</kbd>–<kbd>9</kbd>, <kbd>0</kbd></dd></div>
+                                        <div><dt>Scroll Increments</dt><dd><kbd>Numpad +</kbd> <kbd>Numpad −</kbd></dd></div>
+                                        <div><dt>Prev / Next block</dt><dd><kbd>←</kbd> <kbd>→</kbd></dd></div>
+                                        <div><dt>Theme</dt><dd><kbd>P</kbd> — blue lyrics vs black &amp; white</dd></div>
+                                        <div><dt>Text size</dt><dd><kbd>[</kbd> <kbd>]</kbd></dd></div>
+                                        <div><dt>Line width</dt><dd><kbd>-</kbd> <kbd>=</kbd> (main row keys)</dd></div>
+                                        <div><dt>Jump to top</dt><dd><kbd>T</kbd> (when not auto-scrolling)</dd></div>
+                                    </dl>
+                                    <p class="preview-shortcuts-dialog__note">Buttons in the bar above mirror several shortcuts. Scroll inside the 16∶9 strip to move lyrics when auto-scroll is paused.</p>
                                 </div>
                             </div>
                         </aside>

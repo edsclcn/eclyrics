@@ -208,6 +208,13 @@ window.addEventListener('message', (event) => {
                     broadcastPrompterState();
                 }
                 break;
+            case 'scrollBy':
+                if (typeof msg.delta !== 'number' || Number.isNaN(msg.delta)) break;
+                pauseScroll();
+                scrollPosition += msg.delta;
+                prompterContent.style.top = scrollPosition + 'px';
+                broadcastPrompterState();
+                break;
             case 'toggleTheme':
                 togglePrompterTheme();
                 break;
