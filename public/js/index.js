@@ -1,7 +1,7 @@
 /** Initial lyric blocks when a tab is created (add inserts one at a time). */
-const INITIAL_BLOCK_COUNT = 5;
-/** Hard wrap: row 1 holds blocks 1–5, row 2 holds 6–10, etc. */
-const MAX_BLOCKS_PER_ROW = 5;
+const INITIAL_BLOCK_COUNT = 4;
+/** Hard wrap: row 1 holds blocks 1–4, row 2 holds 5–8, etc. */
+const MAX_BLOCKS_PER_ROW = 4;
 const SESSION_ID = Math.random().toString().substring(2);
 const PREVIEW_PROMPTER_SPEED_KEY = 'eclyrics-preview-prompter-speed';
 const PREVIEW_STAGE_THEME_KEY = 'eclyrics-preview-stage-theme';
@@ -152,11 +152,24 @@ function isPrompterWindowOpen() {
 function updatePreviewPrompterDock() {
     const open = isPrompterWindowOpen();
     const dock = document.getElementById('preview-prompter-dock');
+    const panel = document.getElementById('workspace-preview-panel');
+    if (panel) {
+        panel.tabIndex = open ? 0 : -1;
+    }
     if (dock) {
         dock.classList.toggle('is-inactive', !open);
-        dock.tabIndex = open ? 0 : -1;
     }
-    ['preview-btn-play', 'preview-btn-prev', 'preview-btn-next', 'preview-btn-theme', 'preview-prompter-speed'].forEach((id) => {
+    [
+        'preview-btn-play',
+        'preview-btn-prev',
+        'preview-btn-next',
+        'preview-btn-scroll-up',
+        'preview-btn-scroll-down',
+        'preview-btn-font-smaller',
+        'preview-btn-font-larger',
+        'preview-btn-theme',
+        'preview-prompter-speed',
+    ].forEach((id) => {
         const el = document.getElementById(id);
         if (el) el.disabled = !open;
     });
@@ -214,8 +227,14 @@ function applySavedSpeedToSlider() {
     if (valEl) valEl.textContent = v.toFixed(1);
 }
 
+function isPreviewShortcutsDialogOpen() {
+    const dlg = document.getElementById('preview-shortcuts-dialog');
+    return dlg && !dlg.hidden;
+}
+
 function handlePreviewDockKeydown(event) {
     if (!isPrompterWindowOpen()) return;
+    if (isPreviewShortcutsDialogOpen()) return;
     if (event.ctrlKey || event.metaKey) return;
     event.preventDefault();
     postPrompterKey(event.code, event.key);
@@ -223,6 +242,7 @@ function handlePreviewDockKeydown(event) {
 
 function handlePreviewDockKeyup(event) {
     if (!isPrompterWindowOpen()) return;
+    if (isPreviewShortcutsDialogOpen()) return;
     if (event.key === 'Tab') {
         event.preventDefault();
         postPrompterKeyUp('Tab');
@@ -243,17 +263,106 @@ function goToAdjacentBlockAndSend(delta) {
     sendPrompt(tabId, textId);
 }
 
+function openPreviewShortcutsDialog() {
+    const dlg = document.getElementById('preview-shortcuts-dialog');
+    const btn = document.getElementById('preview-shortcuts-help-btn');
+    if (!dlg) return;
+    dlg.hidden = false;
+    dlg.setAttribute('aria-hidden', 'false');
+    if (btn) btn.setAttribute('aria-expanded', 'true');
+    document.getElementById('preview-shortcuts-dialog-close')?.focus();
+}
+
+function closePreviewShortcutsDialog() {
+    const dlg = document.getElementById('preview-shortcuts-dialog');
+    const btn = document.getElementById('preview-shortcuts-help-btn');
+    if (!dlg) return;
+    dlg.hidden = true;
+    dlg.setAttribute('aria-hidden', 'true');
+    if (btn) {
+        btn.setAttribute('aria-expanded', 'false');
+        btn.focus({ preventScroll: true });
+    }
+}
+
+function initPreviewShortcutsDialog() {
+    const helpBtn = document.getElementById('preview-shortcuts-help-btn');
+    const backdrop = document.getElementById('preview-shortcuts-dialog-backdrop');
+    const closeBtn = document.getElementById('preview-shortcuts-dialog-close');
+    helpBtn?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openPreviewShortcutsDialog();
+    });
+    backdrop?.addEventListener('click', () => closePreviewShortcutsDialog());
+    closeBtn?.addEventListener('click', () => closePreviewShortcutsDialog());
+    document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape' || !isPreviewShortcutsDialogOpen()) return;
+        e.preventDefault();
+        closePreviewShortcutsDialog();
+    });
+}
+
+function getLivePrompterTextarea() {
+    return document.querySelector('#tab-content .textarea-cell.is-live textarea');
+}
+
+function initPreviewViewfinderWheel() {
+    const wheelZone = document.getElementById('preview-viewfinder-stage');
+    if (!wheelZone) return;
+    wheelZone.addEventListener(
+        'wheel',
+        (e) => {
+            if (!isPrompterWindowOpen()) return;
+            if (e.ctrlKey || e.metaKey) {
+                e.preventDefault();
+                if (e.deltaY > 0) {
+                    postPrompterKey('BracketRight', ']');
+                } else {
+                    postPrompterKey('BracketLeft', '[');
+                }
+                return;
+            }
+            e.preventDefault();
+            const wrap = document.querySelector('.preview-viewfinder-16x9');
+            const data = lastPrompterSync || defaultPrompterSync();
+            const vw = data.vw || PROMPTER_POPUP_W;
+            const k = wrap ? Math.max(0.04, wrap.clientWidth / vw) : 0.2;
+            const delta = -e.deltaY / k;
+            postPrompterControl({ action: 'scrollBy', delta });
+        },
+        { passive: false },
+    );
+}
+
 function initPreviewPrompterDock() {
     applySavedSpeedToSlider();
     updatePreviewPrompterDock();
+    initPreviewShortcutsDialog();
+    initPreviewViewfinderWheel();
 
-    const dock = document.getElementById('preview-prompter-dock');
+    const panel = document.getElementById('workspace-preview-panel');
     const playBtn = document.getElementById('preview-btn-play');
     const prevBtn = document.getElementById('preview-btn-prev');
     const nextBtn = document.getElementById('preview-btn-next');
+    const scrollUpBtn = document.getElementById('preview-btn-scroll-up');
+    const scrollDownBtn = document.getElementById('preview-btn-scroll-down');
+    const fontSmBtn = document.getElementById('preview-btn-font-smaller');
+    const fontLgBtn = document.getElementById('preview-btn-font-larger');
     const themeBtn = document.getElementById('preview-btn-theme');
     const speedEl = document.getElementById('preview-prompter-speed');
     const valEl = document.getElementById('preview-prompter-speed-val');
+
+    if (panel) {
+        panel.addEventListener('mousedown', (e) => {
+            if (!isPrompterWindowOpen()) return;
+            const dlg = document.getElementById('preview-shortcuts-dialog');
+            if (dlg && !dlg.hidden && e.target.closest('#preview-shortcuts-dialog')) return;
+            if (e.target.closest('button, input, textarea, select, a')) return;
+            panel.focus({ preventScroll: true });
+        });
+        panel.addEventListener('keydown', handlePreviewDockKeydown, true);
+        panel.addEventListener('keyup', handlePreviewDockKeyup, true);
+    }
 
     if (playBtn) {
         playBtn.addEventListener('click', () => {
@@ -273,6 +382,30 @@ function initPreviewPrompterDock() {
             goToAdjacentBlockAndSend(1);
         });
     }
+    if (scrollUpBtn) {
+        scrollUpBtn.addEventListener('click', () => {
+            if (scrollUpBtn.disabled) return;
+            postPrompterControl({ action: 'scrollBy', delta: 100 });
+        });
+    }
+    if (scrollDownBtn) {
+        scrollDownBtn.addEventListener('click', () => {
+            if (scrollDownBtn.disabled) return;
+            postPrompterControl({ action: 'scrollBy', delta: -100 });
+        });
+    }
+    if (fontSmBtn) {
+        fontSmBtn.addEventListener('click', () => {
+            if (fontSmBtn.disabled) return;
+            postPrompterKey('BracketLeft', '[');
+        });
+    }
+    if (fontLgBtn) {
+        fontLgBtn.addEventListener('click', () => {
+            if (fontLgBtn.disabled) return;
+            postPrompterKey('BracketRight', ']');
+        });
+    }
     if (themeBtn) {
         themeBtn.addEventListener('click', () => {
             if (themeBtn.disabled) return;
@@ -287,15 +420,6 @@ function initPreviewPrompterDock() {
             localStorage.setItem(PREVIEW_PROMPTER_SPEED_KEY, String(v));
             postPrompterControl({ action: 'setSpeed', speed: v });
         });
-    }
-    if (dock) {
-        dock.addEventListener('mousedown', (e) => {
-            if (dock.classList.contains('is-inactive')) return;
-            if (e.target.closest('input[type="range"], button')) return;
-            dock.focus({ preventScroll: true });
-        });
-        dock.addEventListener('keydown', handlePreviewDockKeydown, true);
-        dock.addEventListener('keyup', handlePreviewDockKeyup, true);
     }
 
     window.addEventListener('focus', () => updatePreviewPrompterDock());
@@ -381,22 +505,17 @@ function updateActiveBlockToolbar() {
         if (titleEl) titleEl.textContent = '—';
         if (sendBtn) {
             sendBtn.disabled = false;
-            sendBtn.classList.remove('is-live-prompting');
-            sendBtn.title = 'Send this tab to the lyric prompter window';
+            sendBtn.title = 'Send the active block to the prompter (`) — updates an open window';
         }
         return;
     }
 
     if (titleEl) titleEl.textContent = getBlockTitleDisplay(ta).toUpperCase();
 
-    const cell = ta.closest('.textarea-cell');
-    const isLive = cell?.classList.contains('is-live');
     if (sendBtn) {
-        sendBtn.disabled = !!isLive;
-        sendBtn.classList.toggle('is-live-prompting', !!isLive);
-        sendBtn.title = isLive
-            ? 'This block is already on the prompter — select another block to switch'
-            : 'Send this tab to the lyric prompter window';
+        sendBtn.disabled = false;
+        sendBtn.title =
+            'Send the active block to the prompter (`) — replaces the lineup in an open prompter window';
     }
 }
 
@@ -441,9 +560,35 @@ function getSelectedTextareaForActiveTab() {
     return first;
 }
 
+function updateLiveViewfinder() {
+    const vf = document.getElementById('lyrics-preview-viewfinder');
+    if (!vf) return;
+
+    const liveTa = getLivePrompterTextarea();
+    if (!liveTa) {
+        vf.className = 'preview-empty';
+        vf.textContent = isPrompterWindowOpen()
+            ? 'Nothing on stage yet — choose a block and tap Send to prompter, or use prev / next after a send.'
+            : 'Open the prompter and send a block. This strip mirrors the projection, not the block you are editing below.';
+        applyViewfinderFromPrompterSync();
+        return;
+    }
+
+    const raw = liveTa.value;
+    if (!raw.trim()) {
+        vf.className = 'preview-empty';
+        vf.textContent = 'The live block is empty.';
+        applyViewfinderFromPrompterSync();
+        return;
+    }
+
+    vf.className = '';
+    vf.innerHTML = '\n' + formatText(raw);
+    applyViewfinderFromPrompterSync();
+}
+
 function updatePreview() {
     const el = document.getElementById('lyrics-preview-content');
-    const vf = document.getElementById('lyrics-preview-viewfinder');
     if (!el) return;
 
     const tabId = getActiveTabId();
@@ -452,11 +597,7 @@ function updatePreview() {
     if (!ta || !document.body.contains(ta)) {
         el.className = 'preview-empty';
         el.textContent = 'Select a block to preview formatted lyrics.';
-        if (vf) {
-            vf.className = 'preview-empty';
-            vf.textContent = el.textContent;
-        }
-        applyViewfinderFromPrompterSync();
+        updateLiveViewfinder();
         return;
     }
 
@@ -464,22 +605,13 @@ function updatePreview() {
     if (!raw.trim()) {
         el.className = 'preview-empty';
         el.textContent = 'Empty block — lyrics will appear here.';
-        if (vf) {
-            vf.className = 'preview-empty';
-            vf.textContent = el.textContent;
-        }
-        applyViewfinderFromPrompterSync();
+        updateLiveViewfinder();
         return;
     }
 
-    const html = '\n' + formatText(raw);
     el.className = '';
-    el.innerHTML = html;
-    if (vf) {
-        vf.className = '';
-        vf.innerHTML = html;
-    }
-    applyViewfinderFromPrompterSync();
+    el.innerHTML = '\n' + formatText(raw);
+    updateLiveViewfinder();
 }
 
 function syncThemeToggle(dark) {
@@ -524,6 +656,31 @@ function initSidebarCollapse() {
         localStorage.setItem('eclyrics-sidebar-collapsed', collapsed ? '1' : '0');
         syncSidebarToggle(collapsed);
     });
+}
+
+function isTypingInTextField(target) {
+    if (!target || typeof target.closest !== 'function') return false;
+    const el = target.nodeType === Node.ELEMENT_NODE ? target : null;
+    if (!el) return false;
+    if (el.isContentEditable) return true;
+    const tag = el.tagName;
+    if (tag === 'TEXTAREA') return true;
+    if (tag === 'SELECT') return true;
+    if (tag === 'INPUT') {
+        const type = (el.getAttribute('type') || 'text').toLowerCase();
+        const nonText = new Set(['button', 'submit', 'reset', 'checkbox', 'radio', 'range', 'file', 'hidden', 'image']);
+        return !nonText.has(type);
+    }
+    return false;
+}
+
+function sendActiveBlockToPrompter() {
+    const sendBtn = document.getElementById('send-prompter-btn');
+    if (sendBtn?.disabled) return;
+    const ta = getSelectedTextareaForActiveTab();
+    if (!ta) return;
+    const parts = ta.id.split('-');
+    sendPrompt(parseInt(parts[1], 10), parseInt(parts[2], 10));
 }
 
 function initShell() {
@@ -590,14 +747,23 @@ function initShell() {
 
     const sendBtn = document.getElementById('send-prompter-btn');
     if (sendBtn) {
-        sendBtn.addEventListener('click', () => {
-            if (sendBtn.disabled) return;
-            const ta = getSelectedTextareaForActiveTab();
-            if (!ta) return;
-            const parts = ta.id.split('-');
-            sendPrompt(parseInt(parts[1], 10), parseInt(parts[2], 10));
-        });
+        sendBtn.addEventListener('click', () => sendActiveBlockToPrompter());
     }
+
+    document.addEventListener(
+        'keydown',
+        (e) => {
+            if (e.code !== 'Backquote') return;
+            if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+            const textPanel = document.getElementById('panel-text');
+            if (!textPanel?.classList.contains('is-active')) return;
+            if (isPreviewShortcutsDialogOpen()) return;
+            if (isTypingInTextField(e.target)) return;
+            e.preventDefault();
+            sendActiveBlockToPrompter();
+        },
+        true,
+    );
 
     const tc = document.getElementById('tab-content');
     if (tc) {
@@ -611,9 +777,12 @@ function initShell() {
             const tid = m ? parseInt(m[1], 10) : null;
             if (tid != null) refreshAllBlockLabelsInTab(tid);
             const sel = tid != null && textNum[tid.toString()] ? textNum[tid.toString()][2] : null;
-            if (tid === getActiveTabId() && sel === e.target) {
+            if (tid !== getActiveTabId()) return;
+            if (sel === e.target) {
                 updatePreview();
                 updateActiveBlockToolbar();
+            } else if (e.target.closest('.textarea-cell.is-live')) {
+                updateLiveViewfinder();
             }
         });
     }
@@ -770,9 +939,12 @@ function addSingleBlock(container, tabId) {
             const tid = mid ? parseInt(mid[1], 10) : null;
             if (tid != null) refreshAllBlockLabelsInTab(tid);
             const sel = tid != null && textNum[tid.toString()] ? textNum[tid.toString()][2] : null;
-            if (tid === getActiveTabId() && sel === textarea) {
+            if (tid !== getActiveTabId()) return;
+            if (sel === textarea) {
                 updateActiveBlockToolbar();
                 updatePreview();
+            } else if (textarea.closest('.textarea-cell.is-live')) {
+                updateLiveViewfinder();
             }
         }, 0);
     });
