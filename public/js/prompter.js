@@ -1,6 +1,18 @@
 const DOUBLE_CLICK_INTERVAL = 500;
 const TOP_SPEED = 6.5;
 const SPEED_CONTROL = 0.1;
+const DEFAULT_SCROLL_SPEED = 0.5;
+/** Manual scroll (arrows / wheel) at default speed — scales with scrollSpeed. */
+const ARROW_SCROLL_BASE_PX = 50;
+const WHEEL_SCROLL_BASE_PX = 100;
+
+function scrollStepPx() {
+    return ARROW_SCROLL_BASE_PX * (scrollSpeed / DEFAULT_SCROLL_SPEED);
+}
+
+function wheelScrollStepPx() {
+    return WHEEL_SCROLL_BASE_PX * (scrollSpeed / DEFAULT_SCROLL_SPEED);
+}
 
 /** Sync font/width to localStorage so the main app preview can match the prompter window. */
 function syncPreviewMetricsFromSession() {
@@ -109,9 +121,28 @@ function persistScrollSpeed() {
     }
 }
 
+/** scrollPosition 0 = top; negative = scrolled down. Never scroll above top or past end. */
+function getScrollBounds() {
+    const viewH = window.innerHeight;
+    const contentH = prompterContent ? prompterContent.offsetHeight : 0;
+    const minTop = contentH <= viewH ? 0 : -(contentH - viewH);
+    return { min: minTop, max: 0 };
+}
+
+function clampScrollPosition() {
+    const { min, max } = getScrollBounds();
+    if (scrollPosition > max) scrollPosition = max;
+    if (scrollPosition < min) scrollPosition = min;
+}
+
+function applyScrollPosition() {
+    clampScrollPosition();
+    prompterContent.style.top = scrollPosition + 'px';
+}
+
 function scrollScript() {
     scrollPosition -= scrollSpeed;
-    prompterContent.style.top = scrollPosition + "px";
+    applyScrollPosition();
     if (scrollBroadcastTick++ % 2 === 0) broadcastPrompterState();
     animationLoop = requestAnimationFrame(scrollScript);
 }
@@ -204,7 +235,7 @@ window.addEventListener('message', (event) => {
             case 'scrollTop':
                 if (!scrollingNow) {
                     scrollPosition = 0;
-                    prompterContent.style.top = '0px';
+                    applyScrollPosition();
                     broadcastPrompterState();
                 }
                 break;
@@ -212,8 +243,23 @@ window.addEventListener('message', (event) => {
                 if (typeof msg.delta !== 'number' || Number.isNaN(msg.delta)) break;
                 pauseScroll();
                 scrollPosition += msg.delta;
-                prompterContent.style.top = scrollPosition + 'px';
+                applyScrollPosition();
                 broadcastPrompterState();
+                break;
+            case 'updateLineup':
+                if (!msg.lineupKey || msg.lineupKey !== lineupKey || !Array.isArray(msg.data)) break;
+                data = msg.data;
+                try {
+                    localStorage.setItem(lineupKey, JSON.stringify(data));
+                } catch (e) {
+                    /* ignore */
+                }
+                if (data[currentIndex] != null) {
+                    if (scrollingNow) pauseScroll();
+                    prompterContent.innerHTML = data[currentIndex];
+                    applyScrollPosition();
+                    broadcastPrompterState();
+                }
                 break;
             case 'toggleTheme':
                 togglePrompterTheme();
@@ -385,15 +431,15 @@ function handleMainKeys(event, fromRemote) {
         case 'ArrowUp':
             event.preventDefault();
             pauseScroll();
-            scrollPosition = prompterContent.offsetTop > -50 ? 0 : scrollPosition + 50;
-            prompterContent.style.top = scrollPosition + 'px';
+            scrollPosition += scrollStepPx();
+            applyScrollPosition();
             broadcastPrompterState();
             break;
         case 'ArrowDown':
             event.preventDefault();
             pauseScroll();
-            scrollPosition -= 50;
-            prompterContent.style.top = scrollPosition + 'px';
+            scrollPosition -= scrollStepPx();
+            applyScrollPosition();
             broadcastPrompterState();
             break;
         case 'F11': case 'KeyF':
@@ -526,11 +572,12 @@ var wheelListener = function (event) {
             localStorage.setItem('eclyrics-prompter-fontSize', String(newSize));
             broadcastPrompterState();
         }
-    } else { //Unsure whether to enable when non editable, also the amount
+    } else {
         pauseScroll();
-        if (event.deltaY < 0) scrollPosition = prompterContent.offsetTop > -100 ? 0 : scrollPosition + 100;
-        else scrollPosition -= 100;
-        prompterContent.style.top = scrollPosition + "px";
+        const step = wheelScrollStepPx();
+        if (event.deltaY < 0) scrollPosition += step;
+        else scrollPosition -= step;
+        applyScrollPosition();
         broadcastPrompterState();
     }
 };

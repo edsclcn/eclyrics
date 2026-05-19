@@ -12,13 +12,64 @@
 </head>
 
 <body>
-    <div id="auth-gate" class="auth-gate" role="dialog" aria-modal="true" aria-labelledby="auth-gate-title">
+    <!-- <div id="auth-gate" class="auth-gate" role="dialog" aria-modal="true" aria-labelledby="auth-gate-title">
         <div class="auth-gate-card">
             <h2 id="auth-gate-title" class="auth-gate-title">Sign in</h2>
             <p id="auth-error" class="auth-gate-error" role="alert"></p>
             <button type="button" id="auth-sign-in-google" class="auth-gate-google-btn">
                 <i class="fa-brands fa-google" aria-hidden="true"></i> Continue with Google
             </button>
+        </div>
+    </div> -->
+
+    <div id="block-source-dialog" class="block-source-dialog" hidden role="dialog" aria-modal="true"
+        aria-labelledby="block-source-dialog-title">
+        <div class="block-source-dialog__backdrop" id="block-source-dialog-backdrop" tabindex="-1"></div>
+        <div class="block-source-dialog__card">
+            <header class="block-source-dialog__head">
+                <div class="block-source-dialog__title-wrap">
+                    <h3 id="block-source-dialog-title">Add lyrics to block</h3>
+                </div>
+                <button type="button" class="block-source-dialog__close" id="block-source-dialog-close"
+                    aria-label="Close"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
+            </header>
+            <div class="block-source-body" id="block-source-body">
+                <p class="block-source-dialog__lede">Search your library or paste manually. Format: <strong>title</strong>,
+                    blank line, then lyrics.</p>
+                <label class="visually-hidden" for="block-source-search">Search song library</label>
+                <div class="block-source-search-wrap">
+                    <i class="fa-solid fa-magnifying-glass block-source-search-icon" aria-hidden="true"></i>
+                    <input type="search" id="block-source-search" class="block-source-search"
+                        placeholder="Search song library…" autocomplete="off" />
+                </div>
+                <ul id="block-source-results" class="block-source-results" role="listbox"
+                    aria-label="Song search results"></ul>
+                <p class="block-source-library-note" id="block-source-library-note">Sample results for layout. Firebase
+                    library connects later.</p>
+                <div class="block-source-alt">
+                    <span class="block-source-alt__rule" aria-hidden="true">or</span>
+                    <button type="button" class="block-source-option" id="block-source-type" data-block-source="type">
+                        <span class="block-source-option__icon" aria-hidden="true"><i
+                                class="fa-solid fa-keyboard"></i></span>
+                        <span class="block-source-option__text">
+                            <span class="block-source-option__title">Manually type</span>
+                            <span class="block-source-option__hint">Title line, blank line, then lyrics</span>
+                        </span>
+                        <span class="block-source-option__chevron" aria-hidden="true"><i
+                                class="fa-solid fa-chevron-right"></i></span>
+                    </button>
+                    <button type="button" class="block-source-option" id="block-source-paste" data-block-source="paste">
+                        <span class="block-source-option__icon" aria-hidden="true"><i
+                                class="fa-solid fa-paste"></i></span>
+                        <span class="block-source-option__text">
+                            <span class="block-source-option__title">Paste lyrics</span>
+                            <span class="block-source-option__hint"> Clipboard / Ctrl + V </span>
+                        </span>
+                        <span class="block-source-option__chevron" aria-hidden="true"><i
+                                class="fa-solid fa-chevron-right"></i></span>
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -82,8 +133,13 @@
                         <div class="workspace-editor">
                             <div class="lyrics-toolbar">
                                 <div class="tabs-toolbar-row">
-                                    <ul id="tabs-list"></ul>
-                                    <button type="button" id="add-tab-btn" title="Add another song tab">+</button>
+                                    <div class="song-tabs-group">
+                                        <ul id="tabs-list"></ul>
+                                        <button type="button" id="add-tab-btn" title="Add another song tab">+</button>
+                                        <span class="tabs-divider" id="block-tabs-divider" hidden aria-hidden="true"></span>
+                                        <ul id="block-tabs-list" class="block-tabs-list" hidden
+                                            aria-label="Open block lyrics"></ul>
+                                    </div>
                                     <div id="button-div">
                                         <button type="button" class="port-button" id="csv-btn" onclick="exportCSV()"
                                             title="Download first-line titles as CSV"><i
@@ -97,27 +153,33 @@
                                     </div>
                                 </div>
                                 <div class="block-toolbar">
-                                    <span class="block-toolbar-label">Editing: <span
-                                            id="selected-block-title">—</span></span>
-                                    <p class="hint-inline hint-inline--toolbar">Lyric blocks live
-                                        here. The right panel shows the <strong>selected</strong> block in full and a
-                                        <strong>live</strong> 16∶9 strip that mirrors the <strong>actual</strong> prompter window.</p>
+                                    <span class="block-toolbar-label">Editing: <button type="button"
+                                            class="block-toolbar-title-btn" id="selected-block-title-btn"
+                                            title="Open full lyrics for this block" disabled><span
+                                                id="selected-block-title">—</span></button></span>
+                                    <p class="hint-inline hint-inline--toolbar">Use <strong>+</strong> on a block to
+                                        search the library or paste lyrics. When every block is filled, another empty
+                                        slot appears. Edits sync to the live preview and prompter after you send.</p>
                                 </div>
                             </div>
                             <section id="tab-content" aria-label="Lyric blocks"></section>
+                            <section id="block-tab-content" class="block-tab-content" hidden
+                                aria-label="Block full lyrics"></section>
                         </div>
                         <aside class="workspace-preview preview-stage--lyrics" data-stage-theme="lyrics"
                             id="workspace-preview-panel"
                             aria-label="Stage preview and prompter controls">
                             <div class="preview-header">Stage preview</div>
-                            <div class="preview-frame">
+                            <div class="preview-frame preview-frame--prompter-focus">
                                 <div class="preview-viewfinder-label">Live on prompter (16∶9)</div>
-                                <div class="preview-viewfinder-16x9" aria-hidden="true" id="preview-viewfinder-stage"
-                                    title="Scroll or pinch-scroll adjusts the prompter when it is open (Ctrl+scroll: text size)">
-                                    <div class="preview-viewfinder-stage-bg" aria-hidden="true"></div>
-                                    <div class="preview-viewfinder-clip">
-                                        <div class="preview-viewfinder-pan" id="preview-viewfinder-pan">
-                                            <div id="lyrics-preview-viewfinder" class="preview-empty"></div>
+                                <div class="preview-viewfinder-slot">
+                                    <div class="preview-viewfinder-16x9" id="preview-viewfinder-stage"
+                                        title="Scroll or pinch-scroll adjusts the prompter when it is open (Ctrl+scroll: text size)">
+                                        <div class="preview-viewfinder-stage-bg" aria-hidden="true"></div>
+                                        <div class="preview-viewfinder-clip">
+                                            <div class="preview-viewfinder-pan" id="preview-viewfinder-pan">
+                                                <div id="lyrics-preview-viewfinder" class="preview-empty"></div>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -175,13 +237,6 @@
                                                 step="0.1" value="0.5" disabled />
                                             <output class="preview-speed-value" id="preview-prompter-speed-val" for="preview-prompter-speed">0.5</output>
                                         </div>
-                                    </div>
-                                </div>
-                                <div class="preview-portrait-label">Selected block (full lyrics)</div>
-                                <div class="preview-portrait-body">
-                                    <div class="preview-bg preview-bg-portrait" id="lyrics-preview-bg">
-                                        <div id="lyrics-preview-content" class="preview-empty">Select a block to
-                                            preview formatted lyrics.</div>
                                     </div>
                                 </div>
                             </div>
