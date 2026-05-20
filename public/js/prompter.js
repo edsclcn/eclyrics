@@ -35,13 +35,16 @@ function getPrompterThemeId() {
 
 function broadcastPrompterState() {
     if (!prompterBroadcastChannel || !prompterContent) return;
-    const fs = parseFloat(window.getComputedStyle(prompterContent).fontSize);
+    const cs = window.getComputedStyle(prompterContent);
+    const fs = parseFloat(cs.fontSize);
     prompterBroadcastChannel.postMessage({
         type: 'eclyrics-prompter-sync',
         top: scrollPosition,
         vw: window.innerWidth,
         vh: window.innerHeight,
         fs: Number.isNaN(fs) ? 138 : fs,
+        ls: cs.letterSpacing,
+        lh: cs.lineHeight,
         cw: prompterContent.offsetWidth,
         speed: scrollSpeed,
         playing: scrollingNow,
@@ -263,6 +266,9 @@ window.addEventListener('message', (event) => {
                 break;
             case 'toggleTheme':
                 togglePrompterTheme();
+                break;
+            case 'requestSync':
+                broadcastPrompterState();
                 break;
             default:
                 break;

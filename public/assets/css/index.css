@@ -360,20 +360,25 @@ a {
 
 .song-tabs-group {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     align-items: center;
     gap: 6px;
     flex: 1;
     min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
 }
 
 #tabs-list {
     list-style: none;
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: 6px;
     align-items: center;
     min-width: 0;
+    flex-shrink: 0;
 }
 
 .tab {
@@ -382,6 +387,8 @@ a {
     border-radius: var(--radius-sm);
     font-size: 0.82rem;
     font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
     cursor: pointer;
     user-select: none;
     background: var(--background-subtle);
@@ -517,6 +524,8 @@ a {
     font-weight: 700;
     color: var(--foreground);
     font-size: 0.88rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
     padding: 0;
     border: none;
     background: none;
@@ -587,6 +596,8 @@ a {
 
 .block-tab-label {
     pointer-events: none;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
 }
 
 .block-tab-content {
@@ -612,16 +623,23 @@ a {
 
 .block-tab-pane-head {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     align-items: center;
-    justify-content: space-between;
-    gap: 0.5rem;
+    gap: 0.65rem;
     flex-shrink: 0;
+    min-width: 0;
 }
 
 .block-tab-pane-title {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     font-size: 0.9rem;
     font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
     color: var(--blue-deep);
     margin: 0;
 }
@@ -631,6 +649,10 @@ a {
 }
 
 .block-tab-back-btn {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
     font-family: inherit;
     font-size: 0.78rem;
     font-weight: 600;
@@ -640,6 +662,12 @@ a {
     background: var(--card);
     color: var(--foreground);
     cursor: pointer;
+    white-space: nowrap;
+}
+
+.block-tab-back-btn i {
+    font-size: 0.85em;
+    opacity: 0.85;
 }
 
 .block-tab-back-btn:hover {
@@ -1310,7 +1338,6 @@ a {
 .workspace-preview.preview-stage--lyrics #lyrics-preview-content:not(.preview-empty) {
     font-family: var(--font-stage);
     font-weight: 900;
-    letter-spacing: 0.04em;
     color: #0a0a0a;
     text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
 }
@@ -1319,7 +1346,6 @@ a {
 .workspace-preview.preview-stage--bw #lyrics-preview-content:not(.preview-empty) {
     font-family: Arial, Helvetica, sans-serif;
     font-weight: 600;
-    letter-spacing: 0.02em;
     color: #f2f2f2;
     text-shadow: none;
 }
@@ -1873,15 +1899,15 @@ a {
 
 .preview-viewfinder-pan {
     position: absolute;
-    left: 50%;
+    left: 0;
     top: 0;
-    transform: translate(-50%, 0);
+    width: 100%;
+    transform-origin: top center;
     will-change: transform;
     pointer-events: none;
 }
 
 #lyrics-preview-viewfinder {
-    margin: 0 auto;
     text-align: center;
     font-family: var(--font-stage);
     font-weight: 900;
