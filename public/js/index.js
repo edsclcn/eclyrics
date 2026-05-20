@@ -16,7 +16,6 @@ const PREVIEW_PROMPTER = {
     speedStep: 0.1,
     defaultSpeed: 0.5,
 };
-const PREVIEW_UNLOCK_KEY = 'eclyrics-preview-unlocked';
 const PROMPTER_POPUP_W = 1920;
 const PROMPTER_POPUP_H = 1080;
 const PROMPTER_BC_NAME = 'eclyrics-prompter';
@@ -46,30 +45,6 @@ const SONG_LIBRARY_STUB = [
 ];
 
 let blockSourceTargetTextarea = null;
-
-function isPreviewUnlocked() {
-    return localStorage.getItem(PREVIEW_UNLOCK_KEY) === '1';
-}
-
-function unlockPreviewPanel() {
-    localStorage.setItem(PREVIEW_UNLOCK_KEY, '1');
-}
-
-function anyBlockHasText() {
-    return [...document.querySelectorAll('#tab-content textarea')].some((t) => t.value.trim().length > 0);
-}
-
-function refreshPreviewVisibility() {
-    const w = document.getElementById('workspace');
-    if (!w) return;
-    const shouldShow = isPreviewUnlocked() || anyBlockHasText();
-    if (shouldShow) {
-        if (!isPreviewUnlocked() && anyBlockHasText()) unlockPreviewPanel();
-        w.classList.add('preview-ready');
-    } else {
-        w.classList.remove('preview-ready');
-    }
-}
 
 function defaultPrompterSync() {
     const fs = parseFloat(localStorage.getItem('eclyrics-prompter-fontSize'));
@@ -657,7 +632,11 @@ function updateActiveBlockToolbar() {
         return;
     }
 
-    if (titleEl) titleEl.textContent = getBlockTitleDisplay(ta);
+    if (titleEl) {
+        const full = getBlockTitleFull(ta);
+        titleEl.textContent = full;
+        titleEl.title = full;
+    }
     if (titleBtn) titleBtn.disabled = false;
 
     if (sendBtn) {
@@ -976,7 +955,6 @@ function sendActiveBlockToPrompter() {
 
 function initShell() {
     initSidebarCollapse();
-    refreshPreviewVisibility();
     initPrompterBroadcast();
     initBlockSourceDialog();
     initPreviewPrompterDock();
@@ -999,11 +977,14 @@ function initShell() {
         }
     });
 
-    const saved = localStorage.getItem('eclyrics-theme');
-    if (saved === 'dark') {
-        document.documentElement.classList.add('dark');
-        syncThemeToggle(true);
+    let saved = localStorage.getItem('eclyrics-theme');
+    if (saved !== 'light' && saved !== 'dark') {
+        saved = 'dark';
+        localStorage.setItem('eclyrics-theme', saved);
     }
+    const dark = saved === 'dark';
+    document.documentElement.classList.toggle('dark', dark);
+    syncThemeToggle(dark);
 
     const themeBtn = document.getElementById('theme-toggle');
     if (themeBtn) {
@@ -1069,7 +1050,6 @@ function initShell() {
         });
         tc.addEventListener('input', (e) => {
             if (!e.target.matches || !e.target.matches('textarea')) return;
-            refreshPreviewVisibility();
             const m = e.target.id.match(/^textarea-(\d+)-(\d+)$/);
             const tid = m ? parseInt(m[1], 10) : null;
             if (tid != null) {
@@ -1552,7 +1532,6 @@ function showTabContent(tabId) {
             updateActiveBlockToolbar();
             updatePreview();
         }
-        refreshPreviewVisibility();
     }
 }
 
@@ -1590,7 +1569,6 @@ function handleTabClose(tab) {
         else {
             updateActiveBlockToolbar();
             updatePreview();
-            refreshPreviewVisibility();
         }
     }
 }
@@ -1687,7 +1665,6 @@ document.getElementById('tabs-list').addEventListener('click', (e) => {
 document.addEventListener('DOMContentLoaded', initShell);
 window.onload = () => {
     addTab();
-    refreshPreviewVisibility();
     applyViewfinderFromPrompterSync();
 };
 

@@ -510,6 +510,9 @@ a {
 }
 
 .block-toolbar-label {
+    display: flex;
+    align-items: baseline;
+    gap: 0.35rem;
     font-size: 0.8rem;
     color: var(--blue-deep);
     min-width: 0;
@@ -533,6 +536,22 @@ a {
     text-decoration: underline;
     text-decoration-color: color-mix(in srgb, var(--blue-mid) 45%, transparent);
     text-underline-offset: 2px;
+    flex: 1;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: left;
+}
+
+#selected-block-title {
+    display: inline-block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: bottom;
 }
 
 .block-toolbar-title-btn:hover:not(:disabled) {
@@ -1042,7 +1061,7 @@ a {
 .block-source-dialog__card {
     position: relative;
     width: min(100%, 440px);
-    max-height: min(88vh, 540px);
+    max-height: min(88vh, 560px);
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
@@ -1122,6 +1141,7 @@ a {
     flex-direction: column;
     gap: 0.55rem;
     min-height: 0;
+    flex: 1;
 }
 
 .block-source-dialog__lede {
@@ -1171,11 +1191,15 @@ a {
     list-style: none;
     margin: 0;
     padding: 0;
+    /* Fixed slot — dialog size stays stable whether 1 or many results */
+    height: 220px;
+    min-height: 220px;
     max-height: 220px;
     overflow: auto;
     display: flex;
     flex-direction: column;
     gap: 4px;
+    flex-shrink: 0;
 }
 
 .block-source-result {
@@ -1425,11 +1449,11 @@ a {
     color: #f0f0f0;
 }
 
-/* Preview column — hidden until first lyric text (see .preview-ready) */
+/* Preview column — always visible in Text Lyrics workspace */
 .workspace-preview {
     flex: 1 1 64%;
     min-width: 340px;
-    display: none;
+    display: flex;
     flex-direction: column;
     gap: 0.35rem;
     min-height: 0;
@@ -1442,10 +1466,6 @@ a {
         0 0 0 2px var(--card),
         0 0 0 5px rgba(115, 165, 198, 0.35);
     border-radius: var(--radius-lg);
-}
-
-.workspace.preview-ready .workspace-preview {
-    display: flex;
 }
 
 .preview-header {

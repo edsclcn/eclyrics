@@ -64,7 +64,6 @@ function importLineup() {
                 }
             }
             if (typeof refreshAllBlockLabelsInTab === 'function') refreshAllBlockLabelsInTab(tabId);
-            if (typeof refreshPreviewVisibility === 'function') refreshPreviewVisibility();
             if (typeof updatePreview === 'function') updatePreview();
             if (typeof updateActiveBlockToolbar === 'function') updateActiveBlockToolbar();
         })
