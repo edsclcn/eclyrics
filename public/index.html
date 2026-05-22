@@ -44,8 +44,7 @@
                 </div>
                 <ul id="block-source-results" class="block-source-results" role="listbox"
                     aria-label="Song search results"></ul>
-                <p class="block-source-library-note" id="block-source-library-note">Sample results for layout. Firebase
-                    library connects later.</p>
+                <p class="block-source-library-note" id="block-source-library-note">Loading song library…</p>
                 <div class="block-source-alt">
                     <span class="block-source-alt__rule" aria-hidden="true">or</span>
                     <button type="button" class="block-source-option" id="block-source-type" data-block-source="type">
@@ -320,8 +319,10 @@
     <script defer src="https://www.gstatic.com/firebasejs/12.10.0/firebase-app-compat.js"></script>
     <script defer src="https://www.gstatic.com/firebasejs/12.10.0/firebase-auth-compat.js"></script>
     <script defer src="https://www.gstatic.com/firebasejs/12.10.0/firebase-firestore-compat.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/minisearch@7.1.2/dist/umd/index.min.js"></script>
     <script defer src="js/firebase-config.js"></script>
     <script defer src="js/auth.js"></script>
+    <script defer src="js/song-library.js"></script>
     <script defer src="js/index.js"></script>
     <script defer src="js/port.js"></script>
     <script defer src="js/textformatting.js"></script>
