@@ -1192,7 +1192,7 @@ function onBlockContentChanged(textarea) {
 function applyLyricsToBlock(textarea, lyrics, title) {
     if (!textarea) return;
     delete textarea.dataset.blockTitle;
-    const resolvedTitle = (title || blockNumberFallbackLabel(textarea)).trim();
+    const resolvedTitle = (title || blockNumberFallbackLabel(textarea)).trim().toUpperCase();
     textarea.value = formatBlockLyricsContent(resolvedTitle, lyrics);
     textarea.dispatchEvent(new Event('input', { bubbles: true }));
     onBlockContentChanged(textarea);
