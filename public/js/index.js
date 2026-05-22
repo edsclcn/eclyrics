@@ -35,16 +35,8 @@ let activeBlockTabId = null;
 /** @type {Record<string, ReturnType<typeof setTimeout>>} */
 const prompterLineupSyncTimers = {};
 
-/** UI preview catalog — replace with Firebase queries later. */
-const SONG_LIBRARY_STUB = [
-    { id: 'sample-1', title: 'Song 1', lyrics: 'The quick brown fox jumps over the lazy dog' },
-    { id: 'sample-2', title: 'Song 2', lyrics: 'The quick brown fox jumps over the lazy dog' },
-    { id: 'sample-3', title: 'Song 3', lyrics: 'The quick brown fox jumps over the lazy dog' },
-    { id: 'sample-4', title: 'Song 4', lyrics: 'The quick brown fox jumps over the lazy dog' },
-    { id: 'sample-5', title: 'Song 5', lyrics: 'The quick brown fox jumps over the lazy dog' },
-];
-
 let blockSourceTargetTextarea = null;
+const SONG_LIBRARY_RESULT_LIMIT = 80;
 
 function defaultPrompterSync() {
     const fs = parseFloat(localStorage.getItem('eclyrics-prompter-fontSize'));
@@ -1241,6 +1233,65 @@ function getBlockSourceDialogTitle(textarea) {
     return label && label !== '—' ? `Add lyrics · ${label}` : 'Add lyrics to block';
 }
 
+function renderSongLibraryNote(message, show = true) {
+    const note = document.getElementById('block-source-library-note');
+    if (!note) return;
+    note.textContent = message;
+    note.hidden = !show;
+}
+
+function getSongLibraryApi() {
+    return window.eclyricsSongLibrary || null;
+}
+
+function getSongLibraryState() {
+    const api = getSongLibraryApi();
+    if (!api || typeof api.getState !== 'function') {
+        return { loaded: true, error: 'Song library module is not loaded.', count: 0 };
+    }
+    return api.getState();
+}
+
+function isAdaptationCategory(song) {
+    if (!Array.isArray(song?.category)) return false;
+    return song.category.some((entry) => String(entry || '').trim().toLowerCase() === 'adaptation');
+}
+
+function buildSongCategoryPills(song) {
+    const pills = [];
+    if (Array.isArray(song?.category)) {
+        song.category
+            .filter(Boolean)
+            .forEach((category) =>
+                pills.push({
+                    text: String(category).trim().toUpperCase(),
+                    tone: String(category).trim().toLowerCase(),
+                }),
+            );
+    }
+    return pills;
+}
+
+function getSongVersionDisplay(version) {
+    const v = String(version || '').trim();
+    if (!v) return '';
+    if (v.toLowerCase() === 'original') return '';
+    if (v.toLowerCase() === 'k&t') return 'K&T';
+    return v;
+}
+
+function getSongAdaptationLabel(song) {
+    if (!isAdaptationCategory(song) || !song?.adaptOf) return '';
+    return `${song.adaptOf} Adapt.`;
+}
+
+function truncateLyricsPreview(lyrics, maxChars = 150) {
+    const normalized = String(lyrics || '').replace(/\s+/g, ' ').trim();
+    if (!normalized) return 'No lyrics text yet.';
+    if (normalized.length <= maxChars) return normalized;
+    return `${normalized.slice(0, Math.max(0, maxChars - 3)).trimEnd()}...`;
+}
+
 function updateBlockSourceDialogHeader(textarea) {
     const titleEl = document.getElementById('block-source-dialog-title');
     if (titleEl && textarea) titleEl.textContent = getBlockSourceDialogTitle(textarea);
@@ -1264,35 +1315,71 @@ function focusBlockSourceSearch() {
 
 function renderBlockSourceSearchResults(query) {
     const list = document.getElementById('block-source-results');
-    const note = document.getElementById('block-source-library-note');
     if (!list) return;
-    const q = query.trim().toLowerCase();
-    const matches = q
-        ? SONG_LIBRARY_STUB.filter((s) => s.title.toLowerCase().includes(q))
-        : SONG_LIBRARY_STUB;
+    const api = getSongLibraryApi();
+    const q = query.trim();
+    const state = getSongLibraryState();
+    const matches =
+        api && typeof api.search === 'function' ? api.search(q, SONG_LIBRARY_RESULT_LIMIT) : [];
     list.replaceChildren();
     if (matches.length === 0) {
         const li = document.createElement('li');
         li.className = 'block-source-results-empty';
-        li.textContent = q ? 'No songs match your search.' : 'No songs in library yet.';
+        if (state.error) li.textContent = state.error;
+        else if (!state.loaded) li.textContent = 'Loading song library…';
+        else li.textContent = q ? 'No songs match your search.' : 'No songs in library yet.';
         list.appendChild(li);
-        if (note) note.hidden = false;
+        if (state.error) renderSongLibraryNote(state.error, true);
+        else if (!state.loaded) renderSongLibraryNote('Loading song library…', true);
+        else renderSongLibraryNote('No songs found in Firestore library.', true);
         return;
     }
-    if (note) note.hidden = true;
+    if (q && matches.length === SONG_LIBRARY_RESULT_LIMIT) {
+        renderSongLibraryNote(`Showing top ${SONG_LIBRARY_RESULT_LIMIT} matches. Refine search for more.`, true);
+    } else {
+        renderSongLibraryNote('', false);
+    }
     matches.forEach((song) => {
         const li = document.createElement('li');
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'block-source-result';
         btn.setAttribute('role', 'option');
+        const topRow = document.createElement('span');
+        topRow.className = 'block-source-result__top';
+        const titleWrap = document.createElement('span');
+        titleWrap.className = 'block-source-result__title-wrap';
         const titleSpan = document.createElement('span');
         titleSpan.className = 'block-source-result__title';
         titleSpan.textContent = song.title;
+        titleWrap.appendChild(titleSpan);
+        const versionDisplay = getSongVersionDisplay(song.version);
+        if (versionDisplay) {
+            const versionSpan = document.createElement('span');
+            versionSpan.className = 'block-source-result__version';
+            versionSpan.textContent = versionDisplay;
+            titleWrap.appendChild(versionSpan);
+        }
+        const adaptLabel = getSongAdaptationLabel(song);
+        if (adaptLabel) {
+            const adaptSpan = document.createElement('span');
+            adaptSpan.className = 'block-source-result__adapt';
+            adaptSpan.textContent = adaptLabel;
+            titleWrap.appendChild(adaptSpan);
+        }
+        const pillWrap = document.createElement('span');
+        pillWrap.className = 'block-source-result__pills';
+        buildSongCategoryPills(song).forEach((pillData) => {
+            const pill = document.createElement('span');
+            pill.className = `block-source-pill block-source-pill--${pillData.tone.replace(/[^a-z0-9]+/g, '-')}`;
+            pill.textContent = pillData.text;
+            pillWrap.appendChild(pill);
+        });
+        topRow.append(titleWrap, pillWrap);
         const metaSpan = document.createElement('span');
         metaSpan.className = 'block-source-result__meta';
-        metaSpan.textContent = 'Inserts title, blank line, then lyrics';
-        btn.append(titleSpan, metaSpan);
+        metaSpan.textContent = truncateLyricsPreview(song.lyrics);
+        btn.append(topRow, metaSpan);
         btn.addEventListener('click', () => {
             if (blockSourceTargetTextarea) {
                 applyLyricsToBlock(blockSourceTargetTextarea, song.lyrics, song.title);
@@ -1346,6 +1433,21 @@ function initBlockSourceDialog() {
 
     const search = document.getElementById('block-source-search');
     search?.addEventListener('input', () => renderBlockSourceSearchResults(search.value));
+
+    const libraryApi = getSongLibraryApi();
+    if (libraryApi) {
+        libraryApi.onChange(() => {
+            const next = document.getElementById('block-source-search')?.value || '';
+            renderBlockSourceSearchResults(next);
+            const state = getSongLibraryState();
+            if (state.error) renderSongLibraryNote(state.error, true);
+            else if (!state.loaded) renderSongLibraryNote('Loading song library…', true);
+            else if (state.count === 0) renderSongLibraryNote('No songs found in Firestore library.', true);
+        });
+        void libraryApi.start();
+    } else {
+        renderSongLibraryNote('Song library module is not loaded.', true);
+    }
 
     document.addEventListener('keydown', (e) => {
         if (e.key !== 'Escape' || dlg.hidden) return;

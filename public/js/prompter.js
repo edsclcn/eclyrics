@@ -124,11 +124,12 @@ function persistScrollSpeed() {
     }
 }
 
-/** scrollPosition 0 = top; negative = scrolled down. Never scroll above top or past end. */
+/** scrollPosition 0 = top; negative = scrolled down.
+ * Allow one full viewport of blank tail after the last line. */
 function getScrollBounds() {
     const viewH = window.innerHeight;
     const contentH = prompterContent ? prompterContent.offsetHeight : 0;
-    const minTop = contentH <= viewH ? 0 : -(contentH - viewH);
+    const minTop = -(Math.max(contentH, viewH));
     return { min: minTop, max: 0 };
 }
 
