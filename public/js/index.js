@@ -1189,11 +1189,14 @@ function onBlockContentChanged(textarea) {
     maintainEmptySlotForTab(tabId);
 }
 
-function applyLyricsToBlock(textarea, lyrics, title) {
+function applyLyricsToBlock(textarea, lyrics, title, hymnNum = '') {
     if (!textarea) return;
     delete textarea.dataset.blockTitle;
     const resolvedTitle = (title || blockNumberFallbackLabel(textarea)).trim().toUpperCase();
-    textarea.value = formatBlockLyricsContent(resolvedTitle, lyrics);
+    const hymnNumText = String(hymnNum || '').trim();
+    const hymnHeading = hymnNumText.replace(/^#\s*/, '');
+    const fullTitle = hymnHeading ? `#${hymnHeading}\n${resolvedTitle}` : resolvedTitle;
+    textarea.value = formatBlockLyricsContent(fullTitle, lyrics);
     textarea.dispatchEvent(new Event('input', { bubbles: true }));
     onBlockContentChanged(textarea);
     selectTextarea(textarea);
@@ -1292,6 +1295,12 @@ function truncateLyricsPreview(lyrics, maxChars = 150) {
     return `${normalized.slice(0, Math.max(0, maxChars - 3)).trimEnd()}...`;
 }
 
+function getPopupSongTitle(song) {
+    const hymnNum = String(song?.hymnNum || '').trim();
+    const title = String(song?.title || '').trim() || '(Untitled)';
+    return hymnNum ? `${hymnNum} - ${title}` : title;
+}
+
 function updateBlockSourceDialogHeader(textarea) {
     const titleEl = document.getElementById('block-source-dialog-title');
     if (titleEl && textarea) titleEl.textContent = getBlockSourceDialogTitle(textarea);
@@ -1351,7 +1360,7 @@ function renderBlockSourceSearchResults(query) {
         titleWrap.className = 'block-source-result__title-wrap';
         const titleSpan = document.createElement('span');
         titleSpan.className = 'block-source-result__title';
-        titleSpan.textContent = song.title;
+        titleSpan.textContent = getPopupSongTitle(song);
         titleWrap.appendChild(titleSpan);
         const versionDisplay = getSongVersionDisplay(song.version);
         if (versionDisplay) {
@@ -1382,7 +1391,7 @@ function renderBlockSourceSearchResults(query) {
         btn.append(topRow, metaSpan);
         btn.addEventListener('click', () => {
             if (blockSourceTargetTextarea) {
-                applyLyricsToBlock(blockSourceTargetTextarea, song.lyrics, song.title);
+                applyLyricsToBlock(blockSourceTargetTextarea, song.lyrics, song.title, song.hymnNum);
             }
             closeBlockSourceDialog();
         });

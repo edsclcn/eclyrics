@@ -45,6 +45,7 @@
             id: String(docSnap.id),
             title: title || '(Untitled)',
             lyrics,
+            hymnNum: asNonEmptyString(data['hymn-num'] || data.hymnNum),
             category,
             version: asNonEmptyString(data.version),
             adaptOf,
@@ -55,8 +56,8 @@
         if (!Array.isArray(state.songs) || state.songs.length === 0) return null;
         if (typeof MiniSearch !== 'function') return null;
         const miniSearch = new MiniSearch({
-            fields: ['title', 'lyrics'],
-            storeFields: ['id', 'title', 'lyrics', 'category', 'version', 'adaptOf'],
+            fields: ['hymnNum', 'title', 'lyrics'],
+            storeFields: ['id', 'hymnNum', 'title', 'lyrics', 'category', 'version', 'adaptOf'],
             searchOptions: {
                 prefix: true,
                 fuzzy: 0.2,
@@ -181,6 +182,7 @@
             ? state.searchIndex.search(q)
             : state.songs.filter(
                   (song) =>
+                      song.hymnNum.toLowerCase().includes(q) ||
                       song.title.toLowerCase().includes(q) ||
                       song.lyrics.toLowerCase().includes(q),
               );
