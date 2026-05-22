@@ -1,7 +1,7 @@
 /** Initial lyric blocks when a tab is created (add inserts one at a time). */
-const INITIAL_BLOCK_COUNT = 4;
-/** Hard wrap: row 1 holds blocks 1–4, row 2 holds 5–8, etc. */
-const MAX_BLOCKS_PER_ROW = 4;
+const INITIAL_BLOCK_COUNT = 3;
+/** Hard wrap: row 1 holds blocks 1–3, row 2 holds 4–6, etc. */
+const MAX_BLOCKS_PER_ROW = 3;
 const SESSION_ID = Math.random().toString().substring(2);
 const PREVIEW_PROMPTER_SPEED_KEY = 'eclyrics-preview-prompter-speed';
 const PREVIEW_STAGE_THEME_KEY = 'eclyrics-preview-stage-theme';
@@ -16,7 +16,6 @@ const PREVIEW_PROMPTER = {
     speedStep: 0.1,
     defaultSpeed: 0.5,
 };
-const PREVIEW_UNLOCK_KEY = 'eclyrics-preview-unlocked';
 const PROMPTER_POPUP_W = 1920;
 const PROMPTER_POPUP_H = 1080;
 const PROMPTER_BC_NAME = 'eclyrics-prompter';
@@ -29,30 +28,23 @@ let lastPrompterSync = null;
 let prompterPopupWindow = null;
 let activeTabs = [];
 let textNum = {};
+/** One full-lyrics editor at a time; opening another block switches content. */
+/** @type {{ blockTabId: string, sourceId: string, pane: HTMLElement, editor: HTMLTextAreaElement } | null} */
+let blockEditorSession = null;
+let activeBlockTabId = null;
+/** @type {Record<string, ReturnType<typeof setTimeout>>} */
+const prompterLineupSyncTimers = {};
 
-function isPreviewUnlocked() {
-    return localStorage.getItem(PREVIEW_UNLOCK_KEY) === '1';
-}
+/** UI preview catalog — replace with Firebase queries later. */
+const SONG_LIBRARY_STUB = [
+    { id: 'sample-1', title: 'Song 1', lyrics: 'The quick brown fox jumps over the lazy dog' },
+    { id: 'sample-2', title: 'Song 2', lyrics: 'The quick brown fox jumps over the lazy dog' },
+    { id: 'sample-3', title: 'Song 3', lyrics: 'The quick brown fox jumps over the lazy dog' },
+    { id: 'sample-4', title: 'Song 4', lyrics: 'The quick brown fox jumps over the lazy dog' },
+    { id: 'sample-5', title: 'Song 5', lyrics: 'The quick brown fox jumps over the lazy dog' },
+];
 
-function unlockPreviewPanel() {
-    localStorage.setItem(PREVIEW_UNLOCK_KEY, '1');
-}
-
-function anyBlockHasText() {
-    return [...document.querySelectorAll('#tab-content textarea')].some((t) => t.value.trim().length > 0);
-}
-
-function refreshPreviewVisibility() {
-    const w = document.getElementById('workspace');
-    if (!w) return;
-    const shouldShow = isPreviewUnlocked() || anyBlockHasText();
-    if (shouldShow) {
-        if (!isPreviewUnlocked() && anyBlockHasText()) unlockPreviewPanel();
-        w.classList.add('preview-ready');
-    } else {
-        w.classList.remove('preview-ready');
-    }
-}
+let blockSourceTargetTextarea = null;
 
 function defaultPrompterSync() {
     const fs = parseFloat(localStorage.getItem('eclyrics-prompter-fontSize'));
@@ -66,11 +58,38 @@ function defaultPrompterSync() {
         vw: PROMPTER_POPUP_W,
         vh: PROMPTER_POPUP_H,
         fs: !Number.isNaN(fs) ? fs : 138,
+        ls: theme === 'lyrics' ? '2.5px' : 'normal',
+        lh: '1.2em',
         cw: !Number.isNaN(cw) ? cw : PROMPTER_POPUP_W * 0.7,
         speed: !Number.isNaN(sp) ? sp : PREVIEW_PROMPTER.defaultSpeed,
         playing: false,
         theme,
     };
+}
+
+/** Parse letter-spacing / similar values from prompter computed style. */
+function parsePrompterCssPx(value, fallback = 0) {
+    if (!value || value === 'normal') return fallback;
+    const n = parseFloat(value);
+    return Number.isNaN(n) ? fallback : n;
+}
+
+function getPreviewScaleFactor(wrap, vw) {
+    if (!wrap || !vw) return 1;
+    return Math.max(0.04, wrap.clientWidth / vw);
+}
+
+function applyPreviewFontSizeDelta(deltaPx) {
+    const base = { ...(lastPrompterSync || defaultPrompterSync()) };
+    base.fs = Math.max(8, (base.fs || 138) + deltaPx);
+    try {
+        localStorage.setItem('eclyrics-prompter-fontSize', String(base.fs));
+    } catch (e) {
+        /* ignore */
+    }
+    lastPrompterSync = base;
+    applyViewfinderFromPrompterSync();
+    postPrompterControl({ action: 'requestSync' });
 }
 
 function applyPreviewStageTheme(theme) {
@@ -91,21 +110,37 @@ function applyViewfinderFromPrompterSync() {
         inner.style.width = '';
         inner.style.fontSize = '';
         inner.style.letterSpacing = '';
-        pan.style.transform = 'translate(-50%, 0)';
+        inner.style.lineHeight = '';
+        inner.style.top = '';
+        inner.style.left = '';
+        inner.style.right = '';
+        inner.style.transform = '';
+        inner.style.position = '';
+        pan.style.transform = '';
+        pan.style.transformOrigin = '';
         return;
     }
 
     const data = lastPrompterSync || defaultPrompterSync();
     const vw = data.vw || PROMPTER_POPUP_W;
-    const k = Math.max(0.04, wrap.clientWidth / vw);
+    const k = getPreviewScaleFactor(wrap, vw);
     const top = typeof data.top === 'number' ? data.top : 0;
     const fs = data.fs || 138;
     const cw = data.cw || vw * 0.7;
+    const lsPx = parsePrompterCssPx(data.ls, data.theme === 'bw' ? 0 : 2.5);
 
-    inner.style.width = `${cw * k}px`;
-    inner.style.fontSize = `${fs * k}px`;
-    inner.style.letterSpacing = `${2.5 * k}px`;
-    pan.style.transform = `translate(-50%, ${top * k}px)`;
+    /* Match prompter pixel-for-pixel, then scale from viewport top-center. */
+    inner.style.position = 'absolute';
+    inner.style.left = '50%';
+    inner.style.right = 'auto';
+    inner.style.top = `${top}px`;
+    inner.style.width = `${cw}px`;
+    inner.style.fontSize = `${fs}px`;
+    inner.style.lineHeight = data.lh || '1.2em';
+    inner.style.letterSpacing = lsPx > 0 ? `${lsPx}px` : 'normal';
+    inner.style.transform = 'translateX(-50%)';
+    pan.style.transformOrigin = 'top center';
+    pan.style.transform = `scale(${k})`;
 }
 
 function getPrompterTargetOrigin() {
@@ -146,7 +181,24 @@ function postPrompterKeyUp(key) {
 }
 
 function isPrompterWindowOpen() {
+    if (prompterPopupWindow && prompterPopupWindow.closed) prompterPopupWindow = null;
     return !!(prompterPopupWindow && !prompterPopupWindow.closed);
+}
+
+function getActivePrompterSpeed() {
+    const fromSync = lastPrompterSync?.speed;
+    if (typeof fromSync === 'number' && !Number.isNaN(fromSync)) return fromSync;
+    return readSavedPreviewSpeed();
+}
+
+/** Scroll nudge in the prompter (px), scaled to match current scroll speed. */
+function getPreviewScrollStep() {
+    return 50 * (getActivePrompterSpeed() / PREVIEW_PROMPTER.defaultSpeed);
+}
+
+/** Dock scroll buttons use a slightly larger base step, same speed scaling. */
+function getPreviewScrollStepLarge() {
+    return 100 * (getActivePrompterSpeed() / PREVIEW_PROMPTER.defaultSpeed);
 }
 
 function updatePreviewPrompterDock() {
@@ -154,15 +206,13 @@ function updatePreviewPrompterDock() {
     const dock = document.getElementById('preview-prompter-dock');
     const panel = document.getElementById('workspace-preview-panel');
     if (panel) {
-        panel.tabIndex = open ? 0 : -1;
+        panel.tabIndex = 0;
     }
     if (dock) {
         dock.classList.toggle('is-inactive', !open);
     }
     [
         'preview-btn-play',
-        'preview-btn-prev',
-        'preview-btn-next',
         'preview-btn-scroll-up',
         'preview-btn-scroll-down',
         'preview-btn-font-smaller',
@@ -199,6 +249,7 @@ function updatePreviewDockFromSync(data) {
             /* ignore */
         }
         applyPreviewStageTheme(data.theme);
+        applyViewfinderFromPrompterSync();
     }
     if (themeBtn && (data.theme === 'lyrics' || data.theme === 'bw')) {
         themeBtn.setAttribute('aria-pressed', data.theme === 'lyrics' ? 'true' : 'false');
@@ -233,9 +284,46 @@ function isPreviewShortcutsDialogOpen() {
 }
 
 function handlePreviewDockKeydown(event) {
-    if (!isPrompterWindowOpen()) return;
     if (isPreviewShortcutsDialogOpen()) return;
     if (event.ctrlKey || event.metaKey) return;
+
+    if (event.key === 'ArrowLeft') {
+        event.preventDefault();
+        goToAdjacentBlockAndSend(-1);
+        return;
+    }
+    if (event.key === 'ArrowRight') {
+        event.preventDefault();
+        goToAdjacentBlockAndSend(1);
+        return;
+    }
+
+    if (!isPrompterWindowOpen()) return;
+
+    if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        postPrompterControl({ action: 'scrollBy', delta: getPreviewScrollStep() });
+        return;
+    }
+    if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        postPrompterControl({ action: 'scrollBy', delta: -getPreviewScrollStep() });
+        return;
+    }
+
+    if (event.code === 'BracketLeft') {
+        event.preventDefault();
+        applyPreviewFontSizeDelta(-2);
+        postPrompterKey('BracketLeft', '[');
+        return;
+    }
+    if (event.code === 'BracketRight') {
+        event.preventDefault();
+        applyPreviewFontSizeDelta(2);
+        postPrompterKey('BracketRight', ']');
+        return;
+    }
+
     event.preventDefault();
     postPrompterKey(event.code, event.key);
 }
@@ -260,7 +348,7 @@ function goToAdjacentBlockAndSend(delta) {
     const nextTa = document.getElementById(`textarea-${tabId}-${textId}`);
     if (!nextTa) return;
     selectTextarea(nextTa);
-    sendPrompt(tabId, textId);
+    sendPrompt(tabId, textId, { openIfClosed: false, focusWindow: false });
 }
 
 function openPreviewShortcutsDialog() {
@@ -306,6 +394,42 @@ function getLivePrompterTextarea() {
     return document.querySelector('#tab-content .textarea-cell.is-live textarea');
 }
 
+function buildLineupForTab(tabId) {
+    const blocks = [];
+    for (let i = 1; ; i++) {
+        const textarea = document.getElementById(`textarea-${tabId}-${i}`);
+        if (!textarea) break;
+        blocks.push('\n' + formatText(textarea.value));
+    }
+    return blocks;
+}
+
+function getLineupKeyForTab(tabId) {
+    return `${SESSION_ID}-${tabId}`;
+}
+
+function schedulePrompterLineupSync(tabId) {
+    const key = String(tabId);
+    if (prompterLineupSyncTimers[key]) clearTimeout(prompterLineupSyncTimers[key]);
+    prompterLineupSyncTimers[key] = setTimeout(() => {
+        delete prompterLineupSyncTimers[key];
+        pushLineupToOpenPrompter(tabId);
+    }, 60);
+}
+
+function pushLineupToOpenPrompter(tabId) {
+    if (!isPrompterWindowOpen()) return;
+    const lineupKey = getLineupKeyForTab(tabId);
+    const data = buildLineupForTab(tabId);
+    localStorage.setItem(lineupKey, JSON.stringify(data));
+    postPrompterControl({ action: 'updateLineup', lineupKey, data });
+}
+
+function setLivePreviewHtml(vf, raw) {
+    vf.className = '';
+    vf.innerHTML = '\n' + formatText(raw);
+}
+
 function initPreviewViewfinderWheel() {
     const wheelZone = document.getElementById('preview-viewfinder-stage');
     if (!wheelZone) return;
@@ -316,8 +440,10 @@ function initPreviewViewfinderWheel() {
             if (e.ctrlKey || e.metaKey) {
                 e.preventDefault();
                 if (e.deltaY > 0) {
+                    applyPreviewFontSizeDelta(2);
                     postPrompterKey('BracketRight', ']');
                 } else {
+                    applyPreviewFontSizeDelta(-2);
                     postPrompterKey('BracketLeft', '[');
                 }
                 return;
@@ -327,7 +453,8 @@ function initPreviewViewfinderWheel() {
             const data = lastPrompterSync || defaultPrompterSync();
             const vw = data.vw || PROMPTER_POPUP_W;
             const k = wrap ? Math.max(0.04, wrap.clientWidth / vw) : 0.2;
-            const delta = -e.deltaY / k;
+            const speedScale = getActivePrompterSpeed() / PREVIEW_PROMPTER.defaultSpeed;
+            const delta = (-e.deltaY / k) * speedScale;
             postPrompterControl({ action: 'scrollBy', delta });
         },
         { passive: false },
@@ -371,38 +498,34 @@ function initPreviewPrompterDock() {
         });
     }
     if (prevBtn) {
-        prevBtn.addEventListener('click', () => {
-            if (prevBtn.disabled) return;
-            goToAdjacentBlockAndSend(-1);
-        });
+        prevBtn.addEventListener('click', () => goToAdjacentBlockAndSend(-1));
     }
     if (nextBtn) {
-        nextBtn.addEventListener('click', () => {
-            if (nextBtn.disabled) return;
-            goToAdjacentBlockAndSend(1);
-        });
+        nextBtn.addEventListener('click', () => goToAdjacentBlockAndSend(1));
     }
     if (scrollUpBtn) {
         scrollUpBtn.addEventListener('click', () => {
             if (scrollUpBtn.disabled) return;
-            postPrompterControl({ action: 'scrollBy', delta: 100 });
+            postPrompterControl({ action: 'scrollBy', delta: getPreviewScrollStepLarge() });
         });
     }
     if (scrollDownBtn) {
         scrollDownBtn.addEventListener('click', () => {
             if (scrollDownBtn.disabled) return;
-            postPrompterControl({ action: 'scrollBy', delta: -100 });
+            postPrompterControl({ action: 'scrollBy', delta: -getPreviewScrollStepLarge() });
         });
     }
     if (fontSmBtn) {
         fontSmBtn.addEventListener('click', () => {
             if (fontSmBtn.disabled) return;
+            applyPreviewFontSizeDelta(-2);
             postPrompterKey('BracketLeft', '[');
         });
     }
     if (fontLgBtn) {
         fontLgBtn.addEventListener('click', () => {
             if (fontLgBtn.disabled) return;
+            applyPreviewFontSizeDelta(2);
             postPrompterKey('BracketRight', ']');
         });
     }
@@ -436,14 +559,17 @@ function initPrompterBroadcast() {
 
     prompterBroadcast.onmessage = (ev) => {
         if (!ev.data || ev.data.type !== 'eclyrics-prompter-sync') return;
-        lastPrompterSync = ev.data;
+        lastPrompterSync = { ...(lastPrompterSync || {}), ...ev.data };
         applyViewfinderFromPrompterSync();
         updatePreviewDockFromSync(ev.data);
     };
 
     const wrap = document.querySelector('.preview-viewfinder-16x9');
-    if (wrap && typeof ResizeObserver !== 'undefined') {
-        new ResizeObserver(() => applyViewfinderFromPrompterSync()).observe(wrap);
+    const slot = document.querySelector('.preview-viewfinder-slot');
+    if (typeof ResizeObserver !== 'undefined') {
+        const ro = new ResizeObserver(() => applyViewfinderFromPrompterSync());
+        if (wrap) ro.observe(wrap);
+        if (slot) ro.observe(slot);
     }
 }
 
@@ -453,10 +579,6 @@ function getActiveTabId() {
 }
 
 const BLOCK_TITLE_MAX_LEN = 25;
-
-function getCustomBlockTitle(textarea) {
-    return (textarea.dataset.blockTitle || '').trim();
-}
 
 function firstLineFromValue(text) {
     if (!text || !String(text).trim()) return '';
@@ -475,16 +597,14 @@ function blockNumberFallbackLabel(textarea) {
     return m ? `BLOCK ${m[1]}` : 'BLOCK';
 }
 
-function getBlockTitleDisplay(textarea) {
+function getBlockTitleFull(textarea) {
     if (!textarea) return '—';
-    if (!textarea.value.trim()) {
-        return blockNumberFallbackLabel(textarea);
-    }
-    const custom = getCustomBlockTitle(textarea);
-    if (custom) return truncateTitle(custom);
-    const fl = firstLineFromValue(textarea.value);
-    if (fl) return truncateTitle(fl);
-    return blockNumberFallbackLabel(textarea);
+    if (!textarea.value.trim()) return blockNumberFallbackLabel(textarea);
+    return firstLineFromValue(textarea.value) || blockNumberFallbackLabel(textarea);
+}
+
+function getBlockTitleDisplay(textarea) {
+    return truncateTitle(getBlockTitleFull(textarea));
 }
 
 function updateBlockCellLabel(textarea) {
@@ -498,11 +618,13 @@ function refreshAllBlockLabelsInTab(tabId) {
 
 function updateActiveBlockToolbar() {
     const titleEl = document.getElementById('selected-block-title');
+    const titleBtn = document.getElementById('selected-block-title-btn');
     const sendBtn = document.getElementById('send-prompter-btn');
     const ta = getSelectedTextareaForActiveTab();
 
     if (!ta || !document.body.contains(ta)) {
         if (titleEl) titleEl.textContent = '—';
+        if (titleBtn) titleBtn.disabled = true;
         if (sendBtn) {
             sendBtn.disabled = false;
             sendBtn.title = 'Send the active block to the prompter (`) — updates an open window';
@@ -510,7 +632,12 @@ function updateActiveBlockToolbar() {
         return;
     }
 
-    if (titleEl) titleEl.textContent = getBlockTitleDisplay(ta).toUpperCase();
+    if (titleEl) {
+        const full = getBlockTitleFull(ta);
+        titleEl.textContent = full;
+        titleEl.title = full;
+    }
+    if (titleBtn) titleBtn.disabled = false;
 
     if (sendBtn) {
         sendBtn.disabled = false;
@@ -519,16 +646,12 @@ function updateActiveBlockToolbar() {
     }
 }
 
-function renameBlockLabel(textarea) {
-    const current = getCustomBlockTitle(textarea) || firstLineFromValue(textarea.value) || getBlockTitleDisplay(textarea);
-    const name = prompt('Block display name (leave empty to use first line of lyrics):', current);
-    if (name === null) return;
-    const trimmed = name.trim();
-    if (trimmed === '') delete textarea.dataset.blockTitle;
-    else textarea.dataset.blockTitle = trimmed;
-    updateBlockCellLabel(textarea);
-    const cur = textNum[getActiveTabId()?.toString()]?.[2];
-    if (cur === textarea) updateActiveBlockToolbar();
+function closeBlockTabsForTextarea(textareaId) {
+    if (blockEditorSession?.sourceId === textareaId) closeBlockEditor();
+}
+
+function closeBlockTabsForSongTab(tabId) {
+    if (blockEditorSession?.sourceId?.startsWith(`textarea-${tabId}-`)) closeBlockEditor();
 }
 
 function selectTextarea(textarea) {
@@ -569,7 +692,7 @@ function updateLiveViewfinder() {
         vf.className = 'preview-empty';
         vf.textContent = isPrompterWindowOpen()
             ? 'Nothing on stage yet — choose a block and tap Send to prompter, or use prev / next after a send.'
-            : 'Open the prompter and send a block. This strip mirrors the projection, not the block you are editing below.';
+            : 'Open the prompter and send a block. This strip mirrors the projection.';
         applyViewfinderFromPrompterSync();
         return;
     }
@@ -578,40 +701,187 @@ function updateLiveViewfinder() {
     if (!raw.trim()) {
         vf.className = 'preview-empty';
         vf.textContent = 'The live block is empty.';
-        applyViewfinderFromPrompterSync();
-        return;
+    } else {
+        setLivePreviewHtml(vf, raw);
     }
-
-    vf.className = '';
-    vf.innerHTML = '\n' + formatText(raw);
     applyViewfinderFromPrompterSync();
 }
 
 function updatePreview() {
-    const el = document.getElementById('lyrics-preview-content');
-    if (!el) return;
-
-    const tabId = getActiveTabId();
-    const ta = tabId && textNum[tabId.toString()] ? textNum[tabId.toString()][2] : null;
-
-    if (!ta || !document.body.contains(ta)) {
-        el.className = 'preview-empty';
-        el.textContent = 'Select a block to preview formatted lyrics.';
-        updateLiveViewfinder();
-        return;
-    }
-
-    const raw = ta.value;
-    if (!raw.trim()) {
-        el.className = 'preview-empty';
-        el.textContent = 'Empty block — lyrics will appear here.';
-        updateLiveViewfinder();
-        return;
-    }
-
-    el.className = '';
-    el.innerHTML = '\n' + formatText(raw);
+    syncActiveBlockTabEditor();
     updateLiveViewfinder();
+}
+
+function blockTabIdForTextarea(textarea) {
+    return textarea?.id ? `block-tab-${textarea.id}` : null;
+}
+
+function syncBlockEditorFromSource() {
+    if (!blockEditorSession) return;
+    const source = document.getElementById(blockEditorSession.sourceId);
+    if (!source || !document.body.contains(source)) return;
+    if (blockEditorSession.editor.value !== source.value) {
+        blockEditorSession.editor.value = source.value;
+    }
+}
+
+function syncBlockTabEditor(blockTabId) {
+    if (!blockEditorSession || blockEditorSession.blockTabId !== blockTabId) return;
+    syncBlockEditorFromSource();
+}
+
+function syncActiveBlockTabEditor() {
+    if (activeBlockTabId && blockEditorSession) syncBlockEditorFromSource();
+}
+
+function syncSourceFromBlockEditor() {
+    if (!blockEditorSession) return;
+    const source = document.getElementById(blockEditorSession.sourceId);
+    if (!source) return;
+    if (source.value !== blockEditorSession.editor.value) {
+        source.value = blockEditorSession.editor.value;
+        source.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+}
+
+function syncSourceFromBlockTab(blockTabId) {
+    if (!blockEditorSession || blockEditorSession.blockTabId !== blockTabId) return;
+    syncSourceFromBlockEditor();
+}
+
+function refreshBlockEditorChrome() {
+    if (!blockEditorSession) return;
+    const source = document.getElementById(blockEditorSession.sourceId);
+    if (!source) return;
+    const paneTitle = blockEditorSession.pane.querySelector('.block-tab-pane-title');
+    if (paneTitle) {
+        const full = getBlockTitleFull(source);
+        paneTitle.textContent = full;
+        paneTitle.title = full;
+    }
+}
+
+function refreshBlockTabChrome(blockTabId) {
+    if (!blockEditorSession || blockEditorSession.blockTabId !== blockTabId) return;
+    refreshBlockEditorChrome();
+}
+
+function syncBlockTabsChromeVisibility() {
+    /* Block lyric tabs removed — one editor pane, no toolbar chips. */
+}
+
+function setEditorViewMode(mode) {
+    const grid = document.getElementById('tab-content');
+    const blockContent = document.getElementById('block-tab-content');
+    if (!grid || !blockContent) return;
+    const showBlock = mode === 'block';
+    grid.hidden = showBlock;
+    blockContent.hidden = !showBlock;
+    syncBlockTabsChromeVisibility();
+}
+
+function showBlockEditor() {
+    if (!blockEditorSession) return;
+    activeBlockTabId = blockEditorSession.blockTabId;
+    blockEditorSession.pane.style.display = 'flex';
+    setEditorViewMode('block');
+    syncBlockEditorFromSource();
+    blockEditorSession.editor.focus();
+}
+
+function showGridEditor() {
+    if (blockEditorSession) syncSourceFromBlockEditor();
+    activeBlockTabId = null;
+    setEditorViewMode('grid');
+    const tabId = getActiveTabId();
+    if (tabId) {
+        const activeContent = document.getElementById(`tab-${tabId}`);
+        if (activeContent) activeContent.style.display = 'block';
+    }
+}
+
+function closeBlockEditor() {
+    if (!blockEditorSession) return;
+    syncSourceFromBlockEditor();
+    blockEditorSession.pane.style.display = 'none';
+    blockEditorSession = null;
+    activeBlockTabId = null;
+    showGridEditor();
+}
+
+function closeBlockTab(blockTabId) {
+    if (!blockEditorSession || blockEditorSession.blockTabId !== blockTabId) return;
+    closeBlockEditor();
+}
+
+function ensureBlockEditorPane() {
+    if (blockEditorSession?.pane && document.body.contains(blockEditorSession.pane)) {
+        return blockEditorSession;
+    }
+
+    const pane = document.createElement('div');
+    pane.classList.add('block-tab-pane');
+    pane.id = 'block-editor-pane';
+    pane.style.display = 'none';
+
+    const head = document.createElement('div');
+    head.classList.add('block-tab-pane-head');
+    const paneTitle = document.createElement('h3');
+    paneTitle.classList.add('block-tab-pane-title');
+    const backBtn = document.createElement('button');
+    backBtn.type = 'button';
+    backBtn.classList.add('block-tab-back-btn');
+    backBtn.innerHTML =
+        '<i class="fa-solid fa-table-cells" aria-hidden="true"></i><span>Back to blocks</span>';
+    backBtn.addEventListener('click', () => showGridEditor());
+    head.appendChild(paneTitle);
+    head.appendChild(backBtn);
+
+    const editor = document.createElement('textarea');
+    editor.classList.add('block-tab-editor');
+    editor.spellcheck = false;
+    editor.addEventListener('input', () => {
+        syncSourceFromBlockEditor();
+        refreshBlockEditorChrome();
+    });
+    editor.addEventListener('paste', () => {
+        setTimeout(() => {
+            syncSourceFromBlockEditor();
+            refreshBlockEditorChrome();
+        }, 0);
+    });
+
+    pane.appendChild(head);
+    pane.appendChild(editor);
+    document.getElementById('block-tab-content')?.appendChild(pane);
+
+    blockEditorSession = {
+        blockTabId: 'block-editor-pane',
+        sourceId: '',
+        pane,
+        editor,
+    };
+    return blockEditorSession;
+}
+
+function openBlockTab(textarea) {
+    if (!textarea?.id) return;
+    const blockTabId = blockTabIdForTextarea(textarea);
+    if (!blockTabId) return;
+
+    selectTextarea(textarea);
+
+    const session = ensureBlockEditorPane();
+    if (session.sourceId && session.sourceId !== textarea.id) {
+        syncSourceFromBlockEditor();
+    }
+
+    session.blockTabId = blockTabId;
+    session.sourceId = textarea.id;
+    session.editor.value = textarea.value;
+    session.editor.placeholder = textarea.placeholder;
+    refreshBlockEditorChrome();
+    showBlockEditor();
 }
 
 function syncThemeToggle(dark) {
@@ -685,8 +955,8 @@ function sendActiveBlockToPrompter() {
 
 function initShell() {
     initSidebarCollapse();
-    refreshPreviewVisibility();
     initPrompterBroadcast();
+    initBlockSourceDialog();
     initPreviewPrompterDock();
     applyViewfinderFromPrompterSync();
 
@@ -707,11 +977,14 @@ function initShell() {
         }
     });
 
-    const saved = localStorage.getItem('eclyrics-theme');
-    if (saved === 'dark') {
-        document.documentElement.classList.add('dark');
-        syncThemeToggle(true);
+    let saved = localStorage.getItem('eclyrics-theme');
+    if (saved !== 'light' && saved !== 'dark') {
+        saved = 'dark';
+        localStorage.setItem('eclyrics-theme', saved);
     }
+    const dark = saved === 'dark';
+    document.documentElement.classList.toggle('dark', dark);
+    syncThemeToggle(dark);
 
     const themeBtn = document.getElementById('theme-toggle');
     if (themeBtn) {
@@ -750,6 +1023,11 @@ function initShell() {
         sendBtn.addEventListener('click', () => sendActiveBlockToPrompter());
     }
 
+    document.getElementById('selected-block-title-btn')?.addEventListener('click', () => {
+        const ta = getSelectedTextareaForActiveTab();
+        if (ta) openBlockTab(ta);
+    });
+
     document.addEventListener(
         'keydown',
         (e) => {
@@ -772,17 +1050,24 @@ function initShell() {
         });
         tc.addEventListener('input', (e) => {
             if (!e.target.matches || !e.target.matches('textarea')) return;
-            refreshPreviewVisibility();
-            const m = e.target.id.match(/^textarea-(\d+)-/);
+            const m = e.target.id.match(/^textarea-(\d+)-(\d+)$/);
             const tid = m ? parseInt(m[1], 10) : null;
-            if (tid != null) refreshAllBlockLabelsInTab(tid);
+            if (tid != null) {
+                refreshAllBlockLabelsInTab(tid);
+                schedulePrompterLineupSync(tid);
+            }
+            const blockTabId = blockTabIdForTextarea(e.target);
+            if (blockTabId && blockEditorSession?.blockTabId === blockTabId) {
+                syncBlockTabEditor(blockTabId);
+            }
+            if (e.target.closest('.textarea-cell.is-live')) {
+                updateLiveViewfinder();
+            }
             const sel = tid != null && textNum[tid.toString()] ? textNum[tid.toString()][2] : null;
             if (tid !== getActiveTabId()) return;
             if (sel === e.target) {
                 updatePreview();
                 updateActiveBlockToolbar();
-            } else if (e.target.closest('.textarea-cell.is-live')) {
-                updateLiveViewfinder();
             }
         });
     }
@@ -820,6 +1105,255 @@ function addTab() {
     return tabCount;
 }
 
+
+function isBlockEmpty(textarea) {
+    return !textarea?.value.trim();
+}
+
+function getTabIdFromTextarea(textarea) {
+    const m = textarea?.id.match(/^textarea-(\d+)-/);
+    return m ? parseInt(m[1], 10) : null;
+}
+
+function updateBlockCellState(textarea) {
+    const cell = textarea?.closest('.textarea-cell');
+    if (!cell) return;
+    const empty = isBlockEmpty(textarea);
+    cell.classList.toggle('is-empty', empty);
+    if (!empty) cell.classList.remove('is-paste-focus');
+}
+
+function countEmptyBlocksInTab(tabId) {
+    return [...document.querySelectorAll(`#tab-${tabId} textarea`)].filter(isBlockEmpty).length;
+}
+
+/** Always keep at least one empty block with + available for new lyrics. */
+function maintainEmptySlotForTab(tabId) {
+    const tab = document.getElementById(`tab-${tabId}`);
+    if (!tab) return;
+    const container = tab.querySelector('.textareas-container');
+    if (!container) return;
+    let guard = 0;
+    while (countEmptyBlocksInTab(tabId) === 0 && guard < 3) {
+        addSingleBlock(container, tabId);
+        guard++;
+    }
+}
+
+function formatBlockLyricsContent(title, lyricsBody) {
+    const heading = (title || '').trim();
+    const body = (lyricsBody || '').trim();
+    if (!heading) return body;
+    if (!body) return heading;
+    return `${heading}\n\n${body}`;
+}
+
+/** Parse clipboard text: title + blank line + lyrics, or lyrics only. */
+function parseClipboardLyrics(raw) {
+    const text = String(raw || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    const trimmed = text.trim();
+    if (!trimmed) return { title: null, lyrics: '' };
+
+    const lines = text.split('\n');
+    const firstBlank = lines.findIndex((line, i) => i > 0 && line.trim() === '');
+    if (firstBlank > 0) {
+        const title = lines.slice(0, firstBlank).join('\n').trim();
+        const lyrics = lines.slice(firstBlank + 1).join('\n').trim();
+        if (title && lyrics) return { title, lyrics };
+    }
+
+    return { title: null, lyrics: trimmed };
+}
+
+async function pasteLyricsFromClipboard(textarea) {
+    if (!textarea) return;
+    const fallbackTitle = blockNumberFallbackLabel(textarea);
+
+    try {
+        const raw = await navigator.clipboard.readText();
+        if (!raw || !raw.trim()) {
+            activateBlockPasteMode(textarea);
+            return;
+        }
+        const { title, lyrics } = parseClipboardLyrics(raw);
+        applyLyricsToBlock(textarea, lyrics, title || fallbackTitle);
+        const cell = textarea.closest('.textarea-cell');
+        if (cell) cell.classList.remove('is-paste-focus');
+    } catch (e) {
+        activateBlockPasteMode(textarea);
+    }
+}
+
+function onBlockContentChanged(textarea) {
+    const tabId = getTabIdFromTextarea(textarea);
+    if (tabId == null) return;
+    delete textarea.dataset.blockTitle;
+    updateBlockCellState(textarea);
+    updateBlockCellLabel(textarea);
+    const blockTabId = blockTabIdForTextarea(textarea);
+    if (blockTabId && blockEditorSession?.sourceId === textarea.id) refreshBlockTabChrome(blockTabId);
+    const cur = textNum[tabId.toString()]?.[2];
+    if (cur === textarea) updateActiveBlockToolbar();
+    maintainEmptySlotForTab(tabId);
+}
+
+function applyLyricsToBlock(textarea, lyrics, title) {
+    if (!textarea) return;
+    delete textarea.dataset.blockTitle;
+    const resolvedTitle = (title || blockNumberFallbackLabel(textarea)).trim();
+    textarea.value = formatBlockLyricsContent(resolvedTitle, lyrics);
+    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    onBlockContentChanged(textarea);
+    selectTextarea(textarea);
+}
+
+function activateBlockEditMode(textarea, { paste = false } = {}) {
+    const cell = textarea?.closest('.textarea-cell');
+    if (!cell) return;
+    const label = firstLineFromValue(textarea.value) || blockNumberFallbackLabel(textarea);
+    cell.classList.remove('is-empty');
+    cell.classList.add('is-paste-focus');
+    textarea.value = `${label}\n\n`;
+    textarea.placeholder = paste
+        ? 'Paste lyrics below the title (Ctrl+V)'
+        : 'Type title, then lyrics below the blank line';
+    selectTextarea(textarea);
+    textarea.focus();
+    if (paste) {
+        const end = textarea.value.length;
+        textarea.setSelectionRange(end, end);
+    } else {
+        textarea.setSelectionRange(0, label.length);
+    }
+    onBlockContentChanged(textarea);
+}
+
+function activateBlockPasteMode(textarea) {
+    activateBlockEditMode(textarea, { paste: true });
+}
+
+function activateBlockTypeMode(textarea) {
+    activateBlockEditMode(textarea, { paste: false });
+}
+
+function getBlockSourceDialogTitle(textarea) {
+    const label = getBlockTitleDisplay(textarea);
+    return label && label !== '—' ? `Add lyrics · ${label}` : 'Add lyrics to block';
+}
+
+function updateBlockSourceDialogHeader(textarea) {
+    const titleEl = document.getElementById('block-source-dialog-title');
+    if (titleEl && textarea) titleEl.textContent = getBlockSourceDialogTitle(textarea);
+}
+
+function resetBlockSourceDialog() {
+    const search = document.getElementById('block-source-search');
+    if (search) {
+        search.value = '';
+        renderBlockSourceSearchResults('');
+    }
+    if (blockSourceTargetTextarea) updateBlockSourceDialogHeader(blockSourceTargetTextarea);
+}
+
+function focusBlockSourceSearch() {
+    const search = document.getElementById('block-source-search');
+    if (!search) return;
+    renderBlockSourceSearchResults(search.value);
+    requestAnimationFrame(() => search.focus());
+}
+
+function renderBlockSourceSearchResults(query) {
+    const list = document.getElementById('block-source-results');
+    const note = document.getElementById('block-source-library-note');
+    if (!list) return;
+    const q = query.trim().toLowerCase();
+    const matches = q
+        ? SONG_LIBRARY_STUB.filter((s) => s.title.toLowerCase().includes(q))
+        : SONG_LIBRARY_STUB;
+    list.replaceChildren();
+    if (matches.length === 0) {
+        const li = document.createElement('li');
+        li.className = 'block-source-results-empty';
+        li.textContent = q ? 'No songs match your search.' : 'No songs in library yet.';
+        list.appendChild(li);
+        if (note) note.hidden = false;
+        return;
+    }
+    if (note) note.hidden = true;
+    matches.forEach((song) => {
+        const li = document.createElement('li');
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'block-source-result';
+        btn.setAttribute('role', 'option');
+        const titleSpan = document.createElement('span');
+        titleSpan.className = 'block-source-result__title';
+        titleSpan.textContent = song.title;
+        const metaSpan = document.createElement('span');
+        metaSpan.className = 'block-source-result__meta';
+        metaSpan.textContent = 'Inserts title, blank line, then lyrics';
+        btn.append(titleSpan, metaSpan);
+        btn.addEventListener('click', () => {
+            if (blockSourceTargetTextarea) {
+                applyLyricsToBlock(blockSourceTargetTextarea, song.lyrics, song.title);
+            }
+            closeBlockSourceDialog();
+        });
+        li.appendChild(btn);
+        list.appendChild(li);
+    });
+}
+
+function openBlockSourceDialog(textarea) {
+    const dlg = document.getElementById('block-source-dialog');
+    if (!dlg || !textarea) return;
+    blockSourceTargetTextarea = textarea;
+    resetBlockSourceDialog();
+    dlg.hidden = false;
+    dlg.setAttribute('aria-hidden', 'false');
+    focusBlockSourceSearch();
+}
+
+function closeBlockSourceDialog() {
+    const dlg = document.getElementById('block-source-dialog');
+    if (!dlg) return;
+    dlg.hidden = true;
+    dlg.setAttribute('aria-hidden', 'true');
+    blockSourceTargetTextarea = null;
+    resetBlockSourceDialog();
+}
+
+function initBlockSourceDialog() {
+    const dlg = document.getElementById('block-source-dialog');
+    if (!dlg) return;
+
+    document.getElementById('block-source-dialog-close')?.addEventListener('click', closeBlockSourceDialog);
+    document.getElementById('block-source-dialog-backdrop')?.addEventListener('click', closeBlockSourceDialog);
+
+    document.getElementById('block-source-type')?.addEventListener('click', () => {
+        if (!blockSourceTargetTextarea) return;
+        const ta = blockSourceTargetTextarea;
+        closeBlockSourceDialog();
+        activateBlockTypeMode(ta);
+    });
+
+    document.getElementById('block-source-paste')?.addEventListener('click', () => {
+        if (!blockSourceTargetTextarea) return;
+        const ta = blockSourceTargetTextarea;
+        closeBlockSourceDialog();
+        void pasteLyricsFromClipboard(ta);
+    });
+
+    const search = document.getElementById('block-source-search');
+    search?.addEventListener('input', () => renderBlockSourceSearchResults(search.value));
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape' || dlg.hidden) return;
+        e.preventDefault();
+        closeBlockSourceDialog();
+    });
+}
+
 function addTabContent(tabId) {
     const tabContent = document.getElementById('tab-content');
     const content = document.createElement('div');
@@ -832,19 +1366,9 @@ function addTabContent(tabId) {
     for (let b = 0; b < INITIAL_BLOCK_COUNT; b++) {
         addSingleBlock(container, tabId);
     }
-
-    const addBlockButton = document.createElement('button');
-    addBlockButton.classList.add('add-block-btn');
-    addBlockButton.id = `add-block-${tabId}`;
-    addBlockButton.title = 'Add one lyric block';
-    addBlockButton.type = 'button';
-    addBlockButton.innerHTML = '<i class="fa-solid fa-plus"></i> Add block';
-    addBlockButton.addEventListener('click', () => {
-        addSingleBlock(container, tabId);
-    });
+    maintainEmptySlotForTab(tabId);
 
     content.appendChild(container);
-    content.appendChild(addBlockButton);
     tabContent.appendChild(content);
 }
 
@@ -863,12 +1387,15 @@ function syncBlockRemoveButtons(tabId) {
 function removeBlockCell(cell, tabId) {
     const tab = document.getElementById(`tab-${tabId}`);
     if (!tab || tab.querySelectorAll('.textarea-cell').length <= 1) return;
+    const textarea = cell.querySelector('textarea');
+    if (textarea?.id) closeBlockTabsForTextarea(textarea.id);
     const row = cell.closest('.textareas-row');
     cell.remove();
     if (row && row.querySelectorAll('.textarea-cell').length === 0) {
         row.remove();
     }
     rearrangeTextAreas(tabId);
+    maintainEmptySlotForTab(tabId);
     const first = tab.querySelector('textarea');
     if (first) selectTextarea(first);
     else {
@@ -901,13 +1428,13 @@ function addSingleBlock(container, tabId) {
     const row = getOrCreateRowForNewBlock(container);
 
     const cell = document.createElement('div');
-    cell.classList.add('textarea-cell');
+    cell.classList.add('textarea-cell', 'is-empty');
 
     const head = document.createElement('div');
     head.classList.add('textarea-cell-head');
     const label = document.createElement('span');
     label.classList.add('textarea-cell-label');
-    label.title = 'Double-click to rename';
+    label.title = 'Click to open full lyrics (title is the first line)';
 
     const removeBtn = document.createElement('button');
     removeBtn.type = 'button';
@@ -927,14 +1454,24 @@ function addSingleBlock(container, tabId) {
     const textarea = document.createElement('textarea');
     textarea.id = `textarea-${tabId}-${textId}`;
     textarea.placeholder = `Lyrics for block ${textId}`;
-    label.addEventListener('dblclick', (ev) => {
+    let labelClickTimer = null;
+    label.addEventListener('click', (ev) => {
         ev.preventDefault();
         ev.stopPropagation();
-        renameBlockLabel(textarea);
+        if (labelClickTimer) clearTimeout(labelClickTimer);
+        labelClickTimer = setTimeout(() => {
+            if (isBlockEmpty(textarea)) openBlockSourceDialog(textarea);
+            else openBlockTab(textarea);
+            labelClickTimer = null;
+        }, 220);
+    });
+    textarea.addEventListener('input', () => {
+        onBlockContentChanged(textarea);
     });
     textarea.addEventListener('paste', () => {
         setTimeout(() => {
             textarea.scrollTop = 0;
+            onBlockContentChanged(textarea);
             const mid = textarea.id.match(/^textarea-(\d+)-/);
             const tid = mid ? parseInt(mid[1], 10) : null;
             if (tid != null) refreshAllBlockLabelsInTab(tid);
@@ -949,12 +1486,32 @@ function addSingleBlock(container, tabId) {
         }, 0);
     });
 
+    const body = document.createElement('div');
+    body.classList.add('textarea-cell-body');
+
+    const fillTrigger = document.createElement('button');
+    fillTrigger.type = 'button';
+    fillTrigger.classList.add('block-fill-trigger');
+    fillTrigger.setAttribute('aria-label', 'Add lyrics to this block');
+    fillTrigger.title = 'Add lyrics';
+    fillTrigger.innerHTML = '<i class="fa-solid fa-plus" aria-hidden="true"></i>';
+    fillTrigger.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        openBlockSourceDialog(textarea);
+    });
+
+    body.appendChild(fillTrigger);
+    body.appendChild(textarea);
+
     cell.appendChild(head);
-    cell.appendChild(textarea);
+    cell.appendChild(body);
     row.appendChild(cell);
+    updateBlockCellState(textarea);
     updateBlockCellLabel(textarea);
     refreshAllBlockLabelsInTab(tabId);
     syncBlockRemoveButtons(tabId);
+    maintainEmptySlotForTab(tabId);
 }
 
 function showTabContent(tabId) {
@@ -965,15 +1522,16 @@ function showTabContent(tabId) {
     if (activeTab && activeContent) {
         activeTab.classList.add('active');
         activeContent.style.display = 'block';
+        showGridEditor();
         refreshAllBlockLabelsInTab(tabId);
         syncBlockRemoveButtons(tabId);
+        maintainEmptySlotForTab(tabId);
         const first = activeContent.querySelector('textarea');
         if (first) selectTextarea(first);
         else {
             updateActiveBlockToolbar();
             updatePreview();
         }
-        refreshPreviewVisibility();
     }
 }
 
@@ -991,12 +1549,15 @@ function rearrangeTextAreas(tabId) {
     }
 
     refreshAllBlockLabelsInTab(tabId);
+    textareas.forEach((ta) => updateBlockCellState(ta));
     updateActiveBlockToolbar();
     syncBlockRemoveButtons(tabId);
+    closeBlockTabsForSongTab(tabId);
 }
 
 function handleTabClose(tab) {
     const tabId = parseInt(tab.dataset.tabId);
+    closeBlockTabsForSongTab(tabId);
     tab.remove();
     document.getElementById(`tab-${tabId}`).remove();
 
@@ -1008,7 +1569,6 @@ function handleTabClose(tab) {
         else {
             updateActiveBlockToolbar();
             updatePreview();
-            refreshPreviewVisibility();
         }
     }
 }
@@ -1018,7 +1578,10 @@ function renameTab(tab) {
     if (name) tab.firstChild.textContent = name;
 }
 
-function sendPrompt(tabId, textId) {
+function sendPrompt(tabId, textId, options = {}) {
+    const openIfClosed = options.openIfClosed !== false;
+    const focusWindow = options.focusWindow !== false;
+
     const data = [];
     for (let i = 1; true; i++) {
         const textarea = document.getElementById(`textarea-${tabId}-${i}`);
@@ -1041,6 +1604,8 @@ function sendPrompt(tabId, textId) {
         updateActiveBlockToolbar();
     }
 
+    updatePreview();
+
     const payload = {
         type: 'eclyrics-prompter-load',
         lineupKey,
@@ -1050,18 +1615,22 @@ function sendPrompt(tabId, textId) {
     const targetOrigin =
         window.location.origin && window.location.origin !== 'null' ? window.location.origin : '*';
 
-    if (prompterPopupWindow && !prompterPopupWindow.closed) {
+    if (isPrompterWindowOpen()) {
         try {
             prompterPopupWindow.postMessage(payload, targetOrigin);
-            prompterPopupWindow.focus();
+            if (focusWindow) prompterPopupWindow.focus();
             textNum[tabId.toString()][1] = prompterPopupWindow;
-            updatePreview();
             updatePreviewPrompterDock();
             postPrompterControl({ action: 'setSpeed', speed: readSavedPreviewSpeed() });
             return;
         } catch (e) {
             prompterPopupWindow = null;
         }
+    }
+
+    if (!openIfClosed) {
+        updatePreviewPrompterDock();
+        return;
     }
 
     const left = Math.max(0, Math.round((window.screen.availWidth - PROMPTER_POPUP_W) / 2));
@@ -1096,7 +1665,6 @@ document.getElementById('tabs-list').addEventListener('click', (e) => {
 document.addEventListener('DOMContentLoaded', initShell);
 window.onload = () => {
     addTab();
-    refreshPreviewVisibility();
     applyViewfinderFromPrompterSync();
 };
 
