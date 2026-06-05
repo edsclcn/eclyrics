@@ -1065,7 +1065,7 @@ a {
 
 .block-source-dialog__card {
     position: relative;
-    width: min(100%, 620px);
+    width: min(100%, 720px);
     max-height: min(88vh, 640px);
     display: flex;
     flex-direction: column;
@@ -1339,7 +1339,8 @@ a {
     justify-content: flex-end;
     gap: 0.28rem;
     margin-left: auto;
-    max-width: 52%;
+    max-width: 60%;
+    flex-shrink: 0;
 }
 
 .block-source-pill {
