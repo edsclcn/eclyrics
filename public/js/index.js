@@ -38,6 +38,32 @@ const prompterLineupSyncTimers = {};
 let blockSourceTargetTextarea = null;
 const SONG_LIBRARY_RESULT_LIMIT = 80;
 
+/* ─────────────────────────────────────────────────────────
+ * SONG CATEGORY PILLS — colors, filters, restricted states
+ *
+ *   himnario    light blue
+ *   adaptation  yellow
+ *   original    dark blue
+ *   asop/f      purple
+ *   revision    orange  (non-selectable)
+ *   archived    red     (non-selectable)
+ *
+ *   revision/archived → only those pills shown; deprioritized in search
+ * ───────────────────────────────────────────────────────── */
+const SONG_CATEGORY_FILTERS = [
+    { slug: 'himnario', label: 'Himnario' },
+    { slug: 'original', label: 'Original' },
+    { slug: 'adaptation', label: 'Adaptation' },
+    { slug: 'asop-f', label: 'ASOP/F', aliases: ['asop/f', 'asopf'] },
+    { slug: 'revision', label: 'Revision' },
+    { slug: 'archived', label: 'Archived' },
+];
+
+const RESTRICTED_CATEGORY_SLUGS = new Set(['revision', 'archived']);
+
+/** @type {Set<string>} */
+let blockSourceActiveCategoryFilters = new Set();
+
 function defaultPrompterSync() {
     const fs = parseFloat(localStorage.getItem('eclyrics-prompter-fontSize'));
     const cw = parseFloat(localStorage.getItem('eclyrics-prompter-width'));
@@ -191,6 +217,70 @@ function getPreviewScrollStep() {
 /** Dock scroll buttons use a slightly larger base step, same speed scaling. */
 function getPreviewScrollStepLarge() {
     return 100 * (getActivePrompterSpeed() / PREVIEW_PROMPTER.defaultSpeed);
+}
+
+/* ─────────────────────────────────────────────────────────
+ * DOCK HOLD-SCROLL — press-and-hold the ▲/▼ buttons to scroll
+ *   continuously (NOT line-by-line). Rate is proportional to the
+ *   current scroll speed and frame-rate independent; scrolling
+ *   stops the instant the button is released. Independent of the
+ *   ArrowUp/ArrowDown keyboard shortcuts.
+ * ───────────────────────────────────────────────────────── */
+/** px/sec per unit of scroll speed. Matches auto-scroll (play), which advances
+ *  `scrollSpeed` px per animation frame (~60fps), i.e. scrollSpeed × 60 px/sec. */
+const PREVIEW_HOLD_SCROLL_PX_PER_SPEED = 60;
+/** dir: +1 scrolls toward the start (up), -1 toward the end (down). */
+let previewHoldScroll = { raf: 0, dir: 0, lastTs: 0 };
+
+function stopPreviewHoldScroll() {
+    if (previewHoldScroll.raf) cancelAnimationFrame(previewHoldScroll.raf);
+    previewHoldScroll = { raf: 0, dir: 0, lastTs: 0 };
+}
+
+function previewHoldScrollTick(ts) {
+    if (!previewHoldScroll.dir) return;
+    if (!isPrompterWindowOpen()) {
+        stopPreviewHoldScroll();
+        return;
+    }
+    const last = previewHoldScroll.lastTs || ts;
+    const dtMs = Math.min(64, Math.max(0, ts - last));
+    previewHoldScroll.lastTs = ts;
+    const speed = getActivePrompterSpeed();
+    const px = previewHoldScroll.dir * speed * PREVIEW_HOLD_SCROLL_PX_PER_SPEED * (dtMs / 1000);
+    if (px !== 0) postPrompterControl({ action: 'scrollBy', delta: px });
+    previewHoldScroll.raf = requestAnimationFrame(previewHoldScrollTick);
+}
+
+function startPreviewHoldScroll(dir) {
+    if (!isPrompterWindowOpen()) return;
+    if (previewHoldScroll.dir === dir && previewHoldScroll.raf) return;
+    stopPreviewHoldScroll();
+    previewHoldScroll.dir = dir;
+    previewHoldScroll.lastTs = 0;
+    previewHoldScroll.raf = requestAnimationFrame(previewHoldScrollTick);
+}
+
+/** Wire a dock arrow button to hold-to-scroll instead of a single step jump. */
+function bindPreviewHoldScrollButton(btn, dir) {
+    if (!btn) return;
+    btn.addEventListener('pointerdown', (e) => {
+        if (btn.disabled) return;
+        e.preventDefault();
+        if (e.pointerId != null && btn.setPointerCapture) {
+            try {
+                btn.setPointerCapture(e.pointerId);
+            } catch (_) {
+                /* ignore */
+            }
+        }
+        startPreviewHoldScroll(dir);
+    });
+    btn.addEventListener('pointerup', stopPreviewHoldScroll);
+    btn.addEventListener('pointercancel', stopPreviewHoldScroll);
+    btn.addEventListener('lostpointercapture', stopPreviewHoldScroll);
+    // Suppress the synthetic click so the button never performs a step jump.
+    btn.addEventListener('click', (e) => e.preventDefault());
 }
 
 function updatePreviewPrompterDock() {
@@ -495,18 +585,8 @@ function initPreviewPrompterDock() {
     if (nextBtn) {
         nextBtn.addEventListener('click', () => goToAdjacentBlockAndSend(1));
     }
-    if (scrollUpBtn) {
-        scrollUpBtn.addEventListener('click', () => {
-            if (scrollUpBtn.disabled) return;
-            postPrompterControl({ action: 'scrollBy', delta: getPreviewScrollStepLarge() });
-        });
-    }
-    if (scrollDownBtn) {
-        scrollDownBtn.addEventListener('click', () => {
-            if (scrollDownBtn.disabled) return;
-            postPrompterControl({ action: 'scrollBy', delta: -getPreviewScrollStepLarge() });
-        });
-    }
+    bindPreviewHoldScrollButton(scrollUpBtn, 1);
+    bindPreviewHoldScrollButton(scrollDownBtn, -1);
     if (fontSmBtn) {
         fontSmBtn.addEventListener('click', () => {
             if (fontSmBtn.disabled) return;
@@ -538,6 +618,7 @@ function initPreviewPrompterDock() {
     }
 
     window.addEventListener('focus', () => updatePreviewPrompterDock());
+    window.addEventListener('blur', stopPreviewHoldScroll);
     updatePreviewDockFromSync(lastPrompterSync || defaultPrompterSync());
 }
 
@@ -1168,7 +1249,7 @@ async function pasteLyricsFromClipboard(textarea) {
             return;
         }
         const { title, lyrics } = parseClipboardLyrics(raw);
-        applyLyricsToBlock(textarea, lyrics, title || fallbackTitle);
+        applyLyricsToBlock(textarea, lyrics, title || fallbackTitle, '', { uppercaseTitle: false });
         const cell = textarea.closest('.textarea-cell');
         if (cell) cell.classList.remove('is-paste-focus');
     } catch (e) {
@@ -1189,10 +1270,11 @@ function onBlockContentChanged(textarea) {
     maintainEmptySlotForTab(tabId);
 }
 
-function applyLyricsToBlock(textarea, lyrics, title, hymnNum = '') {
+function applyLyricsToBlock(textarea, lyrics, title, hymnNum = '', { uppercaseTitle = true } = {}) {
     if (!textarea) return;
     delete textarea.dataset.blockTitle;
-    const resolvedTitle = (title || blockNumberFallbackLabel(textarea)).trim().toUpperCase();
+    let resolvedTitle = (title || blockNumberFallbackLabel(textarea)).trim();
+    if (uppercaseTitle) resolvedTitle = resolvedTitle.toUpperCase();
     const hymnNumText = String(hymnNum || '').trim();
     const hymnHeading = hymnNumText.replace(/^#\s*/, '');
     const fullTitle = hymnHeading ? `#${hymnHeading}\n${resolvedTitle}` : resolvedTitle;
@@ -1255,24 +1337,119 @@ function getSongLibraryState() {
     return api.getState();
 }
 
-function isAdaptationCategory(song) {
+function categoryToSlug(category) {
+    const normalized = String(category || '').trim().toLowerCase();
+    if (normalized === 'asop/f' || normalized === 'asopf' || normalized === 'asop-f') return 'asop-f';
+    return normalized.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
+
+function songHasCategorySlug(song, slug) {
     if (!Array.isArray(song?.category)) return false;
-    return song.category.some((entry) => String(entry || '').trim().toLowerCase() === 'adaptation');
+    const filterDef = SONG_CATEGORY_FILTERS.find((entry) => entry.slug === slug);
+    const aliases = filterDef?.aliases || [];
+    return song.category.some((entry) => {
+        const entrySlug = categoryToSlug(entry);
+        return entrySlug === slug || aliases.includes(String(entry || '').trim().toLowerCase());
+    });
+}
+
+function isAdaptationCategory(song) {
+    return songHasCategorySlug(song, 'adaptation');
+}
+
+function shouldOmitHymnNumForSong(song) {
+    return songHasCategorySlug(song, 'adaptation') && songHasCategorySlug(song, 'himnario');
+}
+
+function isRestrictedSong(song) {
+    return [...RESTRICTED_CATEGORY_SLUGS].some((slug) => songHasCategorySlug(song, slug));
 }
 
 function buildSongCategoryPills(song) {
-    const pills = [];
-    if (Array.isArray(song?.category)) {
-        song.category
-            .filter(Boolean)
-            .forEach((category) =>
-                pills.push({
-                    text: String(category).trim().toUpperCase(),
-                    tone: String(category).trim().toLowerCase(),
-                }),
-            );
+    const categories = Array.isArray(song?.category) ? song.category.filter(Boolean) : [];
+    if (categories.length === 0) return [];
+
+    const slugs = categories.map((entry) => categoryToSlug(entry));
+    const hasRevision = slugs.includes('revision');
+    const hasArchived = slugs.includes('archived');
+
+    if (hasRevision || hasArchived) {
+        const pills = [];
+        if (hasRevision) pills.push({ text: 'REVISION', slug: 'revision' });
+        if (hasArchived) pills.push({ text: 'ARCHIVED', slug: 'archived' });
+        return pills;
     }
-    return pills;
+
+    return categories.map((category) => ({
+        text: String(category).trim().toUpperCase(),
+        slug: categoryToSlug(category),
+    }));
+}
+
+function queryTargetsRestrictedCategory(query) {
+    const q = String(query || '').trim().toLowerCase();
+    return q.includes('revision') || q.includes('archived') || q.includes('archive');
+}
+
+function isFilteringRestrictedCategories() {
+    return blockSourceActiveCategoryFilters.has('revision') || blockSourceActiveCategoryFilters.has('archived');
+}
+
+function deprioritizeRestrictedResults(songs, query) {
+    if (isFilteringRestrictedCategories() || queryTargetsRestrictedCategory(query)) {
+        return songs;
+    }
+    const normal = [];
+    const restricted = [];
+    songs.forEach((song) => {
+        if (isRestrictedSong(song)) restricted.push(song);
+        else normal.push(song);
+    });
+    return [...normal, ...restricted];
+}
+
+function applyRestrictedSearchRules(songs, query) {
+    const q = String(query || '').trim();
+    if (!q && !isFilteringRestrictedCategories()) {
+        return songs.filter((song) => !isRestrictedSong(song));
+    }
+    return deprioritizeRestrictedResults(songs, q);
+}
+
+function filterSongsByCategory(songs) {
+    if (blockSourceActiveCategoryFilters.size === 0) return songs;
+    return songs.filter((song) =>
+        [...blockSourceActiveCategoryFilters].every((slug) => songHasCategorySlug(song, slug)),
+    );
+}
+
+function renderBlockSourceCategoryFilters() {
+    const wrap = document.getElementById('block-source-filters');
+    if (!wrap) return;
+    wrap.replaceChildren();
+    SONG_CATEGORY_FILTERS.forEach(({ slug, label }) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'block-source-filter-pill';
+        btn.dataset.category = slug;
+        btn.textContent = label;
+        const isActive = blockSourceActiveCategoryFilters.has(slug);
+        btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+        if (isActive) {
+            btn.classList.add('block-source-filter-pill--active', `block-source-filter-pill--${slug}`);
+        }
+        btn.addEventListener('click', () => {
+            if (blockSourceActiveCategoryFilters.has(slug)) {
+                blockSourceActiveCategoryFilters.delete(slug);
+            } else {
+                blockSourceActiveCategoryFilters.add(slug);
+            }
+            renderBlockSourceCategoryFilters();
+            const search = document.getElementById('block-source-search');
+            renderBlockSourceSearchResults(search?.value || '');
+        });
+        wrap.appendChild(btn);
+    });
 }
 
 function getSongVersionDisplay(version) {
@@ -1308,6 +1485,8 @@ function updateBlockSourceDialogHeader(textarea) {
 
 function resetBlockSourceDialog() {
     const search = document.getElementById('block-source-search');
+    blockSourceActiveCategoryFilters.clear();
+    renderBlockSourceCategoryFilters();
     if (search) {
         search.value = '';
         renderBlockSourceSearchResults('');
@@ -1328,19 +1507,22 @@ function renderBlockSourceSearchResults(query) {
     const api = getSongLibraryApi();
     const q = query.trim();
     const state = getSongLibraryState();
-    const matches =
+    let matches =
         api && typeof api.search === 'function' ? api.search(q, SONG_LIBRARY_RESULT_LIMIT) : [];
+    matches = filterSongsByCategory(matches);
+    matches = applyRestrictedSearchRules(matches, q);
     list.replaceChildren();
     if (matches.length === 0) {
         const li = document.createElement('li');
         li.className = 'block-source-results-empty';
         if (state.error) li.textContent = state.error;
         else if (!state.loaded) li.textContent = 'Loading song library…';
-        else li.textContent = q ? 'No songs match your search.' : 'No songs in library yet.';
+        else if (blockSourceActiveCategoryFilters.size > 0) {
+            li.textContent = 'No songs match your search and filters.';
+        } else li.textContent = q ? 'No songs match your search.' : 'No songs in library yet.';
         list.appendChild(li);
         if (state.error) renderSongLibraryNote(state.error, true);
         else if (!state.loaded) renderSongLibraryNote('Loading song library…', true);
-        else renderSongLibraryNote('No songs found in Firestore library.', true);
         return;
     }
     if (q && matches.length === SONG_LIBRARY_RESULT_LIMIT) {
@@ -1352,8 +1534,15 @@ function renderBlockSourceSearchResults(query) {
         const li = document.createElement('li');
         const btn = document.createElement('button');
         btn.type = 'button';
-        btn.className = 'block-source-result';
+        const restricted = isRestrictedSong(song);
+        btn.className = restricted
+            ? 'block-source-result block-source-result--restricted'
+            : 'block-source-result';
         btn.setAttribute('role', 'option');
+        if (restricted) {
+            btn.setAttribute('aria-disabled', 'true');
+            btn.title = 'Revision and archived lyrics cannot be added to blocks';
+        }
         const topRow = document.createElement('span');
         topRow.className = 'block-source-result__top';
         const titleWrap = document.createElement('span');
@@ -1380,7 +1569,7 @@ function renderBlockSourceSearchResults(query) {
         pillWrap.className = 'block-source-result__pills';
         buildSongCategoryPills(song).forEach((pillData) => {
             const pill = document.createElement('span');
-            pill.className = `block-source-pill block-source-pill--${pillData.tone.replace(/[^a-z0-9]+/g, '-')}`;
+            pill.className = `block-source-pill block-source-pill--${pillData.slug}`;
             pill.textContent = pillData.text;
             pillWrap.appendChild(pill);
         });
@@ -1389,12 +1578,15 @@ function renderBlockSourceSearchResults(query) {
         metaSpan.className = 'block-source-result__meta';
         metaSpan.textContent = truncateLyricsPreview(song.lyrics);
         btn.append(topRow, metaSpan);
-        btn.addEventListener('click', () => {
-            if (blockSourceTargetTextarea) {
-                applyLyricsToBlock(blockSourceTargetTextarea, song.lyrics, song.title, song.hymnNum);
-            }
-            closeBlockSourceDialog();
-        });
+        if (!restricted) {
+            btn.addEventListener('click', () => {
+                if (blockSourceTargetTextarea) {
+                    const hymnNum = shouldOmitHymnNumForSong(song) ? '' : song.hymnNum;
+                    applyLyricsToBlock(blockSourceTargetTextarea, song.lyrics, song.title, hymnNum);
+                }
+                closeBlockSourceDialog();
+            });
+        }
         li.appendChild(btn);
         list.appendChild(li);
     });
@@ -1442,6 +1634,8 @@ function initBlockSourceDialog() {
 
     const search = document.getElementById('block-source-search');
     search?.addEventListener('input', () => renderBlockSourceSearchResults(search.value));
+
+    renderBlockSourceCategoryFilters();
 
     const libraryApi = getSongLibraryApi();
     if (libraryApi) {
