@@ -1192,6 +1192,49 @@ a {
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--blue-mid) 30%, transparent);
 }
 
+.block-source-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+}
+
+.block-source-filter-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.18rem 0.55rem;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--foreground-muted);
+    font-family: inherit;
+    font-size: 0.66rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+        border-color 120ms ease,
+        background 120ms ease,
+        color 120ms ease,
+        box-shadow 120ms ease;
+}
+
+.block-source-filter-pill:hover {
+    border-color: color-mix(in srgb, var(--blue-mid) 40%, var(--border));
+    color: var(--foreground);
+}
+
+.block-source-filter-pill:focus-visible {
+    outline: none;
+    border-color: var(--blue-mid);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--blue-mid) 30%, transparent);
+}
+
+.block-source-filter-pill[aria-pressed='true'] {
+    box-shadow: 0 1px 0 color-mix(in srgb, var(--foreground) 6%, transparent);
+}
+
 .block-source-results {
     list-style: none;
     margin: 0;
@@ -1229,6 +1272,18 @@ a {
     outline: none;
     border-color: var(--blue-mid);
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--blue-mid) 30%, transparent);
+}
+
+.block-source-result--restricted {
+    cursor: not-allowed;
+    opacity: 0.68;
+}
+
+.block-source-result--restricted:hover,
+.block-source-result--restricted:focus-visible {
+    border-color: transparent;
+    background: transparent;
+    box-shadow: none;
 }
 
 .block-source-result__top {
@@ -1302,10 +1357,47 @@ a {
     white-space: nowrap;
 }
 
-.block-source-pill--adaptation {
-    border-color: color-mix(in srgb, #ab8cff 38%, var(--border));
-    background: color-mix(in srgb, #ab8cff 16%, var(--card));
-    color: color-mix(in srgb, #6d4bd2 70%, var(--foreground));
+/* Category pill + active filter colors */
+.block-source-pill--himnario,
+.block-source-filter-pill--active.block-source-filter-pill--himnario {
+    border-color: color-mix(in srgb, #68c7ff 45%, var(--border));
+    background: color-mix(in srgb, #68c7ff 20%, var(--card));
+    color: color-mix(in srgb, #1a6fa0 75%, var(--foreground));
+}
+
+.block-source-pill--adaptation,
+.block-source-filter-pill--active.block-source-filter-pill--adaptation {
+    border-color: color-mix(in srgb, #ffd37a 50%, var(--border));
+    background: color-mix(in srgb, #ffd37a 22%, var(--card));
+    color: color-mix(in srgb, #7a5600 70%, var(--foreground));
+}
+
+.block-source-pill--original,
+.block-source-filter-pill--active.block-source-filter-pill--original {
+    border-color: color-mix(in srgb, var(--blue-deep) 45%, var(--border));
+    background: color-mix(in srgb, var(--blue-deep) 18%, var(--card));
+    color: color-mix(in srgb, var(--blue-deep) 85%, var(--foreground));
+}
+
+.block-source-pill--asop-f,
+.block-source-filter-pill--active.block-source-filter-pill--asop-f {
+    border-color: color-mix(in srgb, #ab8cff 42%, var(--border));
+    background: color-mix(in srgb, #ab8cff 18%, var(--card));
+    color: color-mix(in srgb, #6d4bd2 75%, var(--foreground));
+}
+
+.block-source-pill--revision,
+.block-source-filter-pill--active.block-source-filter-pill--revision {
+    border-color: color-mix(in srgb, #ff9f43 48%, var(--border));
+    background: color-mix(in srgb, #ff9f43 20%, var(--card));
+    color: color-mix(in srgb, #b35a00 75%, var(--foreground));
+}
+
+.block-source-pill--archived,
+.block-source-filter-pill--active.block-source-filter-pill--archived {
+    border-color: color-mix(in srgb, #e74c3c 45%, var(--border));
+    background: color-mix(in srgb, #e74c3c 16%, var(--card));
+    color: color-mix(in srgb, #a8281a 78%, var(--foreground));
 }
 
 .block-source-pill--worship {
@@ -1321,6 +1413,15 @@ a {
 
 .dark .block-source-pill {
     color: color-mix(in srgb, #d6deec 88%, #9bb7d7);
+}
+
+.dark .block-source-pill--original,
+.dark .block-source-filter-pill--active.block-source-filter-pill--original {
+    color: color-mix(in srgb, #9bb7d7 90%, #d6deec);
+}
+
+.dark .block-source-filter-pill {
+    color: color-mix(in srgb, #d6deec 70%, var(--foreground-muted));
 }
 
 .block-source-result__meta {
