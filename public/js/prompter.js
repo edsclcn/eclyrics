@@ -1,4 +1,3 @@
-const DOUBLE_CLICK_INTERVAL = 500;
 const TOP_SPEED = 6.5;
 const SPEED_CONTROL = 0.1;
 const DEFAULT_SCROLL_SPEED = 0.5;
@@ -37,6 +36,8 @@ function broadcastPrompterState() {
     if (!prompterBroadcastChannel || !prompterContent) return;
     const cs = window.getComputedStyle(prompterContent);
     const fs = parseFloat(cs.fontSize);
+    const guard = typeof EclyricsPrompterSyncGuard !== 'undefined' ? EclyricsPrompterSyncGuard : null;
+    const blockHtml = data && data[currentIndex] != null ? String(data[currentIndex]) : '';
     prompterBroadcastChannel.postMessage({
         type: 'eclyrics-prompter-sync',
         top: scrollPosition,
@@ -49,6 +50,9 @@ function broadcastPrompterState() {
         speed: scrollSpeed,
         playing: scrollingNow,
         theme: getPrompterThemeId(),
+        lineupKey: lineupKey || null,
+        currentIndex,
+        contentFingerprint: guard ? guard.hashString(blockHtml) : null,
     });
 }
 
@@ -70,7 +74,6 @@ if (lineupKey) {
 }
 let currentIndex = parseInt(getUrlParameter('current'), 10);
 if (Number.isNaN(currentIndex)) currentIndex = 0;
-let lastPressed = [0, 0];
 
 function getUrlParameter(name) {
     name = name.replace(/[\[]/, '\\[').replace(/[\]]/, '\\]');
@@ -192,23 +195,13 @@ window.addEventListener('message', (event) => {
     const msg = event.data;
     if (!msg || typeof msg !== 'object') return;
 
-    if (msg.type === 'eclyrics-prompter-keyup') {
-        if (!window.opener || event.source !== window.opener) return;
-        if (msg.key === 'Tab') {
-            const helpCard = document.getElementById('helpCard');
-            if (helpCard) helpCard.style.display = 'none';
-        }
-        return;
-    }
-
     if (msg.type === 'eclyrics-prompter-key') {
         if (!window.opener || event.source !== window.opener) return;
+        const code = msg.code || '';
         const key = msg.key || '';
-        if (key === 'Tab' || key === 'Pause' || key === 'PageUp' || key === 'PageDown') {
-            handleAuxiliaryKeydown({ key, preventDefault() {} });
-            return;
-        }
-        handleMainKeys({ code: msg.code, key, preventDefault() {} }, true);
+        const sc = typeof EclyricsPrompterShortcuts !== 'undefined' ? EclyricsPrompterShortcuts : null;
+        if (sc && !sc.assertRemotePrompterKeySupported(code)) return;
+        handleMainKeys({ code, key, preventDefault() {} });
         return;
     }
 
@@ -307,12 +300,7 @@ if (sessionStorage.getItem('prompterType') === 'LYRICS_PROMPTER') {
     prompterContainer.classList.add('blackwhite');
 }
 
-//Full Screen
-function toggleFullscreen() {
-    if (document.fullscreenElement || document.webkitFullscreenElement || document.mozFullscreenElement) exitFullscreen();
-    else requestFullscreen();
-}
-
+//Full Screen — initial open only; keyboard shortcuts live in the main workspace.
 function requestFullscreen() {
     const body = document.documentElement;
     if (body.requestFullscreen) body.requestFullscreen();
@@ -320,13 +308,7 @@ function requestFullscreen() {
     else if (body.mozRequestFullscreen) body.mozRequestFullscreen();
 }
 
-function exitFullscreen() {
-    if (document.exitFullscreen) document.exitFullscreen();
-    else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
-    else if (document.mozCancelFullscreen) document.mozCancelFullscreen();
-}
-
-//Keyboard Shortcuts
+//Keyboard Shortcuts — remote only (see prompter-shortcuts.js in main app)
 function togglePrompterTheme() {
     if (sessionStorage.getItem('prompterType') === 'LYRICS_PROMPTER') sessionStorage.setItem('prompterType', 'BLACK_AND_WHITE');
     else sessionStorage.setItem('prompterType', 'LYRICS_PROMPTER');
@@ -335,37 +317,7 @@ function togglePrompterTheme() {
     broadcastPrompterState();
 }
 
-function handleAuxiliaryKeydown(event) {
-    const helpCard = document.getElementById('helpCard');
-    if (event.key === 'Tab') {
-        if (helpCard) helpCard.style.display = 'block';
-        event.preventDefault();
-        return;
-    }
-    if (event.key === 'Pause') {
-        if (prompterContent.contentEditable === 'true') {
-            prompterContent.contentEditable = 'false';
-            data[currentIndex] = prompterContent.innerHTML;
-            localStorage.setItem(lineupKey, JSON.stringify(data));
-            notEditable();
-        } else {
-            prompterContent.contentEditable = 'true';
-            Editable();
-        }
-        prompterContent.focus();
-        event.preventDefault();
-        return;
-    }
-    if (event.key === 'PageUp' && prompterContent.contentEditable === 'true') {
-        showColorPicker();
-        event.preventDefault();
-    } else if (event.key === 'PageDown' && prompterContent.contentEditable === 'true') {
-        showColorPresets();
-        event.preventDefault();
-    }
-}
-
-function handleMainKeys(event, fromRemote) {
+function handleMainKeys(event) {
     switch (event.code) {
         case 'Space':
             event.preventDefault();
@@ -449,15 +401,15 @@ function handleMainKeys(event, fromRemote) {
             applyScrollPosition();
             broadcastPrompterState();
             break;
-        case 'F11': case 'KeyF':
+        case 'ArrowLeft':
             event.preventDefault();
-            toggleFullscreen();
+            if (currentIndex > 0) setText(currentIndex - 1);
             break;
-        case 'Escape':
+        case 'ArrowRight':
             event.preventDefault();
-            exitFullscreen();
+            if (data && currentIndex < data.length - 1) setText(currentIndex + 1);
             break;
-        case 'BracketLeft': case 'F8':
+        case 'BracketLeft':
             event.preventDefault();
             var newSizeL = parseInt(window.getComputedStyle(prompterContent).fontSize, 10) - 2;
             prompterContent.style.fontSize = newSizeL + 'px';
@@ -465,7 +417,7 @@ function handleMainKeys(event, fromRemote) {
             localStorage.setItem('eclyrics-prompter-fontSize', String(newSizeL));
             broadcastPrompterState();
             break;
-        case 'BracketRight': case 'F9':
+        case 'BracketRight':
             event.preventDefault();
             var newSizeR = parseInt(window.getComputedStyle(prompterContent).fontSize, 10) + 2;
             prompterContent.style.fontSize = newSizeR + 'px';
@@ -514,54 +466,8 @@ function handleMainKeys(event, fromRemote) {
             persistScrollSpeed();
             broadcastPrompterState();
             break;
-        case 'ArrowLeft':
-            if (fromRemote) {
-                event.preventDefault();
-                if (currentIndex > 0) setText(currentIndex - 1);
-            } else if (isDoubleClick(0) && currentIndex > 0) {
-                setText(--currentIndex);
-            }
-            break;
-        case 'ArrowRight':
-            if (fromRemote) {
-                event.preventDefault();
-                if (data && currentIndex < data.length - 1) setText(currentIndex + 1);
-            } else if (isDoubleClick(1) && data && currentIndex < data.length - 1) {
-                setText(++currentIndex);
-            }
-            break;
-        case 'Numpad0':
-            if (prompterContent.getElementsByClassName('lyricTitle').length > 0) break;
-            event.preventDefault();
-            var textLines = prompterContent.innerHTML.split('\n');
-            textLines[1] = `<span class='lyricTitle'>${textLines[1]}</span>`;
-            prompterContent.innerHTML = textLines.join('\n');
-            data[currentIndex] = prompterContent.innerHTML;
-            localStorage.setItem(lineupKey, JSON.stringify(data));
-            break;
     }
 }
-
-function routePrompterKeydown(event) {
-    if (
-        event.key === 'Tab' ||
-        event.key === 'Pause' ||
-        (event.key === 'PageUp' && prompterContent.contentEditable === 'true') ||
-        (event.key === 'PageDown' && prompterContent.contentEditable === 'true')
-    ) {
-        handleAuxiliaryKeydown(event);
-        return;
-    }
-    handleMainKeys(event, false);
-}
-
-var helpCard = document.getElementById('helpCard');
-
-window.addEventListener('keyup', function (event) {
-    if (event.key === 'Tab' && helpCard) {
-        helpCard.style.display = 'none';
-    }
-});
 
 //Scroll Wheel
 var wheelListener = function (event) {
@@ -594,80 +500,42 @@ window.addEventListener('resize', () => {
     broadcastPrompterState();
 });
 
-//Double click function
-function isDoubleClick(type) {
-    let currentTime = Date.now();
-    if (currentTime - lastPressed[type] < DOUBLE_CLICK_INTERVAL) {
-        lastPressed[type] = 0;
-        return true;
+document.addEventListener('contextmenu', event => event.preventDefault());
+
+function initPrompterHelpOverlay() {
+    const helpCard = document.getElementById('helpCard');
+    const tbody = document.getElementById('prompter-help-table');
+    const sc = typeof EclyricsPrompterShortcuts !== 'undefined' ? EclyricsPrompterShortcuts : null;
+    if (sc) sc.renderPrompterHelpTable(tbody);
+
+    function showHelp() {
+        if (!helpCard) return;
+        helpCard.style.display = 'block';
+        helpCard.setAttribute('aria-hidden', 'false');
     }
 
-    lastPressed[type] = currentTime
-    return false;
-}
+    function hideHelp() {
+        if (!helpCard) return;
+        helpCard.style.display = 'none';
+        helpCard.setAttribute('aria-hidden', 'true');
+    }
 
-//Text edit states
-function notEditable() {
-    document.addEventListener('keydown', routePrompterKeydown);
-}
-
-function Editable() {
-    document.getElementById('search-modal');
-    document.removeEventListener('keydown', routePrompterKeydown);
-}
-notEditable();
-
-//Colors
-function showColorPicker() {
-    var colorPicker = document.createElement('input');
-    colorPicker.type = 'color';
-    colorPicker.addEventListener('change', function () { setColor(colorPicker.value); });
-    colorPicker.click();
-}
-
-function showColorPresets() {
-    if (document.getElementById("colorPickerPopup")) return;
-
-    const colorPickerPopup = document.createElement("div");
-    colorPickerPopup.id = "colorPickerPopup";
-
-    //Add your colors here
-    const colors = ["#ffffff", "#000000", "#ffff00", "#ff00ff", "#ff0000", "#0000FF", "#9D00FF"];
-    colors.forEach(color => {
-        const colorButton = document.createElement("button");
-        colorButton.style.backgroundColor = color;
-        colorButton.classList.add("colorButton");
-        colorButton.onclick = () => {
-            setColor(color);
-            closeColorPresets();
-        };
-        colorPickerPopup.appendChild(colorButton);
+    document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Tab' || event.ctrlKey || event.metaKey || event.altKey) return;
+        showHelp();
+        event.preventDefault();
     });
 
-    document.body.appendChild(colorPickerPopup);
-
-    document.addEventListener("click", function handleOutsideClick(event) {
-        if (!colorPickerPopup.contains(event.target)) {
-            closeColorPresets();
-            document.removeEventListener("click", handleOutsideClick);
-        }
+    window.addEventListener('keyup', (event) => {
+        if (event.key !== 'Tab') return;
+        hideHelp();
+        event.preventDefault();
     });
+
+    window.addEventListener('blur', hideHelp);
 }
 
-function closeColorPresets() {
-    const colorPickerPopup = document.getElementById("colorPickerPopup");
-    if (colorPickerPopup) document.body.removeChild(colorPickerPopup);
-}
-
-function setColor(color) {
-    //Deprecated methods, check
-    document.execCommand('styleWithCSS', false, true);
-    document.execCommand('foreColor', false, color);
-    if (window.getSelection) window.getSelection().removeAllRanges();
-    else if (document.selection) document.selection.empty();
-}
-
-document.addEventListener('contextmenu', event => event.preventDefault());
+initPrompterHelpOverlay();
 
 /** Try fullscreen once loaded (may be blocked without a direct user gesture on some browsers). */
 function tryInitialPrompterFullscreen() {

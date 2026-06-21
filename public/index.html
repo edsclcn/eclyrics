@@ -248,18 +248,8 @@
                                         <button type="button" class="preview-shortcuts-dialog__close" id="preview-shortcuts-dialog-close"
                                             aria-label="Close"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
                                     </header>
-                                    <p class="preview-shortcuts-dialog__lede">With the prompter window open, click this preview column, then use the same keys as on the projected window.</p>
-                                    <dl class="preview-shortcuts-dialog__list">
-                                        <div><dt>Send to prompter</dt><dd><kbd>`</kbd> backtick — from left or right side while Text Lyrics is open (not inside a text field)</dd></div>
-                                        <div><dt>Play / pause</dt><dd><kbd>Space</kbd></dd></div>
-                                        <div><dt>Scroll Speed</dt><dd><kbd>1</kbd>–<kbd>9</kbd>, <kbd>0</kbd></dd></div>
-                                        <div><dt>Scroll Increments</dt><dd><kbd>Numpad +</kbd> <kbd>Numpad −</kbd></dd></div>
-                                        <div><dt>Prev / Next block</dt><dd><kbd>←</kbd> <kbd>→</kbd></dd></div>
-                                        <div><dt>Theme</dt><dd><kbd>P</kbd> — blue lyrics vs black &amp; white</dd></div>
-                                        <div><dt>Text size</dt><dd><kbd>[</kbd> <kbd>]</kbd></dd></div>
-                                        <div><dt>Line width</dt><dd><kbd>-</kbd> <kbd>=</kbd> (main row keys)</dd></div>
-                                        <div><dt>Jump to top</dt><dd><kbd>T</kbd> (when not auto-scrolling)</dd></div>
-                                    </dl>
+                                    <p class="preview-shortcuts-dialog__lede">Use these keys anywhere in the app (except lyric text fields). Controls mirror the projected prompter so preview and stage always stay in sync.</p>
+                                    <dl class="preview-shortcuts-dialog__list" id="preview-shortcuts-dialog-list"></dl>
                                     <p class="preview-shortcuts-dialog__note">Buttons in the bar above mirror several shortcuts. Scroll inside the 16∶9 strip to move lyrics when auto-scroll is paused.</p>
                                 </div>
                             </div>
@@ -325,6 +315,8 @@
     <script defer src="js/firebase-config.js"></script>
     <script defer src="js/auth.js"></script>
     <script defer src="js/song-library.js"></script>
+    <script defer src="js/prompter-shortcuts.js"></script>
+    <script defer src="js/prompter-sync-guard.js"></script>
     <script defer src="js/index.js"></script>
     <script defer src="js/port.js"></script>
     <script defer src="js/textformatting.js"></script>

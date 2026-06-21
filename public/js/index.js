@@ -8,7 +8,7 @@ const PREVIEW_STAGE_THEME_KEY = 'eclyrics-preview-stage-theme';
 
 /* ─────────────────────────────────────────────────────────
  * PREVIEW PROMPTER DOCK — controls the opened prompter window
- *   (play, speed, blocks; focus strip forwards keyboard shortcuts)
+ *   (play, speed, blocks; global keyboard shortcuts via prompter-shortcuts.js)
  * ───────────────────────────────────────────────────────── */
 const PREVIEW_PROMPTER = {
     speedMin: 0.1,
@@ -25,6 +25,14 @@ const PROMPTER_WINDOW_NAME = 'eclyricsPrompter';
 let tabCount = 0;
 let prompterBroadcast = null;
 let lastPrompterSync = null;
+let lastPrompterSyncAt = 0;
+/** Tab id last sent to the prompter — lineup pushes are gated to this tab only. */
+let prompterBoundTabId = null;
+/** Slow backup interval for parity watchdog (ms). Primary path should sync via broadcasts. */
+const PROMPTER_PARITY_BACKUP_MS = 5000;
+/** @type {((drifts: object[]) => void) | null} */
+let reportParityDrift = null;
+let prompterParityWatchdog = 0;
 let prompterPopupWindow = null;
 let activeTabs = [];
 let textNum = {};
@@ -97,25 +105,128 @@ function getPreviewScaleFactor(wrap, vw) {
     return Math.max(0.04, wrap.clientWidth / vw);
 }
 
-function applyPreviewFontSizeDelta(deltaPx) {
-    const base = { ...(lastPrompterSync || defaultPrompterSync()) };
-    base.fs = Math.max(8, (base.fs || 138) + deltaPx);
-    try {
-        localStorage.setItem('eclyrics-prompter-fontSize', String(base.fs));
-    } catch (e) {
-        /* ignore */
-    }
-    lastPrompterSync = base;
-    applyViewfinderFromPrompterSync();
-    postPrompterControl({ action: 'requestSync' });
-}
-
 function applyPreviewStageTheme(theme) {
     const wp = document.querySelector('.workspace-preview');
     if (!wp || (theme !== 'lyrics' && theme !== 'bw')) return;
     wp.classList.remove('preview-stage--lyrics', 'preview-stage--bw');
     wp.classList.add(theme === 'lyrics' ? 'preview-stage--lyrics' : 'preview-stage--bw');
     wp.dataset.stageTheme = theme;
+}
+
+function getSyncGuardApi() {
+    return typeof EclyricsPrompterSyncGuard !== 'undefined' ? EclyricsPrompterSyncGuard : null;
+}
+
+function readPreviewViewfinderMetrics() {
+    const inner = document.getElementById('lyrics-preview-viewfinder');
+    const guard = getSyncGuardApi();
+    if (!inner || inner.classList.contains('preview-empty') || !guard) return null;
+    return {
+        top: guard.parsePx(inner.style.top, 0),
+        fs: guard.parsePx(inner.style.fontSize, 0),
+        cw: guard.parsePx(inner.style.width, 0),
+    };
+}
+
+function getLiveBlockParityExpectation() {
+    const guard = getSyncGuardApi();
+    const liveTa = getLivePrompterTextarea();
+    if (!guard || !liveTa) return null;
+
+    const tabId = getActiveTabId();
+    if (!tabId) return null;
+
+    const m = liveTa.id.match(/^textarea-\d+-(\d+)$/);
+    if (!m) return null;
+
+    const raw = liveTa.value;
+    const lineupBlock = raw.trim() ? `\n${formatText(raw)}` : '';
+    return {
+        lineupKey: getLineupKeyForTab(tabId),
+        blockIndex: parseInt(m[1], 10) - 1,
+        contentFingerprint: lineupBlock ? guard.hashString(lineupBlock) : null,
+    };
+}
+
+function reconcilePrompterParity(drifts) {
+    if (!drifts?.length) return;
+
+    const needsVisual = drifts.some((d) => d.kind === 'visual');
+    const needsContent = drifts.some((d) => d.kind === 'content' || d.kind === 'index');
+    const needsStale = drifts.some((d) => d.kind === 'stale');
+
+    if (needsVisual) applyViewfinderFromPrompterSync();
+
+    if (needsContent) {
+        const tabId = getActiveTabId();
+        if (tabId != null) {
+            pushLineupToOpenPrompter(tabId);
+            const exp = getLiveBlockParityExpectation();
+            const sync = lastPrompterSync;
+            if (
+                exp &&
+                sync &&
+                typeof sync.currentIndex === 'number' &&
+                sync.currentIndex !== exp.blockIndex
+            ) {
+                sendPrompt(tabId, exp.blockIndex + 1, { openIfClosed: false, focusWindow: false });
+            }
+        }
+    }
+
+    if (needsStale && isPrompterWindowOpen()) {
+        postPrompterControl({ action: 'requestSync' });
+    }
+}
+
+function runPrompterParityCheck() {
+    if (!isPrompterWindowOpen()) return;
+
+    const guard = getSyncGuardApi();
+    if (!guard || !lastPrompterSync) return;
+
+    /** @type {import('./prompter-sync-guard').ParityDrift[]} */
+    const drifts = [];
+
+    const dom = readPreviewViewfinderMetrics();
+    if (dom) drifts.push(...guard.diffVisualAgainstDom(lastPrompterSync, dom));
+
+    const expected = getLiveBlockParityExpectation();
+    if (expected?.contentFingerprint) {
+        drifts.push(...guard.diffContentAgainstLive(lastPrompterSync, expected));
+    }
+
+    if (lastPrompterSyncAt > 0) {
+        drifts.push(...guard.diffStaleSync(lastPrompterSyncAt));
+    }
+
+    if (!drifts.length) return;
+
+    if (!reportParityDrift) reportParityDrift = guard.createThrottledReporter();
+    reportParityDrift(drifts);
+    reconcilePrompterParity(drifts);
+}
+
+function initPrompterParityGuard() {
+    const guard = getSyncGuardApi();
+    if (!guard) {
+        console.error('[eclyrics] prompter-sync-guard.js must load before index.js');
+        return;
+    }
+
+    if (prompterParityWatchdog) clearInterval(prompterParityWatchdog);
+    prompterParityWatchdog = window.setInterval(() => {
+        if (!isPrompterWindowOpen()) return;
+        runPrompterParityCheck();
+    }, PROMPTER_PARITY_BACKUP_MS);
+}
+
+function ingestPrompterSyncBroadcast(normalized) {
+    if (!normalized || normalized.type !== 'eclyrics-prompter-sync') return;
+    lastPrompterSync = { ...(lastPrompterSync || {}), ...normalized };
+    lastPrompterSyncAt = Date.now();
+    applyViewfinderFromPrompterSync();
+    updatePreviewDockFromSync(normalized);
 }
 
 function applyViewfinderFromPrompterSync() {
@@ -188,18 +299,11 @@ function postPrompterKey(code, key) {
     }
 }
 
-function postPrompterKeyUp(key) {
-    if (!prompterPopupWindow || prompterPopupWindow.closed) return false;
-    try {
-        prompterPopupWindow.postMessage({ type: 'eclyrics-prompter-keyup', key }, getPrompterTargetOrigin());
-        return true;
-    } catch (e) {
-        return false;
-    }
-}
-
 function isPrompterWindowOpen() {
-    if (prompterPopupWindow && prompterPopupWindow.closed) prompterPopupWindow = null;
+    if (prompterPopupWindow && prompterPopupWindow.closed) {
+        prompterPopupWindow = null;
+        prompterBoundTabId = null;
+    }
     return !!(prompterPopupWindow && !prompterPopupWindow.closed);
 }
 
@@ -331,7 +435,6 @@ function updatePreviewDockFromSync(data) {
             /* ignore */
         }
         applyPreviewStageTheme(data.theme);
-        applyViewfinderFromPrompterSync();
     }
     if (themeBtn && (data.theme === 'lyrics' || data.theme === 'bw')) {
         themeBtn.setAttribute('aria-pressed', data.theme === 'lyrics' ? 'true' : 'false');
@@ -360,63 +463,59 @@ function applySavedSpeedToSlider() {
     if (valEl) valEl.textContent = v.toFixed(1);
 }
 
+function getPrompterShortcutsApi() {
+    return typeof EclyricsPrompterShortcuts !== 'undefined' ? EclyricsPrompterShortcuts : null;
+}
+
 function isPreviewShortcutsDialogOpen() {
     const dlg = document.getElementById('preview-shortcuts-dialog');
     return dlg && !dlg.hidden;
 }
 
-function handlePreviewDockKeydown(event) {
-    if (isPreviewShortcutsDialogOpen()) return;
-    if (event.ctrlKey || event.metaKey) return;
+/** Global prompter shortcuts (preview registry) — work everywhere except text fields and modals. */
+function handleGlobalPrompterShortcut(event) {
+    const sc = getPrompterShortcutsApi();
+    if (!sc) return;
 
-    if (event.key === 'ArrowLeft') {
-        event.preventDefault();
-        goToAdjacentBlockAndSend(-1);
-        return;
-    }
-    if (event.key === 'ArrowRight') {
-        event.preventDefault();
-        goToAdjacentBlockAndSend(1);
-        return;
-    }
+    const ctx = { prompterOpen: isPrompterWindowOpen() };
+    if (sc.shouldIgnorePrompterShortcut(event, ctx)) return;
 
-    if (!isPrompterWindowOpen()) return;
-
-    if (event.key === 'ArrowUp') {
-        event.preventDefault();
-        postPrompterControl({ action: 'scrollBy', delta: getPreviewScrollStep() });
-        return;
-    }
-    if (event.key === 'ArrowDown') {
-        event.preventDefault();
-        postPrompterControl({ action: 'scrollBy', delta: -getPreviewScrollStep() });
-        return;
-    }
-
-    if (event.code === 'BracketLeft') {
-        event.preventDefault();
-        applyPreviewFontSizeDelta(-2);
-        postPrompterKey('BracketLeft', '[');
-        return;
-    }
-    if (event.code === 'BracketRight') {
-        event.preventDefault();
-        applyPreviewFontSizeDelta(2);
-        postPrompterKey('BracketRight', ']');
-        return;
-    }
+    const resolved = sc.resolvePrompterShortcut(event);
+    if (!resolved) return;
 
     event.preventDefault();
-    postPrompterKey(event.code, event.key);
+
+    switch (resolved.id) {
+        case 'send':
+            sendActiveBlockToPrompter();
+            break;
+        case 'adjacentBlock':
+            goToAdjacentBlockAndSend(resolved.code === 'ArrowLeft' ? -1 : 1);
+            break;
+        case 'manualScroll':
+            postPrompterControl({
+                action: 'scrollBy',
+                delta: resolved.code === 'ArrowUp' ? getPreviewScrollStep() : -getPreviewScrollStep(),
+            });
+            break;
+        case 'fontSize':
+            postPrompterKey(resolved.code, resolved.key);
+            break;
+        default:
+            postPrompterKey(resolved.code, resolved.key);
+            break;
+    }
 }
 
-function handlePreviewDockKeyup(event) {
-    if (!isPrompterWindowOpen()) return;
-    if (isPreviewShortcutsDialogOpen()) return;
-    if (event.key === 'Tab') {
-        event.preventDefault();
-        postPrompterKeyUp('Tab');
+function initGlobalPrompterShortcuts() {
+    const sc = getPrompterShortcutsApi();
+    if (!sc) {
+        console.error('[eclyrics] prompter-shortcuts.js must load before index.js');
+        return;
     }
+    sc.assertPrompterShortcutParity();
+    sc.renderPreviewShortcutsList(document.getElementById('preview-shortcuts-dialog-list'));
+    document.addEventListener('keydown', handleGlobalPrompterShortcut, true);
 }
 
 function goToAdjacentBlockAndSend(delta) {
@@ -501,6 +600,7 @@ function schedulePrompterLineupSync(tabId) {
 
 function pushLineupToOpenPrompter(tabId) {
     if (!isPrompterWindowOpen()) return;
+    if (prompterBoundTabId != null && tabId !== prompterBoundTabId) return;
     const lineupKey = getLineupKeyForTab(tabId);
     const data = buildLineupForTab(tabId);
     localStorage.setItem(lineupKey, JSON.stringify(data));
@@ -521,13 +621,8 @@ function initPreviewViewfinderWheel() {
             if (!isPrompterWindowOpen()) return;
             if (e.ctrlKey || e.metaKey) {
                 e.preventDefault();
-                if (e.deltaY > 0) {
-                    applyPreviewFontSizeDelta(2);
-                    postPrompterKey('BracketRight', ']');
-                } else {
-                    applyPreviewFontSizeDelta(-2);
-                    postPrompterKey('BracketLeft', '[');
-                }
+                if (e.deltaY > 0) postPrompterKey('BracketRight', ']');
+                else postPrompterKey('BracketLeft', '[');
                 return;
             }
             e.preventDefault();
@@ -549,7 +644,6 @@ function initPreviewPrompterDock() {
     initPreviewShortcutsDialog();
     initPreviewViewfinderWheel();
 
-    const panel = document.getElementById('workspace-preview-panel');
     const playBtn = document.getElementById('preview-btn-play');
     const prevBtn = document.getElementById('preview-btn-prev');
     const nextBtn = document.getElementById('preview-btn-next');
@@ -560,18 +654,6 @@ function initPreviewPrompterDock() {
     const themeBtn = document.getElementById('preview-btn-theme');
     const speedEl = document.getElementById('preview-prompter-speed');
     const valEl = document.getElementById('preview-prompter-speed-val');
-
-    if (panel) {
-        panel.addEventListener('mousedown', (e) => {
-            if (!isPrompterWindowOpen()) return;
-            const dlg = document.getElementById('preview-shortcuts-dialog');
-            if (dlg && !dlg.hidden && e.target.closest('#preview-shortcuts-dialog')) return;
-            if (e.target.closest('button, input, textarea, select, a')) return;
-            panel.focus({ preventScroll: true });
-        });
-        panel.addEventListener('keydown', handlePreviewDockKeydown, true);
-        panel.addEventListener('keyup', handlePreviewDockKeyup, true);
-    }
 
     if (playBtn) {
         playBtn.addEventListener('click', () => {
@@ -590,14 +672,12 @@ function initPreviewPrompterDock() {
     if (fontSmBtn) {
         fontSmBtn.addEventListener('click', () => {
             if (fontSmBtn.disabled) return;
-            applyPreviewFontSizeDelta(-2);
             postPrompterKey('BracketLeft', '[');
         });
     }
     if (fontLgBtn) {
         fontLgBtn.addEventListener('click', () => {
             if (fontLgBtn.disabled) return;
-            applyPreviewFontSizeDelta(2);
             postPrompterKey('BracketRight', ']');
         });
     }
@@ -631,10 +711,9 @@ function initPrompterBroadcast() {
     if (!prompterBroadcast) return;
 
     prompterBroadcast.onmessage = (ev) => {
-        if (!ev.data || ev.data.type !== 'eclyrics-prompter-sync') return;
-        lastPrompterSync = { ...(lastPrompterSync || {}), ...ev.data };
-        applyViewfinderFromPrompterSync();
-        updatePreviewDockFromSync(ev.data);
+        const guard = getSyncGuardApi();
+        const normalized = guard ? guard.normalizeSyncPayload(ev.data) : ev.data;
+        ingestPrompterSyncBroadcast(normalized);
     };
 
     const wrap = document.querySelector('.preview-viewfinder-16x9');
@@ -1001,22 +1080,6 @@ function initSidebarCollapse() {
     });
 }
 
-function isTypingInTextField(target) {
-    if (!target || typeof target.closest !== 'function') return false;
-    const el = target.nodeType === Node.ELEMENT_NODE ? target : null;
-    if (!el) return false;
-    if (el.isContentEditable) return true;
-    const tag = el.tagName;
-    if (tag === 'TEXTAREA') return true;
-    if (tag === 'SELECT') return true;
-    if (tag === 'INPUT') {
-        const type = (el.getAttribute('type') || 'text').toLowerCase();
-        const nonText = new Set(['button', 'submit', 'reset', 'checkbox', 'radio', 'range', 'file', 'hidden', 'image']);
-        return !nonText.has(type);
-    }
-    return false;
-}
-
 function sendActiveBlockToPrompter() {
     const sendBtn = document.getElementById('send-prompter-btn');
     if (sendBtn?.disabled) return;
@@ -1029,25 +1092,16 @@ function sendActiveBlockToPrompter() {
 function initShell() {
     initSidebarCollapse();
     initPrompterBroadcast();
+    initPrompterParityGuard();
     initBlockSourceDialog();
     initPreviewPrompterDock();
+    initGlobalPrompterShortcuts();
     applyViewfinderFromPrompterSync();
 
     window.addEventListener('storage', (e) => {
-        if (e.key === 'eclyrics-prompter-fontSize' || e.key === 'eclyrics-prompter-width') {
-            const base = { ...(lastPrompterSync || defaultPrompterSync()) };
-            if (e.key === 'eclyrics-prompter-fontSize' && e.newValue) {
-                const n = parseFloat(e.newValue);
-                if (!Number.isNaN(n)) base.fs = n;
-            }
-            if (e.key === 'eclyrics-prompter-width' && e.newValue) {
-                const n = parseFloat(e.newValue);
-                if (!Number.isNaN(n)) base.cw = n;
-            }
-            lastPrompterSync = base;
-            applyViewfinderFromPrompterSync();
-            updatePreview();
-        }
+        if (e.key !== 'eclyrics-prompter-fontSize' && e.key !== 'eclyrics-prompter-width') return;
+        if (!isPrompterWindowOpen()) return;
+        postPrompterControl({ action: 'requestSync' });
     });
 
     let saved = localStorage.getItem('eclyrics-theme');
@@ -1101,21 +1155,6 @@ function initShell() {
         if (ta) openBlockTab(ta);
     });
 
-    document.addEventListener(
-        'keydown',
-        (e) => {
-            if (e.code !== 'Backquote') return;
-            if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
-            const textPanel = document.getElementById('panel-text');
-            if (!textPanel?.classList.contains('is-active')) return;
-            if (isPreviewShortcutsDialogOpen()) return;
-            if (isTypingInTextField(e.target)) return;
-            e.preventDefault();
-            sendActiveBlockToPrompter();
-        },
-        true,
-    );
-
     const tc = document.getElementById('tab-content');
     if (tc) {
         tc.addEventListener('focusin', (e) => {
@@ -1127,14 +1166,16 @@ function initShell() {
             const tid = m ? parseInt(m[1], 10) : null;
             if (tid != null) {
                 refreshAllBlockLabelsInTab(tid);
-                schedulePrompterLineupSync(tid);
+                if (e.target.closest('.textarea-cell.is-live')) {
+                    updateLiveViewfinder();
+                    pushLineupToOpenPrompter(tid);
+                } else {
+                    schedulePrompterLineupSync(tid);
+                }
             }
             const blockTabId = blockTabIdForTextarea(e.target);
             if (blockTabId && blockEditorSession?.blockTabId === blockTabId) {
                 syncBlockTabEditor(blockTabId);
-            }
-            if (e.target.closest('.textarea-cell.is-live')) {
-                updateLiveViewfinder();
             }
             const sel = tid != null && textNum[tid.toString()] ? textNum[tid.toString()][2] : null;
             if (tid !== getActiveTabId()) return;
@@ -1911,6 +1952,8 @@ function sendPrompt(tabId, textId, options = {}) {
 
     updatePreview();
 
+    prompterBoundTabId = tabId;
+
     const payload = {
         type: 'eclyrics-prompter-load',
         lineupKey,
@@ -1927,6 +1970,7 @@ function sendPrompt(tabId, textId, options = {}) {
             textNum[tabId.toString()][1] = prompterPopupWindow;
             updatePreviewPrompterDock();
             postPrompterControl({ action: 'setSpeed', speed: readSavedPreviewSpeed() });
+            postPrompterControl({ action: 'requestSync' });
             return;
         } catch (e) {
             prompterPopupWindow = null;
@@ -1956,6 +2000,7 @@ function sendPrompt(tabId, textId, options = {}) {
     updatePreviewPrompterDock();
     setTimeout(() => {
         postPrompterControl({ action: 'setSpeed', speed: readSavedPreviewSpeed() });
+        postPrompterControl({ action: 'requestSync' });
     }, 120);
 }
 

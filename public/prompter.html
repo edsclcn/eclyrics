@@ -12,46 +12,25 @@
     <div class="prompterCon" id="bgPrompter">
         <div id="prompter-content"></div>
 
-        <div class="card md" id="helpCard">
+        <div class="card md" id="helpCard" aria-hidden="true">
             <div class="card-body p-5">
-                <h5>Keyboard Shortcuts</h5>
+                <h5>Prompter controls</h5>
+                <p class="prompter-help-lede">Hold <kbd>Tab</kbd> on this window. Keys are sent from the main app — same list as the preview shortcuts.</p>
                 <hr>
                 <div class="px-3">
                     <table>
-                        <tr><th>Key Code</th>       <th>Function</th></tr>
-                        <tr><td>Space</td>          <td>Play/Pause</td></tr>
-                        <tr><td>F/F11</td>          <td>Fullscreen</td></tr>
-                        <tr><td>P</td>              <td>Change Prompter Style</td></tr>
-                        <tr><td>T</td>              <td>Jump to top</td></tr>
-                        <tr><td>Pause/Break</td>    <td>Edit/Save Text</td></tr>
-                        <tr><td>Page Up</td>        <td>Change Text Color from Hex</td></tr>
-                        <tr><td>Page Down</td>      <td>Change Text Color from Preset</td></tr>
-                        <tr><td>[</td>              <td>Decrease Font Size</td></tr>
-                        <tr><td>]</td>              <td>Increase Font Size</td></tr>
-                        <tr><td>-</td>              <td>Decrease Text Width</td></tr>
-                        <tr><td>=</td>              <td>Increase Text Width</td></tr>
-                        <tr><td>Arrow Up</td>       <td>Manual Scroll Up</td></tr>
-                        <tr><td>Arrow Down</td>     <td>Manual Scroll Down</td></tr>
-                        <tr><td>Arrow Right</td>    <td>Next Prompt</td></tr>
-                        <tr><td>Arrow Left</td>     <td>Previous Prompt</td></tr>
-                        <tr><td>1</td>              <td>1x Speed</td></tr>
-                        <tr><td>2</td>              <td>2x Speed</td></tr>
-                        <tr><td>3</td>              <td>3x Speed</td></tr>
-                        <tr><td>4</td>              <td>4x Speed</td></tr>
-                        <tr><td>5</td>              <td>5x Speed</td></tr>
-                        <tr><td>6</td>              <td>6x Speed</td></tr>
-                        <tr><td>7</td>              <td>7x Speed</td></tr>
-                        <tr><td>8</td>              <td>8x Speed</td></tr>
-                        <tr><td>9</td>              <td>9x Speed</td></tr>
-                        <tr><td>0</td>              <td>Pause</td></tr>
-                        <tr><td>Numpad +</td>       <td>Add Speed</td></tr>
-                        <tr><td>Numpad -</td>       <td>Decrease Speed</td></tr>
+                        <thead>
+                            <tr><th>Key</th><th>Function</th></tr>
+                        </thead>
+                        <tbody id="prompter-help-table"></tbody>
                     </table>
                 </div>
             </div>
         </div>
     </div>
 
-    <script src="js/prompter.js"></script>
+    <script defer src="js/prompter-shortcuts.js"></script>
+    <script defer src="js/prompter-sync-guard.js"></script>
+    <script defer src="js/prompter.js"></script>
 </body>
 </html>
