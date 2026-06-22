@@ -91,6 +91,7 @@
             out.currentIndex = msg.currentIndex;
         }
         if (typeof msg.contentFingerprint === 'string') out.contentFingerprint = msg.contentFingerprint;
+        if (typeof msg.contentH === 'number' && !Number.isNaN(msg.contentH)) out.contentH = msg.contentH;
 
         return Object.keys(out).length > 1 ? out : null;
     }

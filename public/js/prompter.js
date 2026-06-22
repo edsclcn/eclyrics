@@ -79,36 +79,51 @@ try {
     prompterBroadcastChannel = null;
 }
 
-function getPrompterThemeId() {
-    return sessionStorage.getItem('prompterType') === 'LYRICS_PROMPTER' ? 'lyrics' : 'bw';
-}
+/** Cached visual metrics — refreshed on layout/block/theme changes, not every scroll frame. */
+let cachedPrompterBroadcast = null;
 
-function broadcastPrompterState() {
-    if (!prompterBroadcastChannel || !prompterContent) return;
+function refreshCachedPrompterBroadcast() {
+    if (!prompterContent) return null;
     const fs = readPrompterFontSizePx();
     const cw = readPrompterWidthPx();
     const guard = typeof EclyricsPrompterSyncGuard !== 'undefined' ? EclyricsPrompterSyncGuard : null;
     const blockHtml = data && data[currentIndex] != null ? String(data[currentIndex]) : '';
     const cs = window.getComputedStyle(prompterContent);
+    cachedPrompterBroadcast = {
+        fs,
+        cw,
+        ls: cs.letterSpacing,
+        lh: cs.lineHeight,
+        theme: getPrompterThemeId(),
+        lineupKey: lineupKey || null,
+        currentIndex,
+        contentFingerprint: guard ? guard.hashString(blockHtml) : null,
+    };
+    return cachedPrompterBroadcast;
+}
+
+function getPrompterThemeId() {
+    return sessionStorage.getItem('prompterType') === 'LYRICS_PROMPTER' ? 'lyrics' : 'bw';
+}
+
+function broadcastPrompterState(options = {}) {
+    if (!prompterBroadcastChannel || !prompterContent) return;
+    const scrollOnly = options.scrollOnly === true;
+    if (!scrollOnly || !cachedPrompterBroadcast) {
+        refreshCachedPrompterBroadcast();
+    }
+    const contentH = prompterContent.offsetHeight;
     prompterBroadcastChannel.postMessage({
         type: 'eclyrics-prompter-sync',
         top: scrollPosition,
         vw: STAGE_VW,
         vh: STAGE_VH,
-        fs,
-        ls: cs.letterSpacing,
-        lh: cs.lineHeight,
-        cw,
+        contentH,
         speed: scrollSpeed,
         playing: scrollingNow,
-        theme: getPrompterThemeId(),
-        lineupKey: lineupKey || null,
-        currentIndex,
-        contentFingerprint: guard ? guard.hashString(blockHtml) : null,
+        ...(cachedPrompterBroadcast || {}),
     });
 }
-
-let scrollBroadcastTick = 0;
 
 const prompterContainer = document.getElementById("bgPrompter");
 const prompterContent = document.getElementById("prompter-content");
@@ -205,7 +220,7 @@ function applyScrollPosition() {
 function scrollScript() {
     scrollPosition -= scrollSpeed;
     applyScrollPosition();
-    if (scrollBroadcastTick++ % 2 === 0) broadcastPrompterState();
+    broadcastPrompterState({ scrollOnly: true });
     animationLoop = requestAnimationFrame(scrollScript);
 }
 
@@ -528,41 +543,6 @@ var wheelListener = function (event) {
 document.addEventListener('wheel', wheelListener, { passive: false });
 
 document.addEventListener('contextmenu', event => event.preventDefault());
-
-function initPrompterHelpOverlay() {
-    const helpCard = document.getElementById('helpCard');
-    const tbody = document.getElementById('prompter-help-table');
-    const sc = typeof EclyricsPrompterShortcuts !== 'undefined' ? EclyricsPrompterShortcuts : null;
-    if (sc) sc.renderPrompterHelpTable(tbody);
-
-    function showHelp() {
-        if (!helpCard) return;
-        helpCard.style.display = 'block';
-        helpCard.setAttribute('aria-hidden', 'false');
-    }
-
-    function hideHelp() {
-        if (!helpCard) return;
-        helpCard.style.display = 'none';
-        helpCard.setAttribute('aria-hidden', 'true');
-    }
-
-    document.addEventListener('keydown', (event) => {
-        if (event.key !== 'Tab' || event.ctrlKey || event.metaKey || event.altKey) return;
-        showHelp();
-        event.preventDefault();
-    });
-
-    window.addEventListener('keyup', (event) => {
-        if (event.key !== 'Tab') return;
-        hideHelp();
-        event.preventDefault();
-    });
-
-    window.addEventListener('blur', hideHelp);
-}
-
-initPrompterHelpOverlay();
 
 /** Try fullscreen once loaded (may be blocked without a direct user gesture on some browsers). */
 function tryInitialPrompterFullscreen() {

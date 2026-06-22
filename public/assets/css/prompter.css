@@ -114,37 +114,6 @@ body {
     user-select: none;
 }
 
-#helpCard {
-    display: none;
-    position: absolute;
-    margin-top: 1rem;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    z-index: 20;
-    max-height: 85vh;
-    overflow: auto;
-}
-
-.prompter-help-lede {
-    font-size: 0.95rem;
-    margin-bottom: 0;
-    opacity: 0.85;
-}
-
-h5 {
-    font-size: 1.5rem;
-    font-weight: bold;
-}
-
-tr td:first-child {
-    width: 150px;
-}
-
-th {
-    font-weight: bold;
-}
-
 .form-control:focus {
     box-shadow: none;
     border-color: #ced4da;
