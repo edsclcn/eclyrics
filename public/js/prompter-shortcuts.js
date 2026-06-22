@@ -87,7 +87,7 @@
         {
             id: 'manualScroll',
             label: 'Manual scroll',
-            description: 'up / down',
+            description: 'up / down — 100px per keypress (fixed)',
             codes: ['ArrowUp', 'ArrowDown'],
             scope: 'prompter',
         },

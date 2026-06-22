@@ -1,16 +1,67 @@
 const TOP_SPEED = 6.5;
 const SPEED_CONTROL = 0.1;
 const DEFAULT_SCROLL_SPEED = 0.5;
-/** Manual scroll (arrows / wheel) at default speed — scales with scrollSpeed. */
-const ARROW_SCROLL_BASE_PX = 50;
-const WHEEL_SCROLL_BASE_PX = 100;
+/** Logical stage size — fixed regardless of browser zoom or popup window resize. */
+const STAGE_VW = 1920;
+const STAGE_VH = 1080;
+/** Manual scroll: fixed px per input type (not scaled by auto-scroll speed). */
+const KEYBOARD_ARROW_SCROLL_PX = 100;
+const WHEEL_SCROLL_PX = 50;
 
-function scrollStepPx() {
-    return ARROW_SCROLL_BASE_PX * (scrollSpeed / DEFAULT_SCROLL_SPEED);
+function keyboardArrowScrollPx() {
+    return KEYBOARD_ARROW_SCROLL_PX;
 }
 
 function wheelScrollStepPx() {
-    return WHEEL_SCROLL_BASE_PX * (scrollSpeed / DEFAULT_SCROLL_SPEED);
+    return WHEEL_SCROLL_PX;
+}
+
+function readPrompterFontSizePx() {
+    const inline = parseFloat(prompterContent?.style?.fontSize);
+    if (!Number.isNaN(inline) && inline > 0) return inline;
+    const stored = parseFloat(sessionStorage.getItem('fontSize'));
+    if (!Number.isNaN(stored) && stored > 0) return stored;
+    return 138;
+}
+
+function readPrompterWidthPx() {
+    const inline = parseFloat(prompterContent?.style?.width);
+    if (!Number.isNaN(inline) && inline > 0) return inline;
+    const stored = parseFloat(sessionStorage.getItem('prompterWidth'));
+    if (!Number.isNaN(stored) && stored > 0) return stored;
+    return STAGE_VW * 0.7;
+}
+
+function setPrompterFontSizePx(px) {
+    const next = Math.max(8, Math.round(px));
+    prompterContent.style.fontSize = `${next}px`;
+    sessionStorage.setItem('fontSize', String(next));
+    localStorage.setItem('eclyrics-prompter-fontSize', String(next));
+    return next;
+}
+
+function setPrompterWidthPx(px) {
+    const next = Math.round(px);
+    prompterContent.style.width = `${next}px`;
+    sessionStorage.setItem('prompterWidth', String(next));
+    localStorage.setItem('eclyrics-prompter-width', String(next));
+    return next;
+}
+
+/** Counter browser page zoom so stage metrics stay at logical 1920×1080 px. */
+function applyBrowserZoomCompensation() {
+    const scale = window.visualViewport?.scale;
+    if (!scale || Math.abs(scale - 1) < 0.001) {
+        document.documentElement.style.zoom = '';
+        return;
+    }
+    document.documentElement.style.zoom = String(1 / scale);
+}
+
+function initPrompterViewportLock() {
+    applyBrowserZoomCompensation();
+    window.visualViewport?.addEventListener('resize', applyBrowserZoomCompensation);
+    window.visualViewport?.addEventListener('scroll', applyBrowserZoomCompensation);
 }
 
 /** Sync font/width to localStorage so the main app preview can match the prompter window. */
@@ -34,19 +85,20 @@ function getPrompterThemeId() {
 
 function broadcastPrompterState() {
     if (!prompterBroadcastChannel || !prompterContent) return;
-    const cs = window.getComputedStyle(prompterContent);
-    const fs = parseFloat(cs.fontSize);
+    const fs = readPrompterFontSizePx();
+    const cw = readPrompterWidthPx();
     const guard = typeof EclyricsPrompterSyncGuard !== 'undefined' ? EclyricsPrompterSyncGuard : null;
     const blockHtml = data && data[currentIndex] != null ? String(data[currentIndex]) : '';
+    const cs = window.getComputedStyle(prompterContent);
     prompterBroadcastChannel.postMessage({
         type: 'eclyrics-prompter-sync',
         top: scrollPosition,
-        vw: window.innerWidth,
-        vh: window.innerHeight,
-        fs: Number.isNaN(fs) ? 138 : fs,
+        vw: STAGE_VW,
+        vh: STAGE_VH,
+        fs,
         ls: cs.letterSpacing,
         lh: cs.lineHeight,
-        cw: prompterContent.offsetWidth,
+        cw,
         speed: scrollSpeed,
         playing: scrollingNow,
         theme: getPrompterThemeId(),
@@ -85,6 +137,7 @@ function getUrlParameter(name) {
 window.onload = function () {
     var t = getUrlParameter('title');
     if (t) document.title = t;
+    initPrompterViewportLock();
     broadcastPrompterState();
     setTimeout(tryInitialPrompterFullscreen, 150);
 };
@@ -93,14 +146,16 @@ window.onload = function () {
 let fontSize = sessionStorage.getItem('fontSize');
 if (fontSize) prompterContent.style.fontSize = fontSize + 'px';
 else {
-    prompterContent.style.fontSize = '138px';
-    sessionStorage.setItem('fontSize', '138');
+    setPrompterFontSizePx(138);
 }
 syncPreviewMetricsFromSession();
 
-//Prompter width
+//Prompter width — fixed px, never viewport-relative
 let prompterWidth = sessionStorage.getItem('prompterWidth');
-if (prompterWidth) prompterContent.style.width = prompterWidth + "px";
+if (prompterWidth) prompterContent.style.width = prompterWidth + 'px';
+else {
+    setPrompterWidthPx(STAGE_VW * 0.7);
+}
 syncPreviewMetricsFromSession();
 
 //Scrolling
@@ -130,7 +185,7 @@ function persistScrollSpeed() {
 /** scrollPosition 0 = top; negative = scrolled down.
  * Allow one full viewport of blank tail after the last line. */
 function getScrollBounds() {
-    const viewH = window.innerHeight;
+    const viewH = STAGE_VH;
     const contentH = prompterContent ? prompterContent.offsetHeight : 0;
     const minTop = -(Math.max(contentH, viewH));
     return { min: minTop, max: 0 };
@@ -390,14 +445,14 @@ function handleMainKeys(event) {
         case 'ArrowUp':
             event.preventDefault();
             pauseScroll();
-            scrollPosition += scrollStepPx();
+            scrollPosition += keyboardArrowScrollPx();
             applyScrollPosition();
             broadcastPrompterState();
             break;
         case 'ArrowDown':
             event.preventDefault();
             pauseScroll();
-            scrollPosition -= scrollStepPx();
+            scrollPosition -= keyboardArrowScrollPx();
             applyScrollPosition();
             broadcastPrompterState();
             break;
@@ -411,37 +466,27 @@ function handleMainKeys(event) {
             break;
         case 'BracketLeft':
             event.preventDefault();
-            var newSizeL = parseInt(window.getComputedStyle(prompterContent).fontSize, 10) - 2;
-            prompterContent.style.fontSize = newSizeL + 'px';
-            sessionStorage.setItem('fontSize', String(newSizeL));
-            localStorage.setItem('eclyrics-prompter-fontSize', String(newSizeL));
+            setPrompterFontSizePx(readPrompterFontSizePx() - 2);
             broadcastPrompterState();
             break;
         case 'BracketRight':
             event.preventDefault();
-            var newSizeR = parseInt(window.getComputedStyle(prompterContent).fontSize, 10) + 2;
-            prompterContent.style.fontSize = newSizeR + 'px';
-            sessionStorage.setItem('fontSize', String(newSizeR));
-            localStorage.setItem('eclyrics-prompter-fontSize', String(newSizeR));
+            setPrompterFontSizePx(readPrompterFontSizePx() + 2);
             broadcastPrompterState();
             break;
         case 'Minus':
             event.preventDefault();
-            var currentWidthMinus = parseInt(window.getComputedStyle(prompterContent).width, 10) - 50;
-            if (currentWidthMinus >= screen.availWidth / 3) {
-                prompterContent.style.width = currentWidthMinus + 'px';
-                sessionStorage.setItem('prompterWidth', String(currentWidthMinus));
-                localStorage.setItem('eclyrics-prompter-width', String(currentWidthMinus));
+            var currentWidthMinus = readPrompterWidthPx() - 50;
+            if (currentWidthMinus >= STAGE_VW / 3) {
+                setPrompterWidthPx(currentWidthMinus);
                 broadcastPrompterState();
             }
             break;
         case 'Equal':
             event.preventDefault();
-            var currentWidthEq = parseInt(window.getComputedStyle(prompterContent).width, 10) + 50;
-            if (currentWidthEq <= screen.availWidth) {
-                prompterContent.style.width = currentWidthEq + 'px';
-                sessionStorage.setItem('prompterWidth', String(currentWidthEq));
-                localStorage.setItem('eclyrics-prompter-width', String(currentWidthEq));
+            var currentWidthEq = readPrompterWidthPx() + 50;
+            if (currentWidthEq <= STAGE_VW) {
+                setPrompterWidthPx(currentWidthEq);
                 broadcastPrompterState();
             }
             break;
@@ -469,36 +514,18 @@ function handleMainKeys(event) {
     }
 }
 
-//Scroll Wheel
+//Scroll Wheel — plain wheel scrolls lyrics; Ctrl/meta wheel is browser zoom, not scroll.
 var wheelListener = function (event) {
-    if (event.ctrlKey) {
-        if (event.deltaY < 0) {
-            var newSize = parseInt(window.getComputedStyle(prompterContent).fontSize) + 2;
-            prompterContent.style.fontSize = newSize + 'px';
-            sessionStorage.setItem('fontSize', newSize);
-            localStorage.setItem('eclyrics-prompter-fontSize', String(newSize));
-            broadcastPrompterState();
-        } else {
-            var newSize = parseInt(window.getComputedStyle(prompterContent).fontSize) - 2;
-            prompterContent.style.fontSize = newSize + 'px';
-            sessionStorage.setItem('fontSize', newSize);
-            localStorage.setItem('eclyrics-prompter-fontSize', String(newSize));
-            broadcastPrompterState();
-        }
-    } else {
-        pauseScroll();
-        const step = wheelScrollStepPx();
-        if (event.deltaY < 0) scrollPosition += step;
-        else scrollPosition -= step;
-        applyScrollPosition();
-        broadcastPrompterState();
-    }
-};
-document.addEventListener('wheel', wheelListener);
-
-window.addEventListener('resize', () => {
+    if (event.ctrlKey || event.metaKey) return;
+    event.preventDefault();
+    pauseScroll();
+    const step = wheelScrollStepPx();
+    if (event.deltaY < 0) scrollPosition += step;
+    else scrollPosition -= step;
+    applyScrollPosition();
     broadcastPrompterState();
-});
+};
+document.addEventListener('wheel', wheelListener, { passive: false });
 
 document.addEventListener('contextmenu', event => event.preventDefault());
 

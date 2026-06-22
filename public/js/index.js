@@ -16,6 +16,10 @@ const PREVIEW_PROMPTER = {
     speedStep: 0.1,
     defaultSpeed: 0.5,
 };
+/** Fixed manual scroll step for ArrowUp/ArrowDown (not scaled by scroll speed). */
+const PREVIEW_KEYBOARD_SCROLL_PX = 100;
+/** Fixed manual scroll step per mouse wheel tick in the preview strip (not scaled by scroll speed). */
+const PREVIEW_WHEEL_SCROLL_PX = 50;
 const PROMPTER_POPUP_W = 1920;
 const PROMPTER_POPUP_H = 1080;
 const PROMPTER_BC_NAME = 'eclyrics-prompter';
@@ -100,9 +104,10 @@ function parsePrompterCssPx(value, fallback = 0) {
     return Number.isNaN(n) ? fallback : n;
 }
 
-function getPreviewScaleFactor(wrap, vw) {
-    if (!wrap || !vw) return 1;
-    return Math.max(0.04, wrap.clientWidth / vw);
+function getPreviewScaleFactor(wrap) {
+    if (!wrap) return 1;
+    /* Scale preview strip to fit; logical stage is always PROMPTER_POPUP_W (not window/zoom size). */
+    return Math.max(0.04, wrap.clientWidth / PROMPTER_POPUP_W);
 }
 
 function applyPreviewStageTheme(theme) {
@@ -133,18 +138,17 @@ function getLiveBlockParityExpectation() {
     const liveTa = getLivePrompterTextarea();
     if (!guard || !liveTa) return null;
 
-    const tabId = getActiveTabId();
-    if (!tabId) return null;
-
-    const m = liveTa.id.match(/^textarea-\d+-(\d+)$/);
+    const m = liveTa.id.match(/^textarea-(\d+)-(\d+)$/);
     if (!m) return null;
 
+    const liveTabId = parseInt(m[1], 10);
     const raw = liveTa.value;
     const lineupBlock = raw.trim() ? `\n${formatText(raw)}` : '';
     return {
-        lineupKey: getLineupKeyForTab(tabId),
-        blockIndex: parseInt(m[1], 10) - 1,
+        lineupKey: getLineupKeyForTab(liveTabId),
+        blockIndex: parseInt(m[2], 10) - 1,
         contentFingerprint: lineupBlock ? guard.hashString(lineupBlock) : null,
+        tabId: liveTabId,
     };
 }
 
@@ -158,10 +162,10 @@ function reconcilePrompterParity(drifts) {
     if (needsVisual) applyViewfinderFromPrompterSync();
 
     if (needsContent) {
-        const tabId = getActiveTabId();
+        const exp = getLiveBlockParityExpectation();
+        const tabId = exp?.tabId ?? prompterBoundTabId;
         if (tabId != null) {
             pushLineupToOpenPrompter(tabId);
-            const exp = getLiveBlockParityExpectation();
             const sync = lastPrompterSync;
             if (
                 exp &&
@@ -223,10 +227,22 @@ function initPrompterParityGuard() {
 
 function ingestPrompterSyncBroadcast(normalized) {
     if (!normalized || normalized.type !== 'eclyrics-prompter-sync') return;
+    const prevFingerprint = lastPrompterSync?.contentFingerprint;
+    const prevIndex = lastPrompterSync?.currentIndex;
+    /* Stage dimensions are logical (1920×1080), never follow browser zoom or popup resize. */
+    normalized.vw = PROMPTER_POPUP_W;
+    normalized.vh = PROMPTER_POPUP_H;
     lastPrompterSync = { ...(lastPrompterSync || {}), ...normalized };
     lastPrompterSyncAt = Date.now();
     applyViewfinderFromPrompterSync();
     updatePreviewDockFromSync(normalized);
+    const contentChanged =
+        (typeof normalized.contentFingerprint === 'string' &&
+            normalized.contentFingerprint !== prevFingerprint) ||
+        (typeof normalized.currentIndex === 'number' && normalized.currentIndex !== prevIndex);
+    if (contentChanged && getLivePrompterTextarea()) {
+        updateLiveViewfinder();
+    }
 }
 
 function applyViewfinderFromPrompterSync() {
@@ -251,11 +267,10 @@ function applyViewfinderFromPrompterSync() {
     }
 
     const data = lastPrompterSync || defaultPrompterSync();
-    const vw = data.vw || PROMPTER_POPUP_W;
-    const k = getPreviewScaleFactor(wrap, vw);
+    const k = getPreviewScaleFactor(wrap);
     const top = typeof data.top === 'number' ? data.top : 0;
     const fs = data.fs || 138;
-    const cw = data.cw || vw * 0.7;
+    const cw = data.cw || PROMPTER_POPUP_W * 0.7;
     const lsPx = parsePrompterCssPx(data.ls, data.theme === 'bw' ? 0 : 2.5);
 
     /* Match prompter pixel-for-pixel, then scale from viewport top-center. */
@@ -313,22 +328,10 @@ function getActivePrompterSpeed() {
     return readSavedPreviewSpeed();
 }
 
-/** Scroll nudge in the prompter (px), scaled to match current scroll speed. */
-function getPreviewScrollStep() {
-    return 50 * (getActivePrompterSpeed() / PREVIEW_PROMPTER.defaultSpeed);
-}
-
-/** Dock scroll buttons use a slightly larger base step, same speed scaling. */
-function getPreviewScrollStepLarge() {
-    return 100 * (getActivePrompterSpeed() / PREVIEW_PROMPTER.defaultSpeed);
-}
-
 /* ─────────────────────────────────────────────────────────
  * DOCK HOLD-SCROLL — press-and-hold the ▲/▼ buttons to scroll
- *   continuously (NOT line-by-line). Rate is proportional to the
- *   current scroll speed and frame-rate independent; scrolling
- *   stops the instant the button is released. Independent of the
- *   ArrowUp/ArrowDown keyboard shortcuts.
+ *   continuously at a rate proportional to scroll speed.
+ *   ArrowUp/ArrowDown keys and mouse wheel use fixed px steps instead.
  * ───────────────────────────────────────────────────────── */
 /** px/sec per unit of scroll speed. Matches auto-scroll (play), which advances
  *  `scrollSpeed` px per animation frame (~60fps), i.e. scrollSpeed × 60 px/sec. */
@@ -495,7 +498,7 @@ function handleGlobalPrompterShortcut(event) {
         case 'manualScroll':
             postPrompterControl({
                 action: 'scrollBy',
-                delta: resolved.code === 'ArrowUp' ? getPreviewScrollStep() : -getPreviewScrollStep(),
+                delta: resolved.code === 'ArrowUp' ? PREVIEW_KEYBOARD_SCROLL_PX : -PREVIEW_KEYBOARD_SCROLL_PX,
             });
             break;
         case 'fontSize':
@@ -571,6 +574,12 @@ function initPreviewShortcutsDialog() {
     });
 }
 
+function clearAllLiveBlocks() {
+    document.querySelectorAll('#tab-content .textarea-cell.is-live').forEach((c) => {
+        c.classList.remove('is-live');
+    });
+}
+
 function getLivePrompterTextarea() {
     return document.querySelector('#tab-content .textarea-cell.is-live textarea');
 }
@@ -619,19 +628,10 @@ function initPreviewViewfinderWheel() {
         'wheel',
         (e) => {
             if (!isPrompterWindowOpen()) return;
-            if (e.ctrlKey || e.metaKey) {
-                e.preventDefault();
-                if (e.deltaY > 0) postPrompterKey('BracketRight', ']');
-                else postPrompterKey('BracketLeft', '[');
-                return;
-            }
+            /* Do not capture Ctrl/meta + wheel — that is browser zoom, not a prompter control. */
+            if (e.ctrlKey || e.metaKey) return;
             e.preventDefault();
-            const wrap = document.querySelector('.preview-viewfinder-16x9');
-            const data = lastPrompterSync || defaultPrompterSync();
-            const vw = data.vw || PROMPTER_POPUP_W;
-            const k = wrap ? Math.max(0.04, wrap.clientWidth / vw) : 0.2;
-            const speedScale = getActivePrompterSpeed() / PREVIEW_PROMPTER.defaultSpeed;
-            const delta = (-e.deltaY / k) * speedScale;
+            const delta = e.deltaY < 0 ? PREVIEW_WHEEL_SCROLL_PX : -PREVIEW_WHEEL_SCROLL_PX;
             postPrompterControl({ action: 'scrollBy', delta });
         },
         { passive: false },
@@ -1187,6 +1187,54 @@ function initShell() {
     }
 }
 
+function getTabLabel(tab) {
+    return tab?.querySelector('.tab-label')?.textContent?.trim() || '';
+}
+
+function setTabLabel(tab, name) {
+    const label = tab?.querySelector('.tab-label');
+    if (label && name) label.textContent = name.trim();
+}
+
+function buildTabElement(tabId, labelText) {
+    const tab = document.createElement('li');
+    tab.classList.add('tab');
+    tab.dataset.tabId = String(tabId);
+
+    const label = document.createElement('span');
+    label.className = 'tab-label';
+    label.textContent = labelText;
+
+    const editBtn = document.createElement('button');
+    editBtn.type = 'button';
+    editBtn.className = 'tab-edit-btn';
+    editBtn.title = 'Rename tab';
+    editBtn.setAttribute('aria-label', 'Rename tab');
+    editBtn.innerHTML = '<i class="fa-solid fa-pen" aria-hidden="true"></i>';
+    editBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        startTabInlineRename(tab);
+    });
+
+    const closeButton = document.createElement('button');
+    closeButton.type = 'button';
+    closeButton.className = 'tab-close-btn close-btn';
+    closeButton.setAttribute('aria-label', 'Close tab');
+    closeButton.textContent = '×';
+    closeButton.addEventListener('click', (e) => {
+        e.stopPropagation();
+        handleTabClose(tab);
+    });
+
+    tab.append(label, editBtn, closeButton);
+    tab.addEventListener('dblclick', (e) => {
+        if (e.target.closest('.tab-close-btn, .tab-edit-btn')) return;
+        startTabInlineRename(tab);
+    });
+
+    return tab;
+}
+
 function addTab() {
     if (activeTabs.length >= 10) {
         alert('Maximum 10 tabs allowed.');
@@ -1197,21 +1245,7 @@ function addTab() {
     activeTabs.push(tabCount);
     textNum[tabCount.toString()] = [0, null, null];
 
-    const tab = document.createElement('li');
-    tab.classList.add('tab');
-    tab.textContent = `Tab ${tabCount}`;
-    tab.dataset.tabId = tabCount;
-
-    const closeButton = document.createElement('span');
-    closeButton.classList.add('close-btn');
-    closeButton.textContent = '×';
-    closeButton.onclick = function (event) {
-        event.stopPropagation();
-        handleTabClose(tab);
-    };
-
-    tab.appendChild(closeButton);
-    tab.ondblclick = () => renameTab(tab);
+    const tab = buildTabElement(tabCount, `Tab ${tabCount}`);
 
     document.getElementById('tabs-list').appendChild(tab);
     addTabContent(tabCount);
@@ -1919,10 +1953,78 @@ function handleTabClose(tab) {
     }
 }
 
-function renameTab(tab) {
-    const name = prompt('Enter new tab name:', tab.firstChild.textContent.replace('×', '').trim());
-    if (name) tab.firstChild.textContent = name;
+let tabInlineRename = null;
+
+function syncTabRenameInputWidth(input) {
+    const chars = Math.max(3, Math.min(48, (input.value || '').length));
+    input.style.width = `${chars + 0.5}ch`;
 }
+
+function startTabInlineRename(tab) {
+    if (!tab || tab.classList.contains('is-renaming')) return;
+    if (tabInlineRename?.tab) finishTabInlineRename(true);
+
+    const label = tab.querySelector('.tab-label');
+    if (!label) return;
+
+    const prevName = getTabLabel(tab);
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'tab-rename-input';
+    input.value = prevName;
+    input.maxLength = 48;
+    input.setAttribute('aria-label', 'Tab name');
+    input.autocomplete = 'off';
+    input.spellcheck = false;
+
+    label.textContent = '';
+    label.appendChild(input);
+    syncTabRenameInputWidth(input);
+    tab.classList.add('is-renaming');
+
+    tabInlineRename = { tab, prevName, input, label };
+
+    input.addEventListener('input', () => syncTabRenameInputWidth(input));
+    input.addEventListener('keydown', (e) => {
+        e.stopPropagation();
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            finishTabInlineRename(true);
+        } else if (e.key === 'Escape') {
+            e.preventDefault();
+            finishTabInlineRename(false);
+        }
+    });
+    input.addEventListener('click', (e) => e.stopPropagation());
+    input.addEventListener('mousedown', (e) => e.stopPropagation());
+    input.addEventListener('blur', () => {
+        setTimeout(() => {
+            if (tabInlineRename?.input === input) finishTabInlineRename(true);
+        }, 0);
+    });
+
+    requestAnimationFrame(() => {
+        input.focus();
+        input.select();
+    });
+}
+
+function finishTabInlineRename(save) {
+    if (!tabInlineRename) return;
+
+    const { tab, prevName, input, label } = tabInlineRename;
+    const next = input.value.trim();
+    const name = save && next ? next : prevName;
+
+    input.remove();
+    label.textContent = name;
+    tab.classList.remove('is-renaming');
+    tabInlineRename = null;
+}
+
+window.getActiveTabLabel = function getActiveTabLabel() {
+    return getTabLabel(document.querySelector('#tabs-list .tab.active'));
+};
 
 function sendPrompt(tabId, textId, options = {}) {
     const openIfClosed = options.openIfClosed !== false;
@@ -1938,7 +2040,7 @@ function sendPrompt(tabId, textId, options = {}) {
     const lineupKey = `${SESSION_ID}-${tabId}`;
     localStorage.setItem(lineupKey, JSON.stringify(data));
 
-    document.querySelectorAll(`#tab-${tabId} .textarea-cell`).forEach((c) => c.classList.remove('is-live'));
+    clearAllLiveBlocks();
 
     const activeTa = document.getElementById(`textarea-${tabId}-${textId}`);
     if (activeTa) {
