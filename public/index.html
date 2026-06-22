@@ -75,6 +75,14 @@
     </div>
 
     <div class="app-shell" id="app-shell">
+        <script>
+            (function () {
+                var shell = document.getElementById('app-shell');
+                if (shell && window.matchMedia('(max-width: 1200px)').matches) {
+                    shell.classList.add('sidebar-compact');
+                }
+            })();
+        </script>
         <aside class="sidebar" id="sidebar" aria-label="Main navigation">
             <div class="sidebar-brand">
                 <div class="sidebar-brand-row">
@@ -111,17 +119,17 @@
                     <span class="nav-label">Admin</span>
                 </button>
             </nav>
-            <div class="sidebar-footer">
-                <div class="sidebar-auth" id="sidebar-auth">
-                    <span class="sidebar-auth-user" id="auth-user-label" aria-live="polite"></span>
-                    <button type="button" class="sidebar-auth-out" id="auth-sign-out" hidden title="Sign out">
-                        <i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i>
-                        <span class="nav-label">Sign out</span>
-                    </button>
-                </div>
-                <button type="button" class="theme-toggle" id="theme-toggle" aria-pressed="false">
+            <div class="sidebar-utilities" id="sidebar-utilities">
+                <span class="sidebar-auth-user" id="auth-user-label" aria-live="polite"></span>
+                <button type="button" class="sidebar-utility-btn theme-toggle" id="theme-toggle" aria-pressed="false"
+                    title="Toggle dark mode" aria-label="Dark mode">
                     <i class="fa-solid fa-moon" aria-hidden="true"></i>
-                    <span id="theme-toggle-label">Dark mode</span>
+                    <span id="theme-toggle-label" class="sidebar-utility-label">Dark mode</span>
+                </button>
+                <button type="button" class="sidebar-utility-btn sidebar-auth-out" id="auth-sign-out" hidden
+                    title="Sign out" aria-label="Sign out">
+                    <i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i>
+                    <span class="sidebar-utility-label">Sign out</span>
                 </button>
             </div>
         </aside>
@@ -172,12 +180,17 @@
                                 <div class="preview-viewfinder-label">Live on prompter (16∶9)</div>
                                 <div class="preview-viewfinder-slot">
                                     <div class="preview-viewfinder-16x9" id="preview-viewfinder-stage"
-                                        title="Scroll or pinch-scroll adjusts the prompter when it is open (Ctrl+scroll: text size)">
+                                        title="Scroll or pinch-scroll adjusts the prompter when it is open. Use [ ] for text size.">
                                         <div class="preview-viewfinder-stage-bg" aria-hidden="true"></div>
                                         <div class="preview-viewfinder-clip">
                                             <div class="preview-viewfinder-pan" id="preview-viewfinder-pan">
                                                 <div id="lyrics-preview-viewfinder" class="preview-empty"></div>
                                             </div>
+                                        </div>
+                                        <div class="preview-scroll-progress" id="preview-scroll-progress" role="progressbar"
+                                            aria-label="Prompt scroll position" aria-valuemin="0" aria-valuemax="100"
+                                            aria-valuenow="0" hidden>
+                                            <div class="preview-scroll-progress__fill" id="preview-scroll-progress-fill"></div>
                                         </div>
                                     </div>
                                 </div>
@@ -195,45 +208,69 @@
                                         <button type="button" class="btn-toolbar btn-toolbar-primary btn-toolbar-cta preview-send-btn"
                                             id="send-prompter-btn"
                                             title="Send the active block to the prompter — ` (backtick) anywhere except in a text field">
-                                            Send to prompter
+                                            <i class="fa-solid fa-display" aria-hidden="true"></i>
+                                            <span class="preview-send-btn-label">Send to prompter</span>
                                         </button>
-                                        <button type="button" class="preview-icon-btn" id="preview-btn-play"
-                                            title="Play / Pause (Space)" aria-pressed="false" disabled>
-                                            <i class="fa-solid fa-play" aria-hidden="true"></i>
-                                        </button>
-                                        <button type="button" class="preview-icon-btn" id="preview-btn-prev"
-                                            title="Previous block on prompter" disabled>
-                                            <i class="fa-solid fa-backward-step" aria-hidden="true"></i>
-                                        </button>
-                                        <button type="button" class="preview-icon-btn" id="preview-btn-next"
-                                            title="Next block on prompter" disabled>
-                                            <i class="fa-solid fa-forward-step" aria-hidden="true"></i>
-                                        </button>
-                                        <button type="button" class="preview-icon-btn" id="preview-btn-scroll-up"
-                                            title="Scroll prompter up (same as ↑ in prompter)" disabled>
-                                            <i class="fa-solid fa-arrow-up" aria-hidden="true"></i>
-                                        </button>
-                                        <button type="button" class="preview-icon-btn" id="preview-btn-scroll-down"
-                                            title="Scroll prompter down (same as ↓ in prompter)" disabled>
-                                            <i class="fa-solid fa-arrow-down" aria-hidden="true"></i>
-                                        </button>
-                                        <button type="button" class="preview-icon-btn preview-icon-btn--font-sm" id="preview-btn-font-smaller"
-                                            title="Smaller text ([)" disabled>
-                                            <span class="preview-font-glyph" aria-hidden="true">A</span>
-                                        </button>
-                                        <button type="button" class="preview-icon-btn preview-icon-btn--font-lg" id="preview-btn-font-larger"
-                                            title="Larger text (])" disabled>
-                                            <span class="preview-font-glyph" aria-hidden="true">A</span>
-                                        </button>
-                                        <button type="button" class="preview-icon-btn" id="preview-btn-theme"
-                                            title="Toggle blue lyrics vs black &amp; white (P)" aria-pressed="true" disabled>
-                                            <i class="fa-solid fa-droplet" aria-hidden="true"></i>
-                                        </button>
-                                        <div class="preview-speed-control">
-                                            <label class="preview-speed-label" for="preview-prompter-speed">Speed</label>
-                                            <input type="range" id="preview-prompter-speed" min="0.1" max="6.5"
-                                                step="0.1" value="0.5" disabled />
-                                            <output class="preview-speed-value" id="preview-prompter-speed-val" for="preview-prompter-speed">0.5</output>
+                                        <div class="preview-toolbar-group" role="group" aria-label="Playback">
+                                            <button type="button" class="preview-icon-btn" id="preview-btn-play"
+                                                title="Play / Pause (Space)" aria-pressed="false" disabled>
+                                                <i class="fa-solid fa-play" aria-hidden="true"></i>
+                                            </button>
+                                        </div>
+                                        <div class="preview-toolbar-group" role="group" aria-label="Previous and next block">
+                                            <button type="button" class="preview-icon-btn" id="preview-btn-prev"
+                                                title="Previous block (←)" aria-label="Previous block">
+                                                <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
+                                            </button>
+                                            <button type="button" class="preview-icon-btn" id="preview-btn-next"
+                                                title="Next block (→)" aria-label="Next block">
+                                                <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
+                                            </button>
+                                        </div>
+                                        <div class="preview-toolbar-group" role="group" aria-label="Manual scroll">
+                                            <button type="button" class="preview-icon-btn" id="preview-btn-scroll-up"
+                                                title="Scroll up (↑)" disabled aria-label="Scroll up">
+                                                <i class="fa-solid fa-chevron-up" aria-hidden="true"></i>
+                                            </button>
+                                            <button type="button" class="preview-icon-btn" id="preview-btn-scroll-down"
+                                                title="Scroll down (↓)" disabled aria-label="Scroll down">
+                                                <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+                                            </button>
+                                            <button type="button" class="preview-icon-btn preview-icon-btn--jump-top" id="preview-btn-scroll-top"
+                                                title="Jump to top of lyrics (T)" disabled aria-label="Jump to top (T)">
+                                                <i class="fa-solid fa-angles-up" aria-hidden="true"></i>
+                                                <span class="preview-btn-keyhint" aria-hidden="true">T</span>
+                                            </button>
+                                        </div>
+                                        <div class="preview-toolbar-group" role="group" aria-label="Text size and line width">
+                                            <button type="button" class="preview-icon-btn" id="preview-btn-font-smaller"
+                                                title="Smaller text ([)" disabled aria-label="Smaller text">
+                                                <i class="fa-solid fa-font preview-icon-glyph preview-icon-glyph--sm" aria-hidden="true"></i>
+                                            </button>
+                                            <button type="button" class="preview-icon-btn" id="preview-btn-font-larger"
+                                                title="Larger text (])" disabled aria-label="Larger text">
+                                                <i class="fa-solid fa-font preview-icon-glyph preview-icon-glyph--lg" aria-hidden="true"></i>
+                                            </button>
+                                            <button type="button" class="preview-icon-btn" id="preview-btn-width-narrow"
+                                                title="Narrower lines (−)" disabled aria-label="Narrower lines">
+                                                <i class="fa-solid fa-arrows-left-right preview-icon-glyph preview-icon-glyph--narrow" aria-hidden="true"></i>
+                                            </button>
+                                            <button type="button" class="preview-icon-btn" id="preview-btn-width-wider"
+                                                title="Wider lines (=)" disabled aria-label="Wider lines">
+                                                <i class="fa-solid fa-arrows-left-right preview-icon-glyph preview-icon-glyph--wide" aria-hidden="true"></i>
+                                            </button>
+                                        </div>
+                                        <div class="preview-toolbar-group preview-toolbar-group--stage" role="group" aria-label="Stage appearance and speed">
+                                            <button type="button" class="preview-icon-btn" id="preview-btn-theme"
+                                                title="Toggle blue lyrics vs black &amp; white (P)" aria-pressed="true" disabled aria-label="Toggle stage theme">
+                                                <i class="fa-solid fa-palette" aria-hidden="true"></i>
+                                            </button>
+                                            <div class="preview-speed-control">
+                                                <label class="preview-speed-label" for="preview-prompter-speed">Speed</label>
+                                                <input type="range" id="preview-prompter-speed" min="0.1" max="6.5"
+                                                    step="0.1" value="0.5" disabled />
+                                                <output class="preview-speed-value" id="preview-prompter-speed-val" for="preview-prompter-speed">0.5</output>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -248,19 +285,9 @@
                                         <button type="button" class="preview-shortcuts-dialog__close" id="preview-shortcuts-dialog-close"
                                             aria-label="Close"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
                                     </header>
-                                    <p class="preview-shortcuts-dialog__lede">With the prompter window open, click this preview column, then use the same keys as on the projected window.</p>
-                                    <dl class="preview-shortcuts-dialog__list">
-                                        <div><dt>Send to prompter</dt><dd><kbd>`</kbd> backtick — from left or right side while Text Lyrics is open (not inside a text field)</dd></div>
-                                        <div><dt>Play / pause</dt><dd><kbd>Space</kbd></dd></div>
-                                        <div><dt>Scroll Speed</dt><dd><kbd>1</kbd>–<kbd>9</kbd>, <kbd>0</kbd></dd></div>
-                                        <div><dt>Scroll Increments</dt><dd><kbd>Numpad +</kbd> <kbd>Numpad −</kbd></dd></div>
-                                        <div><dt>Prev / Next block</dt><dd><kbd>←</kbd> <kbd>→</kbd></dd></div>
-                                        <div><dt>Theme</dt><dd><kbd>P</kbd> — blue lyrics vs black &amp; white</dd></div>
-                                        <div><dt>Text size</dt><dd><kbd>[</kbd> <kbd>]</kbd></dd></div>
-                                        <div><dt>Line width</dt><dd><kbd>-</kbd> <kbd>=</kbd> (main row keys)</dd></div>
-                                        <div><dt>Jump to top</dt><dd><kbd>T</kbd> (when not auto-scrolling)</dd></div>
-                                    </dl>
-                                    <p class="preview-shortcuts-dialog__note">Buttons in the bar above mirror several shortcuts. Scroll inside the 16∶9 strip to move lyrics when auto-scroll is paused.</p>
+                                    <p class="preview-shortcuts-dialog__lede">Use these keys anywhere in the app (except lyric text fields). Controls mirror the projected prompter so preview and stage always stay in sync.</p>
+                                    <dl class="preview-shortcuts-dialog__list" id="preview-shortcuts-dialog-list"></dl>
+                                    <p class="preview-shortcuts-dialog__note">Toolbar buttons mirror keyboard shortcuts where shown. Prev/next match ← →. Scroll inside the 16∶9 strip when auto-scroll is paused.</p>
                                 </div>
                             </div>
                         </aside>
@@ -325,6 +352,8 @@
     <script defer src="js/firebase-config.js"></script>
     <script defer src="js/auth.js"></script>
     <script defer src="js/song-library.js"></script>
+    <script defer src="js/prompter-shortcuts.js"></script>
+    <script defer src="js/prompter-sync-guard.js"></script>
     <script defer src="js/index.js"></script>
     <script defer src="js/port.js"></script>
     <script defer src="js/textformatting.js"></script>

@@ -29,7 +29,7 @@ function exportLineup() {
 
     if (data) {
         download(
-            now.toISOString().slice(0, 10).replace(/-/g, '')  + "_" + document.querySelector('#tabs-list .tab.active').firstChild.textContent + '_line_up.txt',
+            now.toISOString().slice(0, 10).replace(/-/g, '')  + "_" + (window.getActiveTabLabel?.() || 'Tab') + '_line_up.txt',
             data
         )
     } else alert('Lineup is empty! Export was unsuccessful.');
@@ -143,7 +143,7 @@ function exportCSV() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = now.toISOString().slice(0, 10).replace(/-/g, '')  + "_" + currentTab.firstChild.textContent + '_line_up.csv';
+    a.download = now.toISOString().slice(0, 10).replace(/-/g, '')  + "_" + (window.getActiveTabLabel?.() || 'Tab') + '_line_up.csv';
     document.body.appendChild(a);
     a.click();
 
