@@ -1733,11 +1733,21 @@ function renderBlockSourceCategoryFilters() {
 }
 
 function getSongVersionDisplay(version) {
-    const v = String(version || '').trim();
-    if (!v) return '';
-    if (v.toLowerCase() === 'original') return '';
-    if (v.toLowerCase() === 'k&t') return 'K&T';
-    return v;
+    const v = String(version ?? '').trim();
+
+    if (!v || v.toLowerCase() === 'original') {
+        return '';
+    }
+
+    if (v.toLowerCase() === 'k&t') {
+        return '- K&T';
+    }
+
+    return `- ${v
+        .toLowerCase()
+        .split(' ')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ')}`;
 }
 
 function getSongAdaptationLabel(song) {
