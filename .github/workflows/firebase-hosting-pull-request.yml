@@ -22,12 +22,15 @@ jobs:
 
       - name: Deploy to Firebase Hosting preview channel
         id: deploy
-        env:
-          FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_ECLYRICS_E8D68 }}
         run: |
           npm install -g firebase-tools@13.29.1
-          printf '%s' "$FIREBASE_SA" > "${RUNNER_TEMP}/firebase_sa.json"
+          printf '%s' '${{ secrets.FIREBASE_SERVICE_ACCOUNT_ECLYRICS_E8D68 }}' > "${RUNNER_TEMP}/firebase_sa.json"
           export GOOGLE_APPLICATION_CREDENTIALS="${RUNNER_TEMP}/firebase_sa.json"
+
+          if [ ! -s "${RUNNER_TEMP}/firebase_sa.json" ]; then
+            echo "::error::Firebase service account secret is missing or empty."
+            exit 1
+          fi
 
           CHANNEL_ID="pr${{ github.event.pull_request.number }}"
           DEPLOY_LOG="${RUNNER_TEMP}/hosting-deploy.log"
