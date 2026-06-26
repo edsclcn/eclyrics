@@ -1,7 +1,7 @@
 /**
  * Canonical prompter keyboard shortcuts for the main workspace.
- * Preview dock, global handlers, and the shortcuts dialog all derive from this registry.
- * The projected prompter window receives keys remotely — it must not define a second mapping.
+ * Preview dock, global handlers, the shortcuts dialog, and the prompter popup all derive from this registry.
+ * Remote keys from the main workspace use the same dispatch table as local keys in the prompter window.
  */
 (function (global) {
     /** @typedef {'workspace' | 'prompter'} PrompterShortcutScope */
@@ -87,9 +87,10 @@
         {
             id: 'manualScroll',
             label: 'Manual scroll',
-            description: 'up / down — 100px per keypress (fixed)',
+            description: 'up / down — 100px per step; hold repeats at fixed 100px (not scroll speed)',
             codes: ['ArrowUp', 'ArrowDown'],
             scope: 'prompter',
+            allowRepeat: true,
         },
     ];
 

@@ -406,9 +406,9 @@ function getActivePrompterSpeed() {
 }
 
 /* ─────────────────────────────────────────────────────────
- * DOCK HOLD-SCROLL — press-and-hold the ▲/▼ buttons to scroll
- *   continuously at a rate proportional to scroll speed.
- *   ArrowUp/ArrowDown keys and mouse wheel use fixed px steps instead.
+ * DOCK HOLD-SCROLL — press-and-hold the ▲/▼ buttons to scroll continuously at scroll speed.
+ *   ArrowUp/ArrowDown use a fixed 100px step per keypress (including OS key-repeat while held).
+ *   Mouse wheel uses a fixed px step per tick.
  * ───────────────────────────────────────────────────────── */
 /** px/sec per unit of scroll speed. Matches auto-scroll (play), which advances
  *  `scrollSpeed` px per animation frame (~60fps), i.e. scrollSpeed × 60 px/sec. */
@@ -602,7 +602,7 @@ function handleGlobalPrompterShortcut(event) {
         case 'manualScroll':
             postPrompterControl({
                 action: 'scrollBy',
-                delta: resolved.code === 'ArrowUp' ? PREVIEW_KEYBOARD_SCROLL_PX : -PREVIEW_KEYBOARD_SCROLL_PX,
+                delta: (resolved.code === 'ArrowUp' ? 1 : -1) * PREVIEW_KEYBOARD_SCROLL_PX,
             });
             break;
         case 'fontSize':
@@ -877,19 +877,39 @@ function initPreviewPrompterDock() {
     updatePreviewDockFromSync(lastPrompterSync || defaultPrompterSync());
 }
 
+function handlePrompterWorkspaceShortcutMessage(event) {
+    if (!prompterPopupWindow || event.source !== prompterPopupWindow) return;
+    const msg = event.data;
+    if (!msg || msg.type !== 'eclyrics-workspace-shortcut') return;
+    switch (msg.id) {
+        case 'send':
+            sendActiveBlockToPrompter();
+            break;
+        case 'adjacentBlock': {
+            const delta = msg.delta === 1 ? 1 : msg.delta === -1 ? -1 : 0;
+            if (delta) goToAdjacentBlockAndSend(delta);
+            break;
+        }
+        default:
+            break;
+    }
+}
+
 function initPrompterBroadcast() {
+    window.addEventListener('message', handlePrompterWorkspaceShortcutMessage);
+
     try {
         prompterBroadcast = new BroadcastChannel(PROMPTER_BC_NAME);
     } catch (e) {
         prompterBroadcast = null;
     }
-    if (!prompterBroadcast) return;
-
-    prompterBroadcast.onmessage = (ev) => {
-        const guard = getSyncGuardApi();
-        const normalized = guard ? guard.normalizeSyncPayload(ev.data) : ev.data;
-        ingestPrompterSyncBroadcast(normalized);
-    };
+    if (prompterBroadcast) {
+        prompterBroadcast.onmessage = (ev) => {
+            const guard = getSyncGuardApi();
+            const normalized = guard ? guard.normalizeSyncPayload(ev.data) : ev.data;
+            ingestPrompterSyncBroadcast(normalized);
+        };
+    }
 
     const wrap = document.querySelector('.preview-viewfinder-16x9');
     const slot = document.querySelector('.preview-viewfinder-slot');
