@@ -4,16 +4,17 @@ const DEFAULT_SCROLL_SPEED = 0.5;
 /** Logical stage size — fixed regardless of browser zoom or popup window resize. */
 const STAGE_VW = 1920;
 const STAGE_VH = 1080;
-/** Manual scroll: fixed px per input type (not scaled by auto-scroll speed). */
+/** Manual scroll: fixed 100px per keypress (including hold key-repeat); not scaled by scroll speed. */
 const KEYBOARD_ARROW_SCROLL_PX = 100;
 const WHEEL_SCROLL_PX = 50;
 
-function keyboardArrowScrollPx() {
-    return KEYBOARD_ARROW_SCROLL_PX;
-}
-
 function wheelScrollStepPx() {
     return WHEEL_SCROLL_PX;
+}
+
+function handleManualScrollShortcut(code) {
+    const dir = code === 'ArrowUp' ? 1 : -1;
+    applyPrompterScrollBy(dir * KEYBOARD_ARROW_SCROLL_PX);
 }
 
 function readPrompterFontSizePx() {
@@ -261,6 +262,82 @@ function applyRemoteScrollSpeed(next) {
     broadcastPrompterState();
 }
 
+function getPrompterTargetOrigin() {
+    return window.location.origin && window.location.origin !== 'null' ? window.location.origin : '*';
+}
+
+function notifyOpenerWorkspaceShortcut(id, extra = {}) {
+    if (!window.opener) return;
+    try {
+        window.opener.postMessage({ type: 'eclyrics-workspace-shortcut', id, ...extra }, getPrompterTargetOrigin());
+    } catch (e) {
+        /* ignore */
+    }
+}
+
+/** Same dispatch table as handleGlobalPrompterShortcut in index.js — keeps state/broadcast aligned. */
+function dispatchResolvedPrompterShortcut(resolved) {
+    switch (resolved.id) {
+        case 'send':
+            notifyOpenerWorkspaceShortcut('send');
+            break;
+        case 'adjacentBlock':
+            notifyOpenerWorkspaceShortcut('adjacentBlock', {
+                delta: resolved.code === 'ArrowLeft' ? -1 : 1,
+            });
+            break;
+        case 'manualScroll':
+            handleManualScrollShortcut(resolved.code);
+            break;
+        case 'fontSize':
+            handleMainKeys({ code: resolved.code, key: resolved.key, preventDefault() {} });
+            break;
+        default:
+            handleMainKeys({ code: resolved.code, key: resolved.key, preventDefault() {} });
+            break;
+    }
+}
+
+function applyPrompterScrollBy(delta) {
+    if (typeof delta !== 'number' || Number.isNaN(delta)) return;
+    pauseScroll();
+    scrollPosition += delta;
+    applyScrollPosition();
+    broadcastPrompterState();
+}
+
+function applyPrompterScrollTop() {
+    if (scrollingNow) return;
+    scrollPosition = 0;
+    applyScrollPosition();
+    broadcastPrompterState();
+}
+
+function getPrompterShortcutsApi() {
+    return typeof EclyricsPrompterShortcuts !== 'undefined' ? EclyricsPrompterShortcuts : null;
+}
+
+function handleLocalPrompterShortcut(event) {
+    const sc = getPrompterShortcutsApi();
+    if (!sc) return;
+    const ctx = { prompterOpen: true };
+    if (sc.shouldIgnorePrompterShortcut(event, ctx)) return;
+    const resolved = sc.resolvePrompterShortcut(event);
+    if (!resolved) return;
+    event.preventDefault();
+    dispatchResolvedPrompterShortcut(resolved);
+}
+
+function initPrompterKeyboardShortcuts() {
+    const sc = getPrompterShortcutsApi();
+    if (!sc) {
+        console.error('[eclyrics] prompter-shortcuts.js must load before prompter.js');
+        return;
+    }
+    sc.assertPrompterShortcutParity();
+    document.addEventListener('keydown', handleLocalPrompterShortcut, true);
+}
+
 window.addEventListener('message', (event) => {
     const msg = event.data;
     if (!msg || typeof msg !== 'object') return;
@@ -269,9 +346,10 @@ window.addEventListener('message', (event) => {
         if (!window.opener || event.source !== window.opener) return;
         const code = msg.code || '';
         const key = msg.key || '';
-        const sc = typeof EclyricsPrompterShortcuts !== 'undefined' ? EclyricsPrompterShortcuts : null;
+        const sc = getPrompterShortcutsApi();
         if (sc && !sc.assertRemotePrompterKeySupported(code)) return;
-        handleMainKeys({ code, key, preventDefault() {} });
+        const resolved = sc ? sc.resolvePrompterShortcut({ code, key }) : null;
+        if (resolved) dispatchResolvedPrompterShortcut(resolved);
         return;
     }
 
@@ -300,18 +378,10 @@ window.addEventListener('message', (event) => {
                 applyRemoteScrollSpeed(msg.speed);
                 break;
             case 'scrollTop':
-                if (!scrollingNow) {
-                    scrollPosition = 0;
-                    applyScrollPosition();
-                    broadcastPrompterState();
-                }
+                applyPrompterScrollTop();
                 break;
             case 'scrollBy':
-                if (typeof msg.delta !== 'number' || Number.isNaN(msg.delta)) break;
-                pauseScroll();
-                scrollPosition += msg.delta;
-                applyScrollPosition();
-                broadcastPrompterState();
+                applyPrompterScrollBy(msg.delta);
                 break;
             case 'updateLineup':
                 if (!msg.lineupKey || msg.lineupKey !== lineupKey || !Array.isArray(msg.data)) break;
@@ -457,28 +527,6 @@ function handleMainKeys(event) {
             event.preventDefault();
             togglePrompterTheme();
             break;
-        case 'ArrowUp':
-            event.preventDefault();
-            pauseScroll();
-            scrollPosition += keyboardArrowScrollPx();
-            applyScrollPosition();
-            broadcastPrompterState();
-            break;
-        case 'ArrowDown':
-            event.preventDefault();
-            pauseScroll();
-            scrollPosition -= keyboardArrowScrollPx();
-            applyScrollPosition();
-            broadcastPrompterState();
-            break;
-        case 'ArrowLeft':
-            event.preventDefault();
-            if (currentIndex > 0) setText(currentIndex - 1);
-            break;
-        case 'ArrowRight':
-            event.preventDefault();
-            if (data && currentIndex < data.length - 1) setText(currentIndex + 1);
-            break;
         case 'BracketLeft':
             event.preventDefault();
             setPrompterFontSizePx(readPrompterFontSizePx() - 2);
@@ -507,10 +555,7 @@ function handleMainKeys(event) {
             break;
         case 'KeyT':
             event.preventDefault();
-            if (scrollingNow) break;
-            scrollPosition = 0;
-            prompterContent.style.top = '0px';
-            broadcastPrompterState();
+            applyPrompterScrollTop();
             break;
         case 'NumpadSubtract':
             event.preventDefault();
@@ -543,6 +588,8 @@ var wheelListener = function (event) {
 document.addEventListener('wheel', wheelListener, { passive: false });
 
 document.addEventListener('contextmenu', event => event.preventDefault());
+
+initPrompterKeyboardShortcuts();
 
 /** Try fullscreen once loaded (may be blocked without a direct user gesture on some browsers). */
 function tryInitialPrompterFullscreen() {
