@@ -54,8 +54,8 @@ jobs:
           CODE=${PIPESTATUS[0]}
 
           if [ "$CODE" -ne 0 ]; then
-            if grep -q "is the current active version" "$DEPLOY_LOG" "$DEPLOY_JSON" 2>/dev/null; then
-              echo "::warning::Preview channel already serves this version — treating deploy as success."
+            if grep -qE "is the current active version|Channel .+ already exists" "$DEPLOY_LOG" "$DEPLOY_JSON" 2>/dev/null; then
+              echo "::warning::Preview channel is already live — treating deploy as success."
               CODE=0
             else
               cat "$DEPLOY_LOG" >&2
