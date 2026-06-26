@@ -25,3 +25,4 @@ jobs:
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_ECLYRICS_E8D68 }}
           channelId: live
           projectId: eclyrics-e8d68
+          firebaseToolsVersion: 13.29.1
