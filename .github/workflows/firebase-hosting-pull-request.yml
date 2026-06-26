@@ -28,7 +28,6 @@ jobs:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_ECLYRICS_E8D68 }}
           projectId: eclyrics-e8d68
-          firebaseToolsVersion: 13.29.1
           channelId: pr${{ github.event.pull_request.number }}
           expires: 7d
 
@@ -60,7 +59,7 @@ jobs:
           export FIREBASE_DEPLOY_AGENT=action-hosting-deploy
 
           CHANNEL_ID="pr${{ github.event.pull_request.number }}"
-          URL=$(npx --yes firebase-tools@13.29.1 hosting:channel:list \
+          URL=$(npx --yes firebase-tools@latest hosting:channel:list \
             --site eclyrics \
             --project eclyrics-e8d68 \
             --json 2>/dev/null | node -e "
