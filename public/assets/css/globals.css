@@ -21,7 +21,6 @@
     font-display: swap;
 }
 
-/* Stage / preview — matches prompter.html lyric face when GARA files exist */
 @font-face {
     font-family: 'Gara';
     src: url('../fonts/GARA.TTF') format('truetype');
@@ -36,55 +35,81 @@
     font-style: normal;
 }
 
+/* ─── Light mode (default) ─────────────────────────────────────────── */
+
 :root {
+    color-scheme: light;
+
     /* Brand blues */
     --blue-pale: #bcd2e8;
-    --blue-mid: #73a5c6;
-    --blue-deep: #2e5984;
+    --blue-mid: #2563a8;
+    --blue-deep: #1e4a72;
 
-    /* Grays (provided scale) */
-    --gray-lighter: #ddd;
-    --gray-lightest: #f5f5f5;
-    --gray-1: #3c3a3b;
-    --gray-2: #5f5d5e;
-    --gray-3: #898989;
-    --gray-4: #e0e0e0;
-    --gray-5: #f3f3f4;
-    --gray-6: #ededed;
-    --gray-900: #191b1b;
+    /* Neutral scale */
+    --gray-lighter: #cbd5e1;
+    --gray-lightest: #f1f5f9;
+    --gray-1: #334155;
+    --gray-2: #475569;
+    --gray-3: #64748b;
+    --gray-4: #e2e8f0;
+    --gray-5: #f1f5f9;
+    --gray-6: #e8eef4;
+    --gray-900: #0f172a;
 
-    /* Semantic */
+    /* Surfaces */
     --background: #ffffff;
-    --background-subtle: var(--gray-5);
-    --foreground: var(--gray-900);
-    --foreground-muted: var(--gray-3);
+    --background-subtle: #f8fafc;
+    --foreground: #0f172a;
+    --foreground-muted: #475569;
+    --muted-foreground: #475569;
     --card: #ffffff;
-    --card-elevated: var(--gray-lightest);
-    --border: var(--gray-4);
-    --border-strong: var(--gray-lighter);
+    --card-elevated: #f8fafc;
+    --border: #e2e8f0;
+    --border-strong: #cbd5e1;
 
+    /* Actions */
     --primary: var(--blue-deep);
-    --primary-hover: #245078;
+    --primary-hover: #163a5c;
     --primary-fg: #ffffff;
     --accent: var(--blue-mid);
     --accent-soft: var(--blue-pale);
+    --link: var(--blue-mid);
+    --link-hover: var(--blue-deep);
 
+    /* Shell chrome */
     --sidebar-bg: #ffffff;
-    --sidebar-border: var(--gray-4);
+    --sidebar-border: var(--border);
     --nav-active-bg: linear-gradient(90deg, var(--blue-pale) 0%, rgba(188, 210, 232, 0.55) 100%);
     --nav-hover-bg: var(--gray-6);
-
-    /* Main canvas: flat white; blue gradients live on toolbars, buttons, active nav */
-    --shell-bg: #ffffff;
+    --shell-bg: #f8fafc;
     --panel-bg: #ffffff;
-    --preview-chrome: var(--gray-6);
+    --preview-chrome: #eef2f7;
     --chrome-gradient: linear-gradient(135deg, var(--blue-pale) 0%, #ffffff 45%, var(--blue-pale) 100%);
+    --overlay-scrim: rgba(15, 23, 42, 0.45);
 
-    --danger: #c62828;
-    --danger-hover: #a32020;
+    /* Form controls */
+    --input-bg: #ffffff;
+    --input-border: var(--border);
+    --input-placeholder: #64748b;
+    --focus-ring: color-mix(in srgb, var(--blue-mid) 40%, transparent);
 
-    --shadow-sm: 0 1px 2px rgba(46, 89, 132, 0.06);
-    --shadow-md: 0 8px 24px rgba(46, 89, 132, 0.1);
+    /* Feedback */
+    --danger: #b91c1c;
+    --danger-fg: #ffffff;
+    --danger-soft: rgba(185, 28, 28, 0.1);
+    --danger-border: rgba(185, 28, 28, 0.35);
+    --success: #15803d;
+    --success-fg: #ffffff;
+    --success-soft: rgba(21, 128, 61, 0.1);
+    --success-border: rgba(21, 128, 61, 0.35);
+
+    /* Scrollbars */
+    --scrollbar-track: var(--background-subtle);
+    --scrollbar-thumb: #94a3b8;
+    --scrollbar-thumb-hover: #64748b;
+
+    --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
+    --shadow-md: 0 8px 24px rgba(15, 23, 42, 0.1);
 
     --font-sans: 'Satoshi', system-ui, -apple-system, sans-serif;
     --font-stage: 'Gara', 'Times New Roman', Times, serif;
@@ -96,13 +121,13 @@
     --sidebar-width: 248px;
     --sidebar-rail: 56px;
 
-    /* Text Lyrics workspace — state tokens (contrast ≥ 4.5:1 on surfaces) */
-    --lyrics-hint-fg: #475569;
+    /* Text Lyrics workspace */
+    --lyrics-hint-fg: var(--foreground-muted);
     --lyrics-tab-idle-fg: var(--gray-2);
-    --lyrics-tab-hover-bg: #e8eef4;
-    --lyrics-tab-hover-fg: var(--gray-900);
+    --lyrics-tab-hover-bg: var(--gray-6);
+    --lyrics-tab-hover-fg: var(--foreground);
     --lyrics-tab-active-bg: var(--blue-pale);
-    --lyrics-tab-active-fg: var(--gray-900);
+    --lyrics-tab-active-fg: var(--foreground);
     --lyrics-tab-active-border: var(--blue-mid);
     --lyrics-block-border: var(--border);
     --lyrics-block-hover-border: var(--blue-mid);
@@ -115,57 +140,123 @@
     --lyrics-label-selected: var(--blue-deep);
     --lyrics-label-live: var(--blue-deep);
     --lyrics-dock-btn-fg: var(--blue-deep);
-    --lyrics-dock-btn-hover-bg: #e8eef4;
-    --lyrics-focus-ring: color-mix(in srgb, var(--blue-mid) 45%, transparent);
+    --lyrics-dock-btn-hover-bg: var(--gray-6);
+    --lyrics-focus-ring: var(--focus-ring);
+
+    /* Event prompter (editor chrome) */
+    --ep-brand-blue: #0070c0;
+    --ep-brand-blue-soft: #7ec8ff;
+
+    --nav-active-fg: var(--blue-deep);
+    --nav-active-border: rgba(37, 99, 168, 0.35);
 }
 
+/* ─── Dark mode — neutral surfaces, blue emphasis ──────────────────── */
+
 .dark {
-    --background: #000000;
-    --background-subtle: #0f0f0f;
-    --foreground: #f5f5f5;
-    --foreground-muted: #9a9a9a;
-    --card: #121212;
-    --card-elevated: #1a1a1a;
-    --border: #2a2a2a;
-    --border-strong: #333333;
+    color-scheme: dark;
 
-    --primary: var(--blue-mid);
-    --primary-hover: #8bb8d4;
-    --primary-fg: #0a0a0a;
-    --accent: var(--blue-pale);
-    --accent-soft: rgba(115, 165, 198, 0.2);
+    /* Blues: pale = surface tint, mid = icons/borders, deep = CTA fills, label = text on dark */
+    --blue-pale: #1e3348;
+    --blue-mid: #5eb0f5;
+    --blue-deep: #2d6fad;
+    --blue-label: #9ecae8;
 
-    --sidebar-bg: #000000;
-    --sidebar-border: #1f1f1f;
-    --nav-active-bg: linear-gradient(90deg, rgba(46, 89, 132, 0.5) 0%, rgba(115, 165, 198, 0.25) 100%);
-    --nav-hover-bg: #141414;
+    --gray-lighter: #525252;
+    --gray-lightest: #1a1a1a;
+    --gray-1: #d4d4d4;
+    --gray-2: #a3a3a3;
+    --gray-3: #737373;
+    --gray-4: #333333;
+    --gray-5: #262626;
+    --gray-6: #1f1f1f;
+    --gray-900: #f5f5f5;
 
-    --shell-bg: #000000;
-    --panel-bg: #000000;
-    --preview-chrome: #141414;
-    --chrome-gradient: linear-gradient(135deg, #0d1520 0%, #000000 50%, #0a1622 100%);
+    /* Surfaces — neutral black/gray only */
+    --background: #121212;
+    --background-subtle: #181818;
+    --foreground: #ededed;
+    --foreground-muted: #a3a3a3;
+    --muted-foreground: #a3a3a3;
+    --card: #1a1a1a;
+    --card-elevated: #222222;
+    --border: #2e2e2e;
+    --border-strong: #404040;
+
+    /* Actions & emphasis — blue */
+    --primary: #2d6fad;
+    --primary-hover: #3580bd;
+    --primary-fg: #ffffff;
+    --accent: var(--blue-mid);
+    --accent-soft: rgba(90, 175, 216, 0.16);
+    --link: var(--blue-mid);
+    --link-hover: var(--blue-label);
+
+    --sidebar-bg: #0f0f0f;
+    --sidebar-border: #262626;
+    --nav-active-bg: rgba(37, 99, 168, 0.22);
+    --nav-active-fg: var(--blue-label);
+    --nav-active-border: rgba(94, 176, 245, 0.4);
+    --nav-hover-bg: #1a1a1a;
+    --shell-bg: #0f0f0f;
+    --panel-bg: #121212;
+    --preview-chrome: #181818;
+    --chrome-gradient: linear-gradient(135deg, #1a1a1a 0%, #0f0f0f 50%, #141414 100%);
+    --overlay-scrim: rgba(0, 0, 0, 0.75);
+
+    --input-bg: #1a1a1a;
+    --input-border: #333333;
+    --input-placeholder: #737373;
+    --focus-ring: color-mix(in srgb, var(--blue-mid) 45%, transparent);
+
+    --danger: #f87171;
+    --danger-fg: #121212;
+    --danger-soft: rgba(248, 113, 113, 0.12);
+    --danger-border: rgba(248, 113, 113, 0.35);
+    --success: #4ade80;
+    --success-fg: #121212;
+    --success-soft: rgba(74, 222, 128, 0.12);
+    --success-border: rgba(74, 222, 128, 0.35);
+
+    --scrollbar-track: #181818;
+    --scrollbar-thumb: #525252;
+    --scrollbar-thumb-hover: #737373;
 
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
-    --shadow-md: 0 12px 32px rgba(0, 0, 0, 0.55);
+    --shadow-md: 0 12px 32px rgba(0, 0, 0, 0.6);
 
-    --lyrics-hint-fg: #b0b8c4;
-    --lyrics-tab-idle-fg: #c4c4c4;
-    --lyrics-tab-hover-bg: #1c2430;
+    --lyrics-hint-fg: var(--foreground-muted);
+    --lyrics-tab-idle-fg: #b3b3b3;
+    --lyrics-tab-hover-bg: #222222;
     --lyrics-tab-hover-fg: #f5f5f5;
-    --lyrics-tab-active-bg: rgba(46, 89, 132, 0.42);
+    --lyrics-tab-active-bg: rgba(37, 99, 168, 0.24);
     --lyrics-tab-active-fg: #f5f5f5;
     --lyrics-tab-active-border: var(--blue-mid);
     --lyrics-block-border: var(--border);
     --lyrics-block-hover-border: var(--blue-mid);
     --lyrics-block-selected-border: var(--blue-mid);
-    --lyrics-block-selected-ring: color-mix(in srgb, var(--blue-mid) 38%, transparent);
-    --lyrics-block-live-border: var(--blue-pale);
-    --lyrics-block-live-ring: color-mix(in srgb, var(--blue-pale) 22%, transparent);
-    --lyrics-block-live-accent: var(--blue-pale);
-    --lyrics-label-idle: var(--blue-mid);
-    --lyrics-label-selected: var(--blue-pale);
-    --lyrics-label-live: var(--blue-pale);
-    --lyrics-dock-btn-fg: var(--blue-pale);
-    --lyrics-dock-btn-hover-bg: #1a2430;
-    --lyrics-focus-ring: color-mix(in srgb, var(--blue-pale) 35%, transparent);
+    --lyrics-block-selected-ring: color-mix(in srgb, var(--blue-mid) 35%, transparent);
+    --lyrics-block-live-border: var(--blue-mid);
+    --lyrics-block-live-ring: color-mix(in srgb, var(--blue-mid) 30%, transparent);
+    --lyrics-block-live-accent: var(--blue-label);
+    --lyrics-label-idle: #6a8faa;
+    --lyrics-label-selected: var(--blue-label);
+    --lyrics-label-live: #bcd2e8;
+    --lyrics-dock-btn-fg: var(--blue-label);
+    --lyrics-dock-btn-hover-bg: #222222;
+    --lyrics-focus-ring: var(--focus-ring);
+
+    --ep-brand-blue: #4da3e8;
+    --ep-brand-blue-soft: #9ecae8;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
 }
