@@ -274,7 +274,11 @@
         }
 
         if (note) {
-            note.textContent = `${matches.length} shown · ${state.count} in library`;
+            if (q && matches.length === (api?.LIMITS?.SEARCH ?? 10)) {
+                note.textContent = `Showing top ${api?.LIMITS?.SEARCH ?? 10} matches · ${state.count} in library`;
+            } else {
+                note.textContent = `${matches.length} shown · ${state.count} in library`;
+            }
             note.hidden = false;
         }
 

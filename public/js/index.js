@@ -1768,11 +1768,13 @@ function mergeRestrictedBlockSourceMatches(matches, query) {
 
     const q = String(query || '').trim();
     const pool = q
-        ? typeof api.searchAdmin === 'function'
-            ? api.searchAdmin(q)
-            : typeof api.search === 'function'
-              ? api.search(q, api.getState?.()?.count || matches.length)
-              : api.getSongs()
+        ? typeof api.matchAllSongs === 'function'
+            ? api.matchAllSongs(q)
+            : typeof api.searchAdmin === 'function'
+              ? api.searchAdmin(q)
+              : typeof api.search === 'function'
+                ? api.search(q, api.getState?.()?.count || matches.length)
+                : api.getSongs()
         : api.getSongs();
 
     const restricted = filterSongsByCategory(pool.filter(isRestrictedSong));

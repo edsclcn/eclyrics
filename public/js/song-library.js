@@ -8,6 +8,18 @@
         SEARCH: 10,
     };
 
+    const SEARCH_OPTIONS = {
+        prefix: true,
+        fuzzy: 0.2,
+        combineWith: 'AND',
+        boost: {
+            title: 5,
+            adaptOf: 3,
+            hymnNum: 2.5,
+            lyrics: 1,
+        },
+    };
+
     const state = {
         songs: [],
         songsById: new Map(),
@@ -171,13 +183,158 @@
         const miniSearch = new MiniSearch({
             fields: ['hymnNum', 'title', 'adaptOf', 'lyrics'],
             storeFields: ['id'],
-            searchOptions: {
-                prefix: true,
-                fuzzy: 0.2,
-            },
+            searchOptions: SEARCH_OPTIONS,
         });
         miniSearch.addAll(state.songs);
         return miniSearch;
+    }
+
+    function parseSearchQuery(query) {
+        const q = String(query || '').trim();
+        if (!q) {
+            return { phrases: [], terms: [], miniSearchQuery: '' };
+        }
+
+        const phrases = [];
+        const withoutQuoted = q.replace(/"([^"]+)"/g, (_, phrase) => {
+            const p = String(phrase || '').trim().toLowerCase();
+            if (p) phrases.push(p);
+            return ' ';
+        });
+
+        const terms = withoutQuoted
+            .toLowerCase()
+            .split(/\s+/)
+            .map((term) => term.trim())
+            .filter(Boolean);
+
+        const miniSearchTerms = [];
+        phrases.forEach((phrase) => {
+            phrase.split(/\s+/).filter(Boolean).forEach((part) => miniSearchTerms.push(part));
+        });
+        terms.forEach((term) => miniSearchTerms.push(term));
+
+        return {
+            phrases,
+            terms,
+            miniSearchQuery: [...new Set(miniSearchTerms)].join(' '),
+        };
+    }
+
+    function levenshteinDistance(a, b) {
+        const left = String(a || '');
+        const right = String(b || '');
+        if (left === right) return 0;
+        if (!left.length) return right.length;
+        if (!right.length) return left.length;
+
+        const rows = left.length + 1;
+        const cols = right.length + 1;
+        const matrix = Array.from({ length: rows }, () => new Array(cols).fill(0));
+        for (let i = 0; i < rows; i += 1) matrix[i][0] = i;
+        for (let j = 0; j < cols; j += 1) matrix[0][j] = j;
+
+        for (let i = 1; i < rows; i += 1) {
+            for (let j = 1; j < cols; j += 1) {
+                const cost = left[i - 1] === right[j - 1] ? 0 : 1;
+                matrix[i][j] = Math.min(
+                    matrix[i - 1][j] + 1,
+                    matrix[i][j - 1] + 1,
+                    matrix[i - 1][j - 1] + cost,
+                );
+            }
+        }
+        return matrix[rows - 1][cols - 1];
+    }
+
+    function maxFuzzyDistance(term) {
+        const length = String(term || '').length;
+        if (length < 3) return 0;
+        return Math.max(1, Math.round(length * 0.2));
+    }
+
+    function fuzzyTokenMatch(token, term) {
+        const normalizedToken = String(token || '').toLowerCase();
+        const normalizedTerm = String(term || '').toLowerCase();
+        if (!normalizedToken || !normalizedTerm) return false;
+        if (normalizedToken.includes(normalizedTerm) || normalizedTerm.includes(normalizedToken)) return true;
+        return levenshteinDistance(normalizedToken, normalizedTerm) <= maxFuzzyDistance(normalizedTerm);
+    }
+
+    function haystackContainsTerm(haystack, term) {
+        const normalizedHaystack = String(haystack || '').toLowerCase();
+        const normalizedTerm = String(term || '').toLowerCase();
+        if (!normalizedTerm) return true;
+        if (normalizedHaystack.includes(normalizedTerm)) return true;
+        return normalizedHaystack.split(/[\s\n]+/).some((token) => fuzzyTokenMatch(token, normalizedTerm));
+    }
+
+    function songFieldValues(song) {
+        return {
+            title: String(song?.title || '').toLowerCase(),
+            adaptOf: String(song?.adaptOf || '').toLowerCase(),
+            hymnNum: String(song?.hymnNum || '').toLowerCase(),
+            lyrics: String(song?.lyrics || '').toLowerCase(),
+        };
+    }
+
+    function songMatchesPhrases(song, phrases) {
+        if (!phrases.length) return true;
+        const fields = songFieldValues(song);
+        const haystack = [fields.title, fields.adaptOf, fields.hymnNum, fields.lyrics].join('\n');
+        return phrases.every((phrase) => haystack.includes(phrase));
+    }
+
+    function songMatchesParsedQuery(song, parsed) {
+        if (!songMatchesPhrases(song, parsed.phrases)) return false;
+        return parsed.terms.every((term) => {
+            const fields = songFieldValues(song);
+            return (
+                haystackContainsTerm(fields.title, term) ||
+                haystackContainsTerm(fields.adaptOf, term) ||
+                haystackContainsTerm(fields.hymnNum, term) ||
+                haystackContainsTerm(fields.lyrics, term)
+            );
+        });
+    }
+
+    function computeFieldMatchScore(song, parsed) {
+        const fields = songFieldValues(song);
+        const checks = [
+            ...parsed.phrases.map((text) => ({ text, weight: 2 })),
+            ...parsed.terms.map((text) => ({ text, weight: 1 })),
+        ];
+        if (checks.length === 0) return 0;
+
+        let score = 0;
+        for (const { text, weight } of checks) {
+            if (fields.title.includes(text) || haystackContainsTerm(fields.title, text)) {
+                score += 1000 * weight;
+            } else if (fields.adaptOf.includes(text) || haystackContainsTerm(fields.adaptOf, text)) {
+                score += 300 * weight;
+            } else if (fields.hymnNum.includes(text) || haystackContainsTerm(fields.hymnNum, text)) {
+                score += 200 * weight;
+            } else if (fields.lyrics.includes(text) || haystackContainsTerm(fields.lyrics, text)) {
+                score += 10 * weight;
+            }
+        }
+        return score;
+    }
+
+    function rankMatchedSongs(entries, parsed) {
+        return entries
+            .map((entry) => {
+                const song = resolveStoredSong(entry);
+                if (!song) return null;
+                const indexScore = typeof entry?.score === 'number' ? entry.score : 0;
+                return {
+                    song,
+                    score: indexScore + computeFieldMatchScore(song, parsed),
+                };
+            })
+            .filter(Boolean)
+            .sort((a, b) => b.score - a.score)
+            .map((entry) => entry.song);
     }
 
     function refreshLibraryIndex() {
@@ -218,22 +375,35 @@
         return null;
     }
 
-    function filterSongsFallback(query) {
-        const q = String(query || '').trim().toLowerCase();
-        return state.songs.filter(
-            (song) =>
-                song.hymnNum.toLowerCase().includes(q) ||
-                song.title.toLowerCase().includes(q) ||
-                String(song.adaptOf || '').toLowerCase().includes(q) ||
-                song.lyrics.toLowerCase().includes(q),
-        );
+    function filterSongsFallback(parsed) {
+        const searchParts = parsed || parseSearchQuery('');
+        if (!searchParts.phrases.length && !searchParts.terms.length) return state.songs.slice();
+        return state.songs
+            .filter((song) => songMatchesParsedQuery(song, searchParts))
+            .map((song) => ({ song, score: computeFieldMatchScore(song, searchParts) }))
+            .sort((a, b) => b.score - a.score)
+            .map((entry) => entry.song);
     }
 
     function matchSongs(query) {
-        const q = String(query || '').trim().toLowerCase();
+        const q = String(query || '').trim();
         if (!q) return state.songs.slice();
-        const raw = state.searchIndex ? state.searchIndex.search(q) : filterSongsFallback(q);
-        return raw.map(resolveStoredSong).filter(Boolean);
+
+        const parsed = parseSearchQuery(q);
+        if (!parsed.miniSearchQuery) return [];
+
+        if (state.searchIndex) {
+            let raw = state.searchIndex.search(parsed.miniSearchQuery, SEARCH_OPTIONS);
+            if (parsed.phrases.length > 0) {
+                raw = raw.filter((entry) => {
+                    const song = resolveStoredSong(entry);
+                    return song && songMatchesPhrases(song, parsed.phrases);
+                });
+            }
+            return rankMatchedSongs(raw, parsed);
+        }
+
+        return filterSongsFallback(parsed);
     }
 
     function search(query, limitOrOptions) {
@@ -257,9 +427,13 @@
     }
 
     function searchAdmin(query) {
-        const matches = matchSongs(query);
-        matches.sort(compareAdminAlpha);
-        return matches;
+        const q = String(query || '').trim();
+        let matches = matchSongs(q);
+        if (!q) {
+            matches.sort(compareAdminAlpha);
+            return matches;
+        }
+        return matches.slice(0, LIMITS.SEARCH);
     }
 
     function persistSongsToCache(songs) {
@@ -581,6 +755,7 @@
         stop,
         search,
         searchAdmin,
+        matchAllSongs: matchSongs,
         getSongs,
         createLyric,
         updateLyric,

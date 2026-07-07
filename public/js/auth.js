@@ -92,6 +92,12 @@
         return false;
     }
 
+    function markAuthReadyWithoutUser() {
+        window.__eclyricsAuth.user = null;
+        window.__eclyricsAuth.isAdmin = false;
+        updateAuthChrome();
+    }
+
     async function initAuth() {
         if (typeof firebase === 'undefined') {
             console.error('eclyrics: Firebase SDK not loaded');
@@ -99,6 +105,7 @@
                 authErrorEl.textContent =
                     'Firebase SDK failed to load. Check network / ad blockers, or see README.';
             }
+            markAuthReadyWithoutUser();
             return;
         }
 
@@ -107,6 +114,7 @@
                 authErrorEl.textContent =
                     'Google sign-in does not work from file://. Use http://localhost (e.g. firebase serve).';
             }
+            markAuthReadyWithoutUser();
             return;
         }
 
@@ -117,6 +125,7 @@
                     authErrorEl.textContent =
                         'Paste your web app firebaseConfig into js/firebase-config.js (see README).';
                 }
+                markAuthReadyWithoutUser();
                 return;
             }
             firebase.initializeApp(firebaseConfig);
