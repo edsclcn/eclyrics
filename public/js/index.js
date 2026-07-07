@@ -48,7 +48,10 @@ let activeBlockTabId = null;
 const prompterLineupSyncTimers = {};
 
 let blockSourceTargetTextarea = null;
-const SONG_LIBRARY_RESULT_LIMIT = 80;
+const SONG_LIBRARY_BROWSE_LIMIT = 20;
+const SONG_LIBRARY_SEARCH_LIMIT = 10;
+/** Pasted text at or above this length in the add-lyrics dialog auto-fills the block. */
+const BLOCK_SOURCE_AUTO_PASTE_MIN_CHARS = 50;
 
 /* ─────────────────────────────────────────────────────────
  * SONG CATEGORY PILLS — colors, filters, restricted states
@@ -60,7 +63,7 @@ const SONG_LIBRARY_RESULT_LIMIT = 80;
  *   revision    orange  (non-selectable)
  *   archived    red     (non-selectable)
  *
- *   revision/archived → only those pills shown; deprioritized in search
+ *   revision/archived → visible in search, not addable to blocks; editable in admin
  * ───────────────────────────────────────────────────────── */
 const SONG_CATEGORY_FILTERS = [
     { slug: 'himnario', label: 'Himnario' },
@@ -1240,6 +1243,8 @@ function openBlockTab(textarea) {
 }
 
 function syncThemeToggle(dark) {
+    document.documentElement.classList.toggle('dark', dark);
+    document.documentElement.dataset.theme = dark ? 'dark' : 'light';
     const btn = document.getElementById('theme-toggle');
     const label = document.getElementById('theme-toggle-label');
     if (!btn || !label) return;
@@ -1336,6 +1341,7 @@ function initShell() {
     }
     const dark = saved === 'dark';
     document.documentElement.classList.toggle('dark', dark);
+    document.documentElement.dataset.theme = dark ? 'dark' : 'light';
     syncThemeToggle(dark);
 
     const themeBtn = document.getElementById('theme-toggle');
@@ -1343,6 +1349,7 @@ function initShell() {
         themeBtn.addEventListener('click', () => {
             const dark = document.documentElement.classList.toggle('dark');
             localStorage.setItem('eclyrics-theme', dark ? 'dark' : 'light');
+            document.documentElement.dataset.theme = dark ? 'dark' : 'light';
             syncThemeToggle(dark);
         });
     }
@@ -1521,6 +1528,41 @@ function formatBlockLyricsContent(title, lyricsBody) {
     return `${heading}\n\n${body}`;
 }
 
+function isBlockPlaceholderLine(line) {
+    return /^BLOCK\s+\d+$/i.test(String(line || '').trim());
+}
+
+function isBlockPlaceholderTitle(title) {
+    const lines = String(title || '')
+        .split(/\n/)
+        .map((line) => line.trim())
+        .filter(Boolean);
+    return lines.length > 0 && lines.every(isBlockPlaceholderLine);
+}
+
+/** Remove leading "BLOCK N" lines left from empty blocks or partial paste-mode state. */
+function stripLeadingBlockPlaceholderLines(text) {
+    const lines = String(text || '')
+        .replace(/\r\n/g, '\n')
+        .replace(/\r/g, '\n')
+        .split('\n');
+    let i = 0;
+    while (i < lines.length) {
+        const trimmed = lines[i].trim();
+        if (!trimmed) {
+            i++;
+            continue;
+        }
+        if (isBlockPlaceholderLine(trimmed)) {
+            i++;
+            continue;
+        }
+        break;
+    }
+    while (i < lines.length && !lines[i].trim()) i++;
+    return lines.slice(i).join('\n');
+}
+
 /** Parse clipboard text: title + blank line + lyrics, or lyrics only. */
 function parseClipboardLyrics(raw) {
     const text = String(raw || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
@@ -1530,28 +1572,44 @@ function parseClipboardLyrics(raw) {
     const lines = text.split('\n');
     const firstBlank = lines.findIndex((line, i) => i > 0 && line.trim() === '');
     if (firstBlank > 0) {
-        const title = lines.slice(0, firstBlank).join('\n').trim();
-        const lyrics = lines.slice(firstBlank + 1).join('\n').trim();
-        if (title && lyrics) return { title, lyrics };
+        let title = lines.slice(0, firstBlank).join('\n').trim();
+        let lyrics = lines.slice(firstBlank + 1).join('\n').trim();
+        if (title && lyrics) {
+            if (isBlockPlaceholderTitle(title)) {
+                lyrics = stripLeadingBlockPlaceholderLines(`${title}\n\n${lyrics}`);
+                title = null;
+            } else {
+                lyrics = stripLeadingBlockPlaceholderLines(lyrics);
+            }
+            if (title) return { title, lyrics };
+            if (lyrics) return { title: null, lyrics };
+        }
     }
 
-    return { title: null, lyrics: trimmed };
+    return { title: null, lyrics: stripLeadingBlockPlaceholderLines(trimmed) };
 }
 
-async function pasteLyricsFromClipboard(textarea) {
+function applyRawLyricsPaste(textarea, raw) {
     if (!textarea) return;
-    const fallbackTitle = blockNumberFallbackLabel(textarea);
+    const text = String(raw || '');
+    if (!text.trim()) {
+        activateBlockPasteMode(textarea);
+        return;
+    }
+    const { title, lyrics } = parseClipboardLyrics(text);
+    applyLyricsToBlock(textarea, lyrics, title || '', '', { uppercaseTitle: false });
+    const cell = textarea.closest('.textarea-cell');
+    if (cell) cell.classList.remove('is-paste-focus');
+}
 
+async function pasteLyricsFromClipboard(textarea, rawText) {
+    if (!textarea) return;
+    if (rawText !== undefined) {
+        applyRawLyricsPaste(textarea, rawText);
+        return;
+    }
     try {
-        const raw = await navigator.clipboard.readText();
-        if (!raw || !raw.trim()) {
-            activateBlockPasteMode(textarea);
-            return;
-        }
-        const { title, lyrics } = parseClipboardLyrics(raw);
-        applyLyricsToBlock(textarea, lyrics, title || fallbackTitle, '', { uppercaseTitle: false });
-        const cell = textarea.closest('.textarea-cell');
-        if (cell) cell.classList.remove('is-paste-focus');
+        applyRawLyricsPaste(textarea, await navigator.clipboard.readText());
     } catch (e) {
         activateBlockPasteMode(textarea);
     }
@@ -1573,8 +1631,8 @@ function onBlockContentChanged(textarea) {
 function applyLyricsToBlock(textarea, lyrics, title, hymnNum = '', { uppercaseTitle = true } = {}) {
     if (!textarea) return;
     delete textarea.dataset.blockTitle;
-    let resolvedTitle = (title || blockNumberFallbackLabel(textarea)).trim();
-    if (uppercaseTitle) resolvedTitle = resolvedTitle.toUpperCase();
+    let resolvedTitle = String(title ?? '').trim();
+    if (uppercaseTitle && resolvedTitle) resolvedTitle = resolvedTitle.toUpperCase();
     const hymnNumText = String(hymnNum || '').trim();
     const hymnHeading = hymnNumText.replace(/^#\s*/, '');
     const fullTitle = hymnHeading ? `#${hymnHeading}\n${resolvedTitle}` : resolvedTitle;
@@ -1587,21 +1645,13 @@ function applyLyricsToBlock(textarea, lyrics, title, hymnNum = '', { uppercaseTi
 function activateBlockEditMode(textarea, { paste = false } = {}) {
     const cell = textarea?.closest('.textarea-cell');
     if (!cell) return;
-    const label = firstLineFromValue(textarea.value) || blockNumberFallbackLabel(textarea);
-    cell.classList.remove('is-empty');
     cell.classList.add('is-paste-focus');
-    textarea.value = `${label}\n\n`;
+    textarea.value = '';
     textarea.placeholder = paste
-        ? 'Paste lyrics below the title (Ctrl+V)'
-        : 'Type title, then lyrics below the blank line';
+        ? 'Paste lyrics (Ctrl+V). Optional: title, blank line, then lyrics'
+        : 'Optional: title line, blank line, then lyrics';
     selectTextarea(textarea);
     textarea.focus();
-    if (paste) {
-        const end = textarea.value.length;
-        textarea.setSelectionRange(end, end);
-    } else {
-        textarea.setSelectionRange(0, label.length);
-    }
     onBlockContentChanged(textarea);
 }
 
@@ -1709,11 +1759,30 @@ function deprioritizeRestrictedResults(songs, query) {
 }
 
 function applyRestrictedSearchRules(songs, query) {
+    return deprioritizeRestrictedResults(songs, query);
+}
+
+function mergeRestrictedBlockSourceMatches(matches, query) {
+    const api = getSongLibraryApi();
+    if (!api || typeof api.getSongs !== 'function') return matches;
+
     const q = String(query || '').trim();
-    if (!q && !isFilteringRestrictedCategories()) {
-        return songs.filter((song) => !isRestrictedSong(song));
-    }
-    return deprioritizeRestrictedResults(songs, q);
+    const pool = q
+        ? typeof api.searchAdmin === 'function'
+            ? api.searchAdmin(q)
+            : typeof api.search === 'function'
+              ? api.search(q, api.getState?.()?.count || matches.length)
+              : api.getSongs()
+        : api.getSongs();
+
+    const restricted = filterSongsByCategory(pool.filter(isRestrictedSong));
+    if (restricted.length === 0) return matches;
+
+    const seen = new Set(matches.map((song) => song.id));
+    const extras = restricted.filter((song) => !seen.has(song.id));
+    if (extras.length === 0) return matches;
+
+    return deprioritizeRestrictedResults([...matches, ...extras], q);
 }
 
 function filterSongsByCategory(songs) {
@@ -1753,39 +1822,19 @@ function renderBlockSourceCategoryFilters() {
 }
 
 function getSongVersionDisplay(version) {
-    const v = String(version ?? '').trim();
-
-    if (!v || v.toLowerCase() === 'original') {
-        return '';
-    }
-
-    if (v.toLowerCase() === 'k&t') {
-        return '- K&T';
-    }
-
-    return `- ${v
-        .toLowerCase()
-        .split(' ')
-        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-        .join(' ')}`;
+    return getSongLibraryApi()?.formatSongVersionDisplay?.(version) || '';
 }
 
 function getSongAdaptationLabel(song) {
-    if (!isAdaptationCategory(song) || !song?.adaptOf) return '';
-    return `${song.adaptOf} Adapt.`;
+    return getSongLibraryApi()?.getSongAdaptationLabel?.(song) || '';
 }
 
 function truncateLyricsPreview(lyrics, maxChars = 150) {
-    const normalized = String(lyrics || '').replace(/\s+/g, ' ').trim();
-    if (!normalized) return 'No lyrics text yet.';
-    if (normalized.length <= maxChars) return normalized;
-    return `${normalized.slice(0, Math.max(0, maxChars - 3)).trimEnd()}...`;
+    return getSongLibraryApi()?.truncateLyricsPreview?.(lyrics, maxChars) || '';
 }
 
 function getPopupSongTitle(song) {
-    const hymnNum = String(song?.hymnNum || '').trim();
-    const title = String(song?.title || '').trim() || '(Untitled)';
-    return hymnNum ? `${hymnNum} - ${title}` : title;
+    return getSongLibraryApi()?.getPopupSongTitle?.(song) || '(Untitled)';
 }
 
 function updateBlockSourceDialogHeader(textarea) {
@@ -1817,9 +1866,10 @@ function renderBlockSourceSearchResults(query) {
     const api = getSongLibraryApi();
     const q = query.trim();
     const state = getSongLibraryState();
-    let matches =
-        api && typeof api.search === 'function' ? api.search(q, SONG_LIBRARY_RESULT_LIMIT) : [];
+    const limit = q ? SONG_LIBRARY_SEARCH_LIMIT : SONG_LIBRARY_BROWSE_LIMIT;
+    let matches = api && typeof api.search === 'function' ? api.search(q, limit) : [];
     matches = filterSongsByCategory(matches);
+    matches = mergeRestrictedBlockSourceMatches(matches, q);
     matches = applyRestrictedSearchRules(matches, q);
     list.replaceChildren();
     if (matches.length === 0) {
@@ -1835,8 +1885,10 @@ function renderBlockSourceSearchResults(query) {
         else if (!state.loaded) renderSongLibraryNote('Loading song library…', true);
         return;
     }
-    if (q && matches.length === SONG_LIBRARY_RESULT_LIMIT) {
-        renderSongLibraryNote(`Showing top ${SONG_LIBRARY_RESULT_LIMIT} matches. Refine search for more.`, true);
+    if (q && matches.length === SONG_LIBRARY_SEARCH_LIMIT) {
+        renderSongLibraryNote(`Showing top ${SONG_LIBRARY_SEARCH_LIMIT} matches. Refine search for more.`, true);
+    } else if (!q && state.count > SONG_LIBRARY_BROWSE_LIMIT) {
+        renderSongLibraryNote(`Showing ${SONG_LIBRARY_BROWSE_LIMIT} of ${state.count} songs. Search to find more.`, true);
     } else {
         renderSongLibraryNote('', false);
     }
@@ -1850,6 +1902,7 @@ function renderBlockSourceSearchResults(query) {
             : 'block-source-result';
         btn.setAttribute('role', 'option');
         if (restricted) {
+            btn.disabled = true;
             btn.setAttribute('aria-disabled', 'true');
             btn.title = 'Revision and archived lyrics cannot be added to blocks';
         }
@@ -1921,9 +1974,28 @@ function closeBlockSourceDialog() {
     resetBlockSourceDialog();
 }
 
+function isBlockSourceDialogOpen() {
+    const dlg = document.getElementById('block-source-dialog');
+    return !!dlg && !dlg.hidden;
+}
+
+function handleBlockSourceDialogPaste(e) {
+    if (!isBlockSourceDialogOpen() || !blockSourceTargetTextarea) return;
+
+    const raw = e.clipboardData?.getData('text/plain') ?? '';
+    if (raw.trim().length < BLOCK_SOURCE_AUTO_PASTE_MIN_CHARS) return;
+
+    e.preventDefault();
+    const ta = blockSourceTargetTextarea;
+    closeBlockSourceDialog();
+    pasteLyricsFromClipboard(ta, raw);
+}
+
 function initBlockSourceDialog() {
     const dlg = document.getElementById('block-source-dialog');
     if (!dlg) return;
+
+    dlg.addEventListener('paste', handleBlockSourceDialogPaste, true);
 
     document.getElementById('block-source-dialog-close')?.addEventListener('click', closeBlockSourceDialog);
     document.getElementById('block-source-dialog-backdrop')?.addEventListener('click', closeBlockSourceDialog);
@@ -2109,7 +2181,17 @@ function addSingleBlock(container, tabId) {
     textarea.addEventListener('input', () => {
         onBlockContentChanged(textarea);
     });
-    textarea.addEventListener('paste', () => {
+    textarea.addEventListener('paste', (e) => {
+        const raw = e.clipboardData?.getData('text/plain') ?? '';
+        const cell = textarea.closest('.textarea-cell');
+        const shouldAutoPaste =
+            raw.trim().length >= BLOCK_SOURCE_AUTO_PASTE_MIN_CHARS &&
+            (cell?.classList.contains('is-paste-focus') || isBlockEmpty(textarea));
+        if (shouldAutoPaste) {
+            e.preventDefault();
+            applyRawLyricsPaste(textarea, raw);
+            return;
+        }
         setTimeout(() => {
             textarea.scrollTop = 0;
             onBlockContentChanged(textarea);

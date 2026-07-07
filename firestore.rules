@@ -6,12 +6,18 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    /** Same emails as rbac/config.adminEmails in Console (lowercase recommended). */
+    /** adminEmails in rbac/config must be lowercase strings. */
+    function normalizedAuthEmail() {
+      return request.auth.token.email.lower();
+    }
+
     function isListedEmailAdmin() {
       return isSignedIn()
         && request.auth.token.email != null
         && exists(/databases/$(database)/documents/rbac/config)
-        && request.auth.token.email in get(/databases/$(database)/documents/rbac/config).data.adminEmails;
+        && 'adminEmails' in get(/databases/$(database)/documents/rbac/config).data
+        && get(/databases/$(database)/documents/rbac/config).data.adminEmails is list
+        && normalizedAuthEmail() in get(/databases/$(database)/documents/rbac/config).data.adminEmails;
     }
 
     function isUidAdmin() {
@@ -37,9 +43,27 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
+    function isValidLyricsPayload(data) {
+      return data.keys().hasAll(['title', 'lyrics', 'last-modified', 'last-modified-by'])
+        && data.title is string
+        && data.lyrics is string
+        && data['last-modified'] is string
+        && data['last-modified-by'] is string
+        && data.title.size() <= 500
+        && data.lyrics.size() <= 50000
+        && data['last-modified'].size() <= 120
+        && data['last-modified-by'].size() <= 320
+        && (!('hymn-num' in data) || data['hymn-num'] is string)
+        && (!('category' in data) || data.category is list)
+        && (!('version' in data) || data.version is string)
+        && (!('adapt-of' in data) || data['adapt-of'] is string);
+    }
+
     match /lyrics/{docId} {
       allow read: if true;
-      allow write: if false;
+      allow create: if isAdmin() && isValidLyricsPayload(request.resource.data);
+      allow update: if isAdmin() && isValidLyricsPayload(request.resource.data);
+      allow delete: if isAdmin();
     }
 
     match /{document=**} {

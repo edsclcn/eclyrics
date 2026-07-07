@@ -1,9 +1,10 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="js/theme-init.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link rel="stylesheet" href="assets/css/index.css">
     <link rel="stylesheet" href="assets/css/event-prompter.css">
@@ -12,15 +13,16 @@
 </head>
 
 <body>
-    <!-- <div id="auth-gate" class="auth-gate" role="dialog" aria-modal="true" aria-labelledby="auth-gate-title">
+    <div id="auth-gate" class="auth-gate" role="dialog" aria-modal="true" aria-labelledby="auth-gate-title">
         <div class="auth-gate-card">
             <h2 id="auth-gate-title" class="auth-gate-title">Sign in</h2>
+            <p class="auth-gate-hint">Sign in with Google to use EC Lyrics.</p>
             <p id="auth-error" class="auth-gate-error" role="alert"></p>
             <button type="button" id="auth-sign-in-google" class="auth-gate-google-btn">
                 <i class="fa-brands fa-google" aria-hidden="true"></i> Continue with Google
             </button>
         </div>
-    </div> -->
+    </div>
 
     <div id="block-source-dialog" class="block-source-dialog" hidden role="dialog" aria-modal="true"
         aria-labelledby="block-source-dialog-title">
@@ -314,12 +316,100 @@
                 </section>
 
                 <section id="panel-admin" class="panel" aria-labelledby="panel-admin-title">
-                    <div class="placeholder-panel">
-                        <h2 id="panel-admin-title">Admin</h2>
-                        <p>Admin-only tools and data. Access is enforced in Firestore rules (<code>admins</code> /
-                            <code>admin_data</code>).</p>
-                        <p class="admin-rbac-lead"><strong>admin_data/welcome</strong> (read test, admins only):</p>
-                        <pre id="admin-panel-firestore-sample" class="admin-firestore-sample" aria-live="polite"></pre>
+                    <div class="admin-panel">
+                        <header class="admin-panel__head">
+                            <div>
+                                <h2 id="panel-admin-title">Admin · Lyrics library</h2>
+                                <p class="admin-panel__lede">Add, edit, or delete songs in the Firestore library.</p>
+                            </div>
+                            <button type="button" class="btn-toolbar btn-toolbar-primary" id="admin-add-btn">
+                                <i class="fa-solid fa-plus" aria-hidden="true"></i> New lyrics
+                            </button>
+                        </header>
+
+                        <p id="admin-status" class="admin-status" role="status" aria-live="polite" hidden></p>
+
+                        <div class="admin-panel__layout">
+                            <section class="admin-panel__search admin-panel__card" aria-label="Search lyrics library">
+                                <header class="admin-panel__section-head">
+                                    <h3 class="admin-panel__section-title">
+                                        <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+                                        Library
+                                    </h3>
+                                    <p class="admin-panel__section-hint">Search and filter existing songs</p>
+                                </header>
+                                <label class="visually-hidden" for="admin-search">Search lyrics library</label>
+                                <div class="block-source-search-wrap admin-search-wrap">
+                                    <i class="fa-solid fa-magnifying-glass block-source-search-icon" aria-hidden="true"></i>
+                                    <input type="search" id="admin-search" class="block-source-search admin-search-input"
+                                        placeholder="Hymn #, title, or lyrics…" autocomplete="off" />
+                                </div>
+                                <div id="admin-search-filters" class="block-source-filters admin-search-filters" role="group"
+                                    aria-label="Filter by category"></div>
+                                <p id="admin-results-note" class="admin-results-note">Loading song library…</p>
+                                <ul id="admin-results" class="admin-results" role="listbox" aria-label="Lyrics search results"></ul>
+                            </section>
+
+                            <section class="admin-panel__editor admin-panel__card" aria-label="Edit lyrics">
+                                <header class="admin-panel__section-head">
+                                    <h3 class="admin-panel__section-title">
+                                        <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>
+                                        Editor
+                                    </h3>
+                                    <p class="admin-panel__section-hint">Pick categories first — extra fields appear as needed</p>
+                                </header>
+                                <form id="admin-lyrics-form" class="admin-lyrics-form">
+                                    <div class="admin-form-field">
+                                        <label for="admin-form-title">Title <span class="admin-form-required" aria-hidden="true">*</span></label>
+                                        <input type="text" id="admin-form-title" required autocomplete="off"
+                                            placeholder="Song title" />
+                                    </div>
+
+                                    <fieldset class="admin-form-field admin-form-field--categories">
+                                        <legend>Categories</legend>
+                                        <p class="admin-form-field-hint">Select one or more. Himnario shows hymn #; Adaptation shows adapt-of.</p>
+                                        <div id="admin-form-categories" class="admin-form-categories" role="group"
+                                            aria-label="Song categories"></div>
+                                    </fieldset>
+
+                                    <div id="admin-form-field-hymn" class="admin-form-field admin-form-field--conditional">
+                                        <label for="admin-form-hymn-num">Hymn #</label>
+                                        <input type="text" id="admin-form-hymn-num" autocomplete="off"
+                                            inputmode="numeric" placeholder="e.g. 123" />
+                                    </div>
+
+                                    <div id="admin-form-field-adapt" class="admin-form-field admin-form-field--conditional">
+                                        <label for="admin-form-adapt-of">Adapt of</label>
+                                        <input type="text" id="admin-form-adapt-of" autocomplete="off"
+                                            placeholder="Source hymn number or title" />
+                                    </div>
+
+                                    <div class="admin-form-field">
+                                        <label for="admin-form-version">Version</label>
+                                        <input type="text" id="admin-form-version" placeholder="e.g. K&T, Original" autocomplete="off" />
+                                    </div>
+
+                                    <div class="admin-form-field admin-form-field--lyrics">
+                                        <label for="admin-form-lyrics">Lyrics <span class="admin-form-required" aria-hidden="true">*</span></label>
+                                        <textarea id="admin-form-lyrics" required
+                                            placeholder="Full lyric text…"></textarea>
+                                    </div>
+
+                                    <p id="admin-form-meta" class="admin-form-meta" hidden></p>
+
+                                    <div class="admin-form-actions">
+                                        <button type="button" class="btn-toolbar btn-toolbar-primary admin-form-action-btn" id="admin-save-btn">
+                                            <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>
+                                            Add to library
+                                        </button>
+                                        <button type="button" class="btn-toolbar admin-form-action-btn" id="admin-cancel-btn">Cancel</button>
+                                        <button type="button" class="btn-toolbar admin-delete-btn admin-form-action-btn" id="admin-delete-btn" hidden>
+                                            <i class="fa-solid fa-trash" aria-hidden="true"></i> Delete
+                                        </button>
+                                    </div>
+                                </form>
+                            </section>
+                        </div>
                     </div>
                 </section>
             </div>
@@ -351,7 +441,9 @@
     <script defer src="https://cdn.jsdelivr.net/npm/minisearch@7.1.2/dist/umd/index.min.js"></script>
     <script defer src="js/firebase-config.js"></script>
     <script defer src="js/auth.js"></script>
+    <script defer src="js/login.js"></script>
     <script defer src="js/song-library.js"></script>
+    <script defer src="js/admin-panel.js"></script>
     <script defer src="js/prompter-shortcuts.js"></script>
     <script defer src="js/prompter-sync-guard.js"></script>
     <script defer src="js/index.js"></script>
