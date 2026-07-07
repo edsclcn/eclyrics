@@ -14,13 +14,30 @@
 
 <body>
     <div id="auth-gate" class="auth-gate" role="dialog" aria-modal="true" aria-labelledby="auth-gate-title">
-        <div class="auth-gate-card">
-            <h2 id="auth-gate-title" class="auth-gate-title">Sign in</h2>
-            <p class="auth-gate-hint">Sign in with Google to use EC Lyrics.</p>
-            <p id="auth-error" class="auth-gate-error" role="alert"></p>
-            <button type="button" id="auth-sign-in-google" class="auth-gate-google-btn">
-                <i class="fa-brands fa-google" aria-hidden="true"></i> Continue with Google
+        <div class="auth-gate__backdrop" aria-hidden="true"></div>
+        <div class="auth-gate__layout">
+            <button type="button" class="auth-gate-theme-btn" id="auth-gate-theme-toggle" aria-pressed="false"
+                title="Toggle dark mode" aria-label="Dark mode">
+                <i class="fa-solid fa-moon" aria-hidden="true"></i>
             </button>
+            <div class="auth-gate__inner">
+                <header class="auth-gate-brand">
+                    <h1 class="auth-gate-brand__title">EC Lyrics</h1>
+                    <p class="auth-gate-brand__tagline">Lyric prompts and stage preview.</p>
+                </header>
+                <div class="auth-gate-card">
+                    <h2 id="auth-gate-title" class="auth-gate-title">Sign in to continue</h2>
+                    <p class="auth-gate-hint">Use your Google account to access your song library, lyrics workspace, and
+                        prompter tools.</p>
+                    <p id="auth-error" class="auth-gate-error" role="alert"></p>
+                    <button type="button" id="auth-sign-in-google" class="auth-gate-google-btn" disabled>
+                        <span class="auth-gate-google-btn__icon" aria-hidden="true"><i
+                                class="fa-brands fa-google"></i></span>
+                        <span class="auth-gate-google-btn__label">Continue with Google</span>
+                    </button>
+                    <p id="auth-gate-status" class="auth-gate-status" aria-live="polite">Checking session…</p>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -76,7 +93,7 @@
         </div>
     </div>
 
-    <div class="app-shell" id="app-shell">
+    <div class="app-shell app-shell--gated" id="app-shell" inert aria-hidden="true">
         <script>
             (function () {
                 var shell = document.getElementById('app-shell');
