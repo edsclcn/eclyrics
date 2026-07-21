@@ -256,6 +256,9 @@
                   ? api.search(q)
                   : [];
         matches = filterSongsByCategory(matches);
+        if (api?.sortSongsForCategoryFilters && !q) {
+            matches = api.sortSongsForCategoryFilters(matches, activeCategoryFilters);
+        }
 
         list.replaceChildren();
         if (matches.length === 0) {
@@ -407,10 +410,75 @@
         }
     }
 
+    async function confirmAdminDelete(songTitle) {
+        const dialog = $('admin-delete-dialog');
+        const input = $('admin-delete-confirm-input');
+        const confirmBtn = $('admin-delete-dialog-confirm');
+        const message = $('admin-delete-dialog-message');
+        if (!dialog || !input || !confirmBtn) return false;
+
+        const title = String(songTitle || '').trim() || 'this song';
+        message.textContent = `“${title}” will be removed from the Firestore library.`;
+
+        return new Promise((resolve) => {
+            let settled = false;
+            const finish = (result) => {
+                if (settled) return;
+                settled = true;
+                dialog.hidden = true;
+                dialog.setAttribute('aria-hidden', 'true');
+                input.removeEventListener('input', onInput);
+                input.removeEventListener('keydown', onInputKeydown);
+                confirmBtn.removeEventListener('click', onConfirm);
+                $('admin-delete-dialog-cancel')?.removeEventListener('click', onCancel);
+                $('admin-delete-dialog-close')?.removeEventListener('click', onCancel);
+                $('admin-delete-dialog-backdrop')?.removeEventListener('click', onCancel);
+                document.removeEventListener('keydown', onDocumentKeydown);
+                resolve(result);
+            };
+
+            const onInput = () => {
+                confirmBtn.disabled = input.value.trim().toLowerCase() !== 'delete';
+            };
+
+            const onConfirm = () => {
+                if (confirmBtn.disabled) return;
+                finish(true);
+            };
+
+            const onCancel = () => finish(false);
+
+            const onInputKeydown = (e) => {
+                if (e.key === 'Enter' && !confirmBtn.disabled) {
+                    e.preventDefault();
+                    onConfirm();
+                }
+            };
+
+            const onDocumentKeydown = (e) => {
+                if (e.key === 'Escape') onCancel();
+            };
+
+            input.value = '';
+            confirmBtn.disabled = true;
+            dialog.hidden = false;
+            dialog.setAttribute('aria-hidden', 'false');
+            input.addEventListener('input', onInput);
+            input.addEventListener('keydown', onInputKeydown);
+            confirmBtn.addEventListener('click', onConfirm);
+            $('admin-delete-dialog-cancel')?.addEventListener('click', onCancel);
+            $('admin-delete-dialog-close')?.addEventListener('click', onCancel);
+            $('admin-delete-dialog-backdrop')?.addEventListener('click', onCancel);
+            document.addEventListener('keydown', onDocumentKeydown);
+            window.setTimeout(() => input.focus(), 0);
+        });
+    }
+
     async function handleDelete() {
         if (formMode !== 'edit' || !selectedSongId) return;
         const title = $('admin-form-title')?.value?.trim() || 'this song';
-        if (!window.confirm(`Delete "${title}" from the library? This cannot be undone.`)) return;
+        const confirmed = await confirmAdminDelete(title);
+        if (!confirmed) return;
 
         const api = getLibraryApi();
         if (!api) return;

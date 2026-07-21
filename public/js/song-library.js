@@ -168,13 +168,74 @@
     function appendAuditFields(payload, user) {
         const email = asNonEmptyString(user?.email);
         if (!email) throw new Error('Signed-in user email is required to save lyrics.');
-        payload['last-modified'] = formatLastModifiedTimestamp();
+        if (typeof firebase === 'undefined' || !firebase.firestore?.Timestamp) {
+            throw new Error('Firestore is not ready.');
+        }
+        payload['last-modified'] = firebase.firestore.Timestamp.now();
         payload['last-modified-by'] = email;
         return payload;
     }
 
     function rebuildSongsById() {
         state.songsById = new Map(state.songs.map((song) => [song.id, song]));
+    }
+
+    function normalizeSearchText(value) {
+        return String(value || '')
+            .toLowerCase()
+            .replace(/[^\p{L}\p{N}]+/gu, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+    }
+
+    /** Letters and digits only — e.g. "pag-asa" and "pagasa" both become "pagasa". */
+    function normalizeSearchCompact(value) {
+        return String(value || '')
+            .toLowerCase()
+            .replace(/[^\p{L}\p{N}]+/gu, '');
+    }
+
+    function normalizeSearchQueryToken(term) {
+        const compact = normalizeSearchCompact(term);
+        return compact || String(term || '').toLowerCase().trim();
+    }
+
+    /** Tokens for MiniSearch fields (title, lyrics, etc.), including compact hyphenated words. */
+    function tokensFromSearchField(value) {
+        const tokens = new Set();
+        const raw = String(value || '').toLowerCase();
+        raw.split(/\s+/).forEach((segment) => {
+            const piece = segment.trim();
+            if (!piece) return;
+            const compact = normalizeSearchCompact(piece);
+            if (compact) tokens.add(compact);
+            normalizeSearchText(piece)
+                .split(/\s+/)
+                .forEach((word) => {
+                    if (word) tokens.add(word);
+                });
+        });
+        normalizeSearchText(raw)
+            .split(/\s+/)
+            .forEach((word) => {
+                if (word) tokens.add(word);
+            });
+        return [...tokens];
+    }
+
+    function fieldSearchString(value) {
+        const tokens = tokensFromSearchField(value);
+        return tokens.length ? tokens.join(' ') : '';
+    }
+
+    function songToSearchDocument(song) {
+        return {
+            id: song.id,
+            hymnNum: fieldSearchString(song.hymnNum),
+            title: fieldSearchString(song.title),
+            adaptOf: fieldSearchString(song.adaptOf),
+            lyrics: fieldSearchString(song.lyrics),
+        };
     }
 
     function buildSearchIndex() {
@@ -184,8 +245,10 @@
             fields: ['hymnNum', 'title', 'adaptOf', 'lyrics'],
             storeFields: ['id'],
             searchOptions: SEARCH_OPTIONS,
+            tokenize: (string) => String(string || '').split(/\s+/).filter(Boolean),
+            processTerm: (term) => normalizeSearchQueryToken(term),
         });
-        miniSearch.addAll(state.songs);
+        miniSearch.addAll(state.songs.map(songToSearchDocument));
         return miniSearch;
     }
 
@@ -197,7 +260,7 @@
 
         const phrases = [];
         const withoutQuoted = q.replace(/"([^"]+)"/g, (_, phrase) => {
-            const p = String(phrase || '').trim().toLowerCase();
+            const p = normalizeSearchText(String(phrase || '').trim());
             if (p) phrases.push(p);
             return ' ';
         });
@@ -206,11 +269,16 @@
             .toLowerCase()
             .split(/\s+/)
             .map((term) => term.trim())
+            .filter(Boolean)
+            .map(normalizeSearchQueryToken)
             .filter(Boolean);
 
         const miniSearchTerms = [];
         phrases.forEach((phrase) => {
-            phrase.split(/\s+/).filter(Boolean).forEach((part) => miniSearchTerms.push(part));
+            phrase
+                .split(/\s+/)
+                .filter(Boolean)
+                .forEach((part) => miniSearchTerms.push(normalizeSearchQueryToken(part)));
         });
         terms.forEach((term) => miniSearchTerms.push(term));
 
@@ -262,27 +330,32 @@
     }
 
     function haystackContainsTerm(haystack, term) {
-        const normalizedHaystack = String(haystack || '').toLowerCase();
-        const normalizedTerm = String(term || '').toLowerCase();
-        if (!normalizedTerm) return true;
-        if (normalizedHaystack.includes(normalizedTerm)) return true;
-        return normalizedHaystack.split(/[\s\n]+/).some((token) => fuzzyTokenMatch(token, normalizedTerm));
+        const compactHaystack = normalizeSearchCompact(haystack);
+        const compactTerm = normalizeSearchQueryToken(term);
+        if (!compactTerm) return true;
+        if (compactHaystack.includes(compactTerm)) return true;
+        return normalizeSearchText(haystack)
+            .split(/\s+/)
+            .some((token) => fuzzyTokenMatch(normalizeSearchCompact(token), compactTerm));
     }
 
     function songFieldValues(song) {
         return {
-            title: String(song?.title || '').toLowerCase(),
-            adaptOf: String(song?.adaptOf || '').toLowerCase(),
-            hymnNum: String(song?.hymnNum || '').toLowerCase(),
-            lyrics: String(song?.lyrics || '').toLowerCase(),
+            title: normalizeSearchCompact(song?.title),
+            adaptOf: normalizeSearchCompact(song?.adaptOf),
+            hymnNum: normalizeSearchCompact(song?.hymnNum),
+            lyrics: normalizeSearchCompact(song?.lyrics),
         };
     }
 
     function songMatchesPhrases(song, phrases) {
         if (!phrases.length) return true;
         const fields = songFieldValues(song);
-        const haystack = [fields.title, fields.adaptOf, fields.hymnNum, fields.lyrics].join('\n');
-        return phrases.every((phrase) => haystack.includes(phrase));
+        const haystack = [fields.title, fields.adaptOf, fields.hymnNum, fields.lyrics].join('');
+        return phrases.every((phrase) => {
+            const compactPhrase = normalizeSearchCompact(phrase);
+            return compactPhrase && haystack.includes(compactPhrase);
+        });
     }
 
     function songMatchesParsedQuery(song, parsed) {
@@ -308,13 +381,26 @@
 
         let score = 0;
         for (const { text, weight } of checks) {
-            if (fields.title.includes(text) || haystackContainsTerm(fields.title, text)) {
+            const compactText = normalizeSearchQueryToken(text);
+            if (
+                fields.title.includes(compactText) ||
+                haystackContainsTerm(song?.title, text)
+            ) {
                 score += 1000 * weight;
-            } else if (fields.adaptOf.includes(text) || haystackContainsTerm(fields.adaptOf, text)) {
+            } else if (
+                fields.adaptOf.includes(compactText) ||
+                haystackContainsTerm(song?.adaptOf, text)
+            ) {
                 score += 300 * weight;
-            } else if (fields.hymnNum.includes(text) || haystackContainsTerm(fields.hymnNum, text)) {
+            } else if (
+                fields.hymnNum.includes(compactText) ||
+                haystackContainsTerm(song?.hymnNum, text)
+            ) {
                 score += 200 * weight;
-            } else if (fields.lyrics.includes(text) || haystackContainsTerm(fields.lyrics, text)) {
+            } else if (
+                fields.lyrics.includes(compactText) ||
+                haystackContainsTerm(song?.lyrics, text)
+            ) {
                 score += 10 * weight;
             }
         }
@@ -367,6 +453,16 @@
         });
     }
 
+    function sortSongsForCategoryFilters(songs, activeFilterSlugs) {
+        if (!Array.isArray(songs) || songs.length === 0) return songs;
+        const slugs =
+            activeFilterSlugs instanceof Set
+                ? activeFilterSlugs
+                : new Set(Array.isArray(activeFilterSlugs) ? activeFilterSlugs : []);
+        if (!slugs.has('himnario')) return songs;
+        return songs.slice().sort(compareBrowseOrder);
+    }
+
     function resolveStoredSong(entry) {
         if (!entry) return null;
         const id = typeof entry === 'string' ? entry : entry.id;
@@ -400,7 +496,16 @@
                     return song && songMatchesPhrases(song, parsed.phrases);
                 });
             }
-            return rankMatchedSongs(raw, parsed);
+            raw = raw.filter((entry) => {
+                const song = resolveStoredSong(entry);
+                return song && songMatchesParsedQuery(song, parsed);
+            });
+            const ranked = rankMatchedSongs(raw, parsed);
+            if (ranked.length > 0) return ranked;
+            if (parsed.phrases.length || parsed.terms.length) {
+                return filterSongsFallback(parsed);
+            }
+            return ranked;
         }
 
         return filterSongsFallback(parsed);
@@ -755,6 +860,7 @@
         stop,
         search,
         searchAdmin,
+        sortSongsForCategoryFilters,
         matchAllSongs: matchSongs,
         getSongs,
         createLyric,
