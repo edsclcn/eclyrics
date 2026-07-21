@@ -3401,6 +3401,22 @@ body.auth-gate-open {
     margin: 0;
     width: 100%;
     overflow: hidden;
+    font-family: var(--font-sans);
+}
+
+#panel-admin :is(
+    input,
+    textarea,
+    button,
+    select,
+    label,
+    legend,
+    .block-source-search,
+    .block-source-filter-pill,
+    .admin-results-row,
+    .btn-toolbar
+) {
+    font-family: var(--font-sans);
 }
 
 .admin-panel__head {
@@ -3677,7 +3693,7 @@ body.auth-gate-open {
     border-radius: 8px;
     background: var(--input-bg);
     color: var(--foreground);
-    font-family: inherit;
+    font-family: var(--font-sans);
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
@@ -3744,5 +3760,59 @@ body.auth-gate-open {
 
 .admin-delete-btn:hover {
     background: var(--danger-soft);
+}
+
+.admin-delete-dialog__card {
+    width: min(100%, 420px);
+    max-height: none;
+}
+
+.admin-delete-dialog__message {
+    margin: 0;
+    font-size: 0.88rem;
+    line-height: 1.45;
+    color: var(--foreground);
+}
+
+.admin-delete-dialog__hint {
+    margin: 0;
+    font-size: 0.78rem;
+    color: var(--muted-foreground, var(--gray-3));
+    line-height: 1.4;
+}
+
+.admin-delete-confirm-input {
+    width: 100%;
+    padding: 0.5rem 0.6rem;
+    font-size: 0.88rem;
+    font-family: var(--font-sans);
+    border: 1px solid var(--input-border);
+    border-radius: 8px;
+    background: var(--input-bg);
+    color: var(--foreground);
+}
+
+.admin-delete-confirm-input:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.admin-delete-dialog__actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.45rem;
+    margin-top: 0.15rem;
+}
+
+#admin-delete-dialog-confirm:not(:disabled) {
+    color: var(--danger);
+    border-color: var(--danger-border);
+    background: var(--danger-soft);
+}
+
+#admin-delete-dialog-confirm:not(:disabled):hover {
+    background: color-mix(in srgb, var(--danger) 18%, transparent);
 }
 

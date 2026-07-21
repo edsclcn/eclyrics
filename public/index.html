@@ -438,6 +438,32 @@
         </div>
     </div>
 
+    <div id="admin-delete-dialog" class="block-source-dialog admin-delete-dialog" hidden role="dialog"
+        aria-modal="true" aria-labelledby="admin-delete-dialog-title" aria-describedby="admin-delete-dialog-message">
+        <div class="block-source-dialog__backdrop" id="admin-delete-dialog-backdrop" tabindex="-1"></div>
+        <div class="block-source-dialog__card admin-delete-dialog__card">
+            <header class="block-source-dialog__head">
+                <div class="block-source-dialog__title-wrap">
+                    <h3 id="admin-delete-dialog-title">Delete from library?</h3>
+                </div>
+                <button type="button" class="block-source-dialog__close" id="admin-delete-dialog-close"
+                    aria-label="Close"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
+            </header>
+            <p id="admin-delete-dialog-message" class="admin-delete-dialog__message"></p>
+            <p class="admin-delete-dialog__hint">Type <strong>delete</strong> to confirm. This cannot be undone.</p>
+            <label class="visually-hidden" for="admin-delete-confirm-input">Type delete to confirm</label>
+            <input type="text" id="admin-delete-confirm-input" class="admin-delete-confirm-input"
+                autocomplete="off" spellcheck="false" autocapitalize="off" inputmode="text"
+                placeholder="delete" />
+            <div class="admin-delete-dialog__actions">
+                <button type="button" class="btn-toolbar" id="admin-delete-dialog-cancel">Cancel</button>
+                <button type="button" class="btn-toolbar admin-delete-btn" id="admin-delete-dialog-confirm" disabled>
+                    Delete permanently
+                </button>
+            </div>
+        </div>
+    </div>
+
     <style>
         .visually-hidden {
             position: absolute;

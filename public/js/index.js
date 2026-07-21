@@ -1762,7 +1762,39 @@ function applyRestrictedSearchRules(songs, query) {
     return deprioritizeRestrictedResults(songs, query);
 }
 
+function shouldIncludeRestrictedInBlockSource(query) {
+    const q = String(query || '').trim();
+    if (q.length > 0) return true;
+    if (isFilteringRestrictedCategories()) return true;
+    return queryTargetsRestrictedCategory(q);
+}
+
+function sortBlockSourceMatches(matches, query) {
+    const api = getSongLibraryApi();
+    const q = String(query || '').trim();
+    if (!api?.sortSongsForCategoryFilters) return matches;
+    if (!blockSourceActiveCategoryFilters.has('himnario')) return matches;
+    // Empty search + Himnario: hymn order. With a query, keep library search ranking.
+    if (q.length > 0) return matches;
+
+    if (!shouldIncludeRestrictedInBlockSource(query)) {
+        return api.sortSongsForCategoryFilters(matches, blockSourceActiveCategoryFilters);
+    }
+
+    const normal = [];
+    const restricted = [];
+    matches.forEach((song) => {
+        if (isRestrictedSong(song)) restricted.push(song);
+        else normal.push(song);
+    });
+    const sortedNormal = api.sortSongsForCategoryFilters(normal, blockSourceActiveCategoryFilters);
+    const sortedRestricted = api.sortSongsForCategoryFilters(restricted, blockSourceActiveCategoryFilters);
+    return [...sortedNormal, ...sortedRestricted];
+}
+
 function mergeRestrictedBlockSourceMatches(matches, query) {
+    if (!shouldIncludeRestrictedInBlockSource(query)) return matches;
+
     const api = getSongLibraryApi();
     if (!api || typeof api.getSongs !== 'function') return matches;
 
@@ -1792,6 +1824,32 @@ function filterSongsByCategory(songs) {
     return songs.filter((song) =>
         [...blockSourceActiveCategoryFilters].every((slug) => songHasCategorySlug(song, slug)),
     );
+}
+
+/** Block-source list: category-only browse uses the full library, not the global 20-song browse slice. */
+function getBlockSourceSearchMatches(query) {
+    const api = getSongLibraryApi();
+    const q = String(query || '').trim();
+    if (!api || typeof api.search !== 'function') return [];
+
+    if (!q && blockSourceActiveCategoryFilters.size > 0) {
+        const pool = typeof api.getSongs === 'function' ? api.getSongs() : [];
+        let matches = filterSongsByCategory(pool);
+        if (!shouldIncludeRestrictedInBlockSource(q)) {
+            matches = matches.filter((song) => !isRestrictedSong(song));
+        }
+        return sortBlockSourceMatches(matches, q);
+    }
+
+    const limit = q ? SONG_LIBRARY_SEARCH_LIMIT : SONG_LIBRARY_BROWSE_LIMIT;
+    let matches = api.search(q, limit);
+    matches = filterSongsByCategory(matches);
+    if (!shouldIncludeRestrictedInBlockSource(q)) {
+        matches = matches.filter((song) => !isRestrictedSong(song));
+    }
+    matches = mergeRestrictedBlockSourceMatches(matches, q);
+    matches = applyRestrictedSearchRules(matches, q);
+    return sortBlockSourceMatches(matches, q);
 }
 
 function renderBlockSourceCategoryFilters() {
@@ -1865,14 +1923,9 @@ function focusBlockSourceSearch() {
 function renderBlockSourceSearchResults(query) {
     const list = document.getElementById('block-source-results');
     if (!list) return;
-    const api = getSongLibraryApi();
     const q = query.trim();
     const state = getSongLibraryState();
-    const limit = q ? SONG_LIBRARY_SEARCH_LIMIT : SONG_LIBRARY_BROWSE_LIMIT;
-    let matches = api && typeof api.search === 'function' ? api.search(q, limit) : [];
-    matches = filterSongsByCategory(matches);
-    matches = mergeRestrictedBlockSourceMatches(matches, q);
-    matches = applyRestrictedSearchRules(matches, q);
+    const matches = getBlockSourceSearchMatches(query);
     list.replaceChildren();
     if (matches.length === 0) {
         const li = document.createElement('li');
@@ -1889,7 +1942,7 @@ function renderBlockSourceSearchResults(query) {
     }
     if (q && matches.length === SONG_LIBRARY_SEARCH_LIMIT) {
         renderSongLibraryNote(`Showing top ${SONG_LIBRARY_SEARCH_LIMIT} matches. Refine search for more.`, true);
-    } else if (!q && state.count > SONG_LIBRARY_BROWSE_LIMIT) {
+    } else if (!q && blockSourceActiveCategoryFilters.size === 0 && state.count > SONG_LIBRARY_BROWSE_LIMIT) {
         renderSongLibraryNote(`Showing ${SONG_LIBRARY_BROWSE_LIMIT} of ${state.count} songs. Search to find more.`, true);
     } else {
         renderSongLibraryNote('', false);
