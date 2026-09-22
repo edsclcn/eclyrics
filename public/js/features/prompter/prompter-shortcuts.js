@@ -94,7 +94,7 @@
         },
     ];
 
-    const MODAL_BLOCK_IDS = ['preview-shortcuts-dialog', 'block-source-dialog'];
+    const MODAL_BLOCK_IDS = ['preview-shortcuts-dialog', 'block-source-dialog', 'lineup-dialog', 'workspace-tour-dialog'];
 
     const CODE_TO_SHORTCUT = new Map();
     for (const def of PROMPTER_SHORTCUT_REGISTRY) {

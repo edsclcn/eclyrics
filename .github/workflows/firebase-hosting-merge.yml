@@ -36,13 +36,6 @@ jobs:
           echo "GOOGLE_APPLICATION_CREDENTIALS=$SA_PATH" >> "$GITHUB_ENV"
           echo "FIREBASE_DEPLOY_AGENT=action-hosting-deploy" >> "$GITHUB_ENV"
 
-      - name: Deploy Firestore rules
-        run: |
-          npx --yes firebase-tools@latest deploy \
-            --only firestore:rules \
-            --project eclyrics-e8d68 \
-            --non-interactive
-
       - name: Deploy to Firebase Hosting
         run: |
           DEPLOY_LOG="${RUNNER_TEMP}/hosting-deploy.log"
@@ -67,3 +60,10 @@ jobs:
           fi
 
           echo "Production deploy succeeded."
+
+      - name: Deploy Firestore rules
+        run: |
+          npx --yes firebase-tools@latest deploy \
+            --only firestore:rules \
+            --project eclyrics-e8d68 \
+            --non-interactive

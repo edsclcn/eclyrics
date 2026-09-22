@@ -16,6 +16,7 @@
     let selectedSongId = null;
     let formMode = 'create';
     let unsubscribeLibrary = null;
+    let statusTimer = 0;
 
     function $(id) {
         return document.getElementById(id);
@@ -68,7 +69,7 @@
     }
 
     function getSongAdaptationLabelForRow(song) {
-        return songDisplay()?.getSongAdaptationLabel?.(song) || '';
+        return songDisplay()?.getSongAdaptationSearchLabel?.(song) || '';
     }
 
     function truncateLyricsPreviewForRow(lyrics) {
@@ -112,13 +113,25 @@
         if (!showAdapt && adaptInput) adaptInput.value = '';
     }
 
-    function setStatus(message, isError = false) {
+    function setStatus(message, isError = false, statusKind = isError ? 'error' : 'success') {
         const el = $('admin-status');
         if (!el) return;
+        if (statusTimer) {
+            window.clearTimeout(statusTimer);
+            statusTimer = 0;
+        }
         el.textContent = message || '';
         el.classList.toggle('admin-status--error', isError);
-        el.classList.toggle('admin-status--success', !isError && !!message);
+        el.classList.toggle('admin-status--success', !isError && statusKind === 'success' && !!message);
+        el.classList.toggle('admin-status--pending', !isError && statusKind === 'pending' && !!message);
         el.hidden = !message;
+        if (message && !isError && statusKind === 'success') {
+            statusTimer = window.setTimeout(() => {
+                el.hidden = true;
+                el.textContent = '';
+                statusTimer = 0;
+            }, 4000);
+        }
     }
 
     function setFormMode(mode) {
@@ -239,6 +252,20 @@
             });
             wrap.appendChild(btn);
         });
+        if (activeCategoryFilters.size > 0) {
+            const clearBtn = document.createElement('button');
+            clearBtn.type = 'button';
+            clearBtn.className = 'block-source-filter-clear';
+            clearBtn.setAttribute('aria-label', 'Clear category filters');
+            clearBtn.title = 'Clear category filters';
+            clearBtn.innerHTML = '<span aria-hidden="true">×</span><span>Clear</span>';
+            clearBtn.addEventListener('click', () => {
+                activeCategoryFilters.clear();
+                renderSearchFilters();
+                renderSearchResults($('admin-search')?.value || '');
+            });
+            wrap.appendChild(clearBtn);
+        }
     }
 
     function renderSearchResults(query) {
@@ -299,18 +326,21 @@
 
             const titleWrap = document.createElement('span');
             titleWrap.className = 'block-source-result__title-wrap';
+            const titleLine = document.createElement('span');
+            titleLine.className = 'block-source-result__title-line';
             const titleSpan = document.createElement('span');
             titleSpan.className = 'block-source-result__title';
             titleSpan.textContent = getPopupSongTitleForRow(song);
-            titleWrap.appendChild(titleSpan);
+            titleLine.appendChild(titleSpan);
 
             const versionDisplay = getSongVersionDisplay(song.version);
             if (versionDisplay) {
                 const versionSpan = document.createElement('span');
                 versionSpan.className = 'block-source-result__version';
                 versionSpan.textContent = versionDisplay;
-                titleWrap.appendChild(versionSpan);
+                titleLine.appendChild(versionSpan);
             }
+            titleWrap.appendChild(titleLine);
 
             const adaptLabel = getSongAdaptationLabelForRow(song);
             if (adaptLabel) {
@@ -370,6 +400,11 @@
         const api = getLibraryApi();
         if (!api) return;
         const data = readFormData();
+        if (data.category.length === 0) {
+            setStatus('At least one category is required.', true);
+            document.querySelector('#admin-form-categories button')?.focus();
+            return;
+        }
         if (!String(data.title).trim()) {
             setStatus('Title is required.', true);
             $('admin-form-title')?.focus();
@@ -383,17 +418,17 @@
 
         const saveBtn = $('admin-save-btn');
         if (saveBtn) saveBtn.disabled = true;
-        setStatus('Saving…');
+        setStatus('Saving…', false, 'pending');
 
         try {
             if (formMode === 'edit' && selectedSongId) {
                 await api.updateLyric(selectedSongId, data);
-                setStatus('Lyrics updated.');
+                setStatus(`Saved “${String(data.title).trim()}”.`);
             } else {
                 const newId = await api.createLyric(data);
                 selectedSongId = newId;
                 setFormMode('edit');
-                setStatus('Lyrics added to library.');
+                setStatus(`Saved “${String(data.title).trim()}”.`);
             }
             renderSearchResults($('admin-search')?.value || '');
             const email = window.__eclyricsAuth?.user?.email || '';
@@ -485,13 +520,13 @@
 
         const deleteBtn = $('admin-delete-btn');
         if (deleteBtn) deleteBtn.disabled = true;
-        setStatus('Deleting…');
+        setStatus('Deleting…', false, 'pending');
 
         try {
             await api.deleteLyric(selectedSongId);
             clearForm();
             setFormMode('create');
-            setStatus('Lyrics deleted.');
+            setStatus(`Deleted “${title}”.`);
             renderSearchResults($('admin-search')?.value || '');
         } catch (e) {
             setStatus(e.message || 'Delete failed.', true);

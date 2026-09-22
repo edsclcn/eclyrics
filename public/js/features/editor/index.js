@@ -47,37 +47,8 @@ let activeBlockTabId = null;
 /** @type {Record<string, ReturnType<typeof setTimeout>>} */
 const prompterLineupSyncTimers = {};
 
-let blockSourceTargetTextarea = null;
-const SONG_LIBRARY_BROWSE_LIMIT = 20;
-const SONG_LIBRARY_SEARCH_LIMIT = 10;
 /** Pasted text at or above this length in the add-lyrics dialog auto-fills the block. */
-const BLOCK_SOURCE_AUTO_PASTE_MIN_CHARS = 50;
-
-/* ─────────────────────────────────────────────────────────
- * SONG CATEGORY PILLS — colors, filters, restricted states
- *
- *   himnario    light blue
- *   adaptation  yellow
- *   original    dark blue
- *   asop/f      purple
- *   revision    orange  (non-selectable)
- *   archived    red     (non-selectable)
- *
- *   revision/archived → visible in search, not addable to blocks; editable in admin
- * ───────────────────────────────────────────────────────── */
-const SONG_CATEGORY_FILTERS = [
-    { slug: 'himnario', label: 'Himnario' },
-    { slug: 'original', label: 'Original' },
-    { slug: 'adaptation', label: 'Adaptation' },
-    { slug: 'asop-f', label: 'ASOP/F', aliases: ['asop/f', 'asopf'] },
-    { slug: 'revision', label: 'Revision' },
-    { slug: 'archived', label: 'Archived' },
-];
-
-const RESTRICTED_CATEGORY_SLUGS = new Set(['revision', 'archived']);
-
-/** @type {Set<string>} */
-let blockSourceActiveCategoryFilters = new Set();
+const BLOCK_SOURCE_AUTO_PASTE_MIN_CHARS = window.eclyricsEditorBlockSource?.AUTO_PASTE_MIN_CHARS || 50;
 
 function defaultPrompterSync() {
     const fs = parseFloat(localStorage.getItem('eclyrics-prompter-fontSize'));
@@ -192,7 +163,7 @@ function runPrompterParityCheck() {
     const guard = getSyncGuardApi();
     if (!guard || !lastPrompterSync) return;
 
-    /** @type {import('./prompter-sync-guard').ParityDrift[]} */
+    /** @type {import('../prompter/prompter-sync-guard').ParityDrift[]} */
     const drifts = [];
 
     const dom = readPreviewViewfinderMetrics();
@@ -928,7 +899,7 @@ function getActiveTabId() {
     return t ? parseInt(t.dataset.tabId, 10) : null;
 }
 
-const BLOCK_TITLE_MAX_LEN = 25;
+const BLOCK_TITLE_MAX_LEN = 35;
 
 function firstLineFromValue(text) {
     if (!text || !String(text).trim()) return '';
@@ -1628,7 +1599,13 @@ function onBlockContentChanged(textarea) {
     maintainEmptySlotForTab(tabId);
 }
 
-function applyLyricsToBlock(textarea, lyrics, title, hymnNum = '', { uppercaseTitle = true } = {}) {
+function applyLyricsToBlock(
+    textarea,
+    lyrics,
+    title,
+    hymnNum = '',
+    { uppercaseTitle = true, adaptationLabel = '' } = {},
+) {
     if (!textarea) return;
     delete textarea.dataset.blockTitle;
     let resolvedTitle = String(title ?? '').trim();
@@ -1636,7 +1613,9 @@ function applyLyricsToBlock(textarea, lyrics, title, hymnNum = '', { uppercaseTi
     const hymnNumText = String(hymnNum || '').trim();
     const hymnHeading = hymnNumText.replace(/^#\s*/, '');
     const fullTitle = hymnHeading ? `#${hymnHeading}\n${resolvedTitle}` : resolvedTitle;
-    textarea.value = formatBlockLyricsContent(fullTitle, lyrics);
+    const adaptationHeading = String(adaptationLabel || '').trim();
+    const promptTitle = adaptationHeading ? `${fullTitle}\n${adaptationHeading}` : fullTitle;
+    textarea.value = formatBlockLyricsContent(promptTitle, lyrics);
     textarea.dispatchEvent(new Event('input', { bubbles: true }));
     onBlockContentChanged(textarea);
     selectTextarea(textarea);
@@ -1668,433 +1647,27 @@ function getBlockSourceDialogTitle(textarea) {
     return label && label !== '—' ? `Add lyrics · ${label}` : 'Add lyrics to block';
 }
 
-function renderSongLibraryNote(message, show = true) {
-    const note = document.getElementById('block-source-library-note');
-    if (!note) return;
-    note.textContent = message;
-    note.hidden = !show;
-}
-
-function getSongLibraryApi() {
-    return window.eclyricsSongLibrary || null;
-}
-
-function getSongLibraryState() {
-    const api = getSongLibraryApi();
-    if (!api || typeof api.getState !== 'function') {
-        return { loaded: true, error: 'Song library module is not loaded.', count: 0 };
-    }
-    return api.getState();
-}
-
-function categoryToSlug(category) {
-    const normalized = String(category || '').trim().toLowerCase();
-    if (normalized === 'asop/f' || normalized === 'asopf' || normalized === 'asop-f') return 'asop-f';
-    return normalized.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-}
-
-function songHasCategorySlug(song, slug) {
-    if (!Array.isArray(song?.category)) return false;
-    const filterDef = SONG_CATEGORY_FILTERS.find((entry) => entry.slug === slug);
-    const aliases = filterDef?.aliases || [];
-    return song.category.some((entry) => {
-        const entrySlug = categoryToSlug(entry);
-        return entrySlug === slug || aliases.includes(String(entry || '').trim().toLowerCase());
-    });
-}
-
-function isAdaptationCategory(song) {
-    return songHasCategorySlug(song, 'adaptation');
-}
-
-function shouldOmitHymnNumForSong(song) {
-    return songHasCategorySlug(song, 'adaptation') && songHasCategorySlug(song, 'himnario');
-}
-
-function isRestrictedSong(song) {
-    return [...RESTRICTED_CATEGORY_SLUGS].some((slug) => songHasCategorySlug(song, slug));
-}
-
-function buildSongCategoryPills(song) {
-    const categories = Array.isArray(song?.category) ? song.category.filter(Boolean) : [];
-    if (categories.length === 0) return [];
-
-    const slugs = categories.map((entry) => categoryToSlug(entry));
-    const hasRevision = slugs.includes('revision');
-    const hasArchived = slugs.includes('archived');
-
-    if (hasRevision || hasArchived) {
-        const pills = [];
-        if (hasRevision) pills.push({ text: 'REVISION', slug: 'revision' });
-        if (hasArchived) pills.push({ text: 'ARCHIVED', slug: 'archived' });
-        return pills;
-    }
-
-    return categories.map((category) => ({
-        text: String(category).trim().toUpperCase(),
-        slug: categoryToSlug(category),
-    }));
-}
-
-function queryTargetsRestrictedCategory(query) {
-    const q = String(query || '').trim().toLowerCase();
-    return q.includes('revision') || q.includes('archived') || q.includes('archive');
-}
-
-function isFilteringRestrictedCategories() {
-    return blockSourceActiveCategoryFilters.has('revision') || blockSourceActiveCategoryFilters.has('archived');
-}
-
-function deprioritizeRestrictedResults(songs, query) {
-    if (isFilteringRestrictedCategories() || queryTargetsRestrictedCategory(query)) {
-        return songs;
-    }
-    const normal = [];
-    const restricted = [];
-    songs.forEach((song) => {
-        if (isRestrictedSong(song)) restricted.push(song);
-        else normal.push(song);
-    });
-    return [...normal, ...restricted];
-}
-
-function applyRestrictedSearchRules(songs, query) {
-    return deprioritizeRestrictedResults(songs, query);
-}
-
-function shouldIncludeRestrictedInBlockSource(query) {
-    const q = String(query || '').trim();
-    if (q.length > 0) return true;
-    if (isFilteringRestrictedCategories()) return true;
-    return queryTargetsRestrictedCategory(q);
-}
-
-function sortBlockSourceMatches(matches, query) {
-    const api = getSongLibraryApi();
-    const q = String(query || '').trim();
-    if (!api?.sortSongsForCategoryFilters) return matches;
-    if (!blockSourceActiveCategoryFilters.has('himnario')) return matches;
-    // Empty search + Himnario: hymn order. With a query, keep library search ranking.
-    if (q.length > 0) return matches;
-
-    if (!shouldIncludeRestrictedInBlockSource(query)) {
-        return api.sortSongsForCategoryFilters(matches, blockSourceActiveCategoryFilters);
-    }
-
-    const normal = [];
-    const restricted = [];
-    matches.forEach((song) => {
-        if (isRestrictedSong(song)) restricted.push(song);
-        else normal.push(song);
-    });
-    const sortedNormal = api.sortSongsForCategoryFilters(normal, blockSourceActiveCategoryFilters);
-    const sortedRestricted = api.sortSongsForCategoryFilters(restricted, blockSourceActiveCategoryFilters);
-    return [...sortedNormal, ...sortedRestricted];
-}
-
-function mergeRestrictedBlockSourceMatches(matches, query) {
-    if (!shouldIncludeRestrictedInBlockSource(query)) return matches;
-
-    const api = getSongLibraryApi();
-    if (!api || typeof api.getSongs !== 'function') return matches;
-
-    const q = String(query || '').trim();
-    const pool = q
-        ? typeof api.matchAllSongs === 'function'
-            ? api.matchAllSongs(q)
-            : typeof api.searchAdmin === 'function'
-              ? api.searchAdmin(q)
-              : typeof api.search === 'function'
-                ? api.search(q, api.getState?.()?.count || matches.length)
-                : api.getSongs()
-        : api.getSongs();
-
-    const restricted = filterSongsByCategory(pool.filter(isRestrictedSong));
-    if (restricted.length === 0) return matches;
-
-    const seen = new Set(matches.map((song) => song.id));
-    const extras = restricted.filter((song) => !seen.has(song.id));
-    if (extras.length === 0) return matches;
-
-    return deprioritizeRestrictedResults([...matches, ...extras], q);
-}
-
-function filterSongsByCategory(songs) {
-    if (blockSourceActiveCategoryFilters.size === 0) return songs;
-    return songs.filter((song) =>
-        [...blockSourceActiveCategoryFilters].every((slug) => songHasCategorySlug(song, slug)),
-    );
-}
-
-/** Block-source list: category-only browse uses the full library, not the global 20-song browse slice. */
-function getBlockSourceSearchMatches(query) {
-    const api = getSongLibraryApi();
-    const q = String(query || '').trim();
-    if (!api || typeof api.search !== 'function') return [];
-
-    if (!q && blockSourceActiveCategoryFilters.size > 0) {
-        const pool = typeof api.getSongs === 'function' ? api.getSongs() : [];
-        let matches = filterSongsByCategory(pool);
-        if (!shouldIncludeRestrictedInBlockSource(q)) {
-            matches = matches.filter((song) => !isRestrictedSong(song));
-        }
-        return sortBlockSourceMatches(matches, q);
-    }
-
-    const limit = q ? SONG_LIBRARY_SEARCH_LIMIT : SONG_LIBRARY_BROWSE_LIMIT;
-    let matches = api.search(q, limit);
-    matches = filterSongsByCategory(matches);
-    if (!shouldIncludeRestrictedInBlockSource(q)) {
-        matches = matches.filter((song) => !isRestrictedSong(song));
-    }
-    matches = mergeRestrictedBlockSourceMatches(matches, q);
-    matches = applyRestrictedSearchRules(matches, q);
-    return sortBlockSourceMatches(matches, q);
-}
-
-function renderBlockSourceCategoryFilters() {
-    const wrap = document.getElementById('block-source-filters');
-    if (!wrap) return;
-    wrap.replaceChildren();
-    SONG_CATEGORY_FILTERS.forEach(({ slug, label }) => {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'block-source-filter-pill';
-        btn.dataset.category = slug;
-        btn.textContent = label;
-        const isActive = blockSourceActiveCategoryFilters.has(slug);
-        btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
-        if (isActive) {
-            btn.classList.add('block-source-filter-pill--active', `block-source-filter-pill--${slug}`);
-        }
-        btn.addEventListener('click', () => {
-            if (blockSourceActiveCategoryFilters.has(slug)) {
-                blockSourceActiveCategoryFilters.delete(slug);
-            } else {
-                blockSourceActiveCategoryFilters.add(slug);
-            }
-            renderBlockSourceCategoryFilters();
-            const search = document.getElementById('block-source-search');
-            renderBlockSourceSearchResults(search?.value || '');
-        });
-        wrap.appendChild(btn);
-    });
-}
-
-function getSongVersionDisplay(version) {
-    return getSongLibraryApi()?.formatSongVersionDisplay?.(version) || '';
-}
-
-function getSongAdaptationLabel(song) {
-    return getSongLibraryApi()?.getSongAdaptationLabel?.(song) || '';
-}
-
-function truncateLyricsPreview(lyrics, maxChars = 150) {
-    return getSongLibraryApi()?.truncateLyricsPreview?.(lyrics, maxChars) || '';
-}
-
-function getPopupSongTitle(song) {
-    return getSongLibraryApi()?.getPopupSongTitle?.(song) || '(Untitled)';
-}
-
-function updateBlockSourceDialogHeader(textarea) {
-    const titleEl = document.getElementById('block-source-dialog-title');
-    if (titleEl && textarea) titleEl.textContent = getBlockSourceDialogTitle(textarea);
-}
-
-function resetBlockSourceDialog() {
-    const search = document.getElementById('block-source-search');
-    blockSourceActiveCategoryFilters.clear();
-    renderBlockSourceCategoryFilters();
-    if (search) {
-        search.value = '';
-        renderBlockSourceSearchResults('');
-    }
-    if (blockSourceTargetTextarea) updateBlockSourceDialogHeader(blockSourceTargetTextarea);
-}
-
-function focusBlockSourceSearch() {
-    const search = document.getElementById('block-source-search');
-    if (!search) return;
-    renderBlockSourceSearchResults(search.value);
-    requestAnimationFrame(() => search.focus());
-}
-
-function renderBlockSourceSearchResults(query) {
-    const list = document.getElementById('block-source-results');
-    if (!list) return;
-    const q = query.trim();
-    const state = getSongLibraryState();
-    const matches = getBlockSourceSearchMatches(query);
-    list.replaceChildren();
-    if (matches.length === 0) {
-        const li = document.createElement('li');
-        li.className = 'block-source-results-empty';
-        if (state.error) li.textContent = state.error;
-        else if (!state.loaded) li.textContent = 'Loading song library…';
-        else if (blockSourceActiveCategoryFilters.size > 0) {
-            li.textContent = 'No songs match your search and filters.';
-        } else li.textContent = q ? 'No songs match your search.' : 'No songs in library yet.';
-        list.appendChild(li);
-        if (state.error) renderSongLibraryNote(state.error, true);
-        else if (!state.loaded) renderSongLibraryNote('Loading song library…', true);
-        return;
-    }
-    if (q && matches.length === SONG_LIBRARY_SEARCH_LIMIT) {
-        renderSongLibraryNote(`Showing top ${SONG_LIBRARY_SEARCH_LIMIT} matches. Refine search for more.`, true);
-    } else if (!q && blockSourceActiveCategoryFilters.size === 0 && state.count > SONG_LIBRARY_BROWSE_LIMIT) {
-        renderSongLibraryNote(`Showing ${SONG_LIBRARY_BROWSE_LIMIT} of ${state.count} songs. Search to find more.`, true);
-    } else {
-        renderSongLibraryNote('', false);
-    }
-    matches.forEach((song) => {
-        const li = document.createElement('li');
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        const restricted = isRestrictedSong(song);
-        btn.className = restricted
-            ? 'block-source-result block-source-result--restricted'
-            : 'block-source-result';
-        btn.setAttribute('role', 'option');
-        if (restricted) {
-            btn.disabled = true;
-            btn.setAttribute('aria-disabled', 'true');
-            btn.title = 'Revision and archived lyrics cannot be added to blocks';
-        }
-        const topRow = document.createElement('span');
-        topRow.className = 'block-source-result__top';
-        const titleWrap = document.createElement('span');
-        titleWrap.className = 'block-source-result__title-wrap';
-        const titleSpan = document.createElement('span');
-        titleSpan.className = 'block-source-result__title';
-        titleSpan.textContent = getPopupSongTitle(song);
-        titleWrap.appendChild(titleSpan);
-        const versionDisplay = getSongVersionDisplay(song.version);
-        if (versionDisplay) {
-            const versionSpan = document.createElement('span');
-            versionSpan.className = 'block-source-result__version';
-            versionSpan.textContent = versionDisplay;
-            titleWrap.appendChild(versionSpan);
-        }
-        const adaptLabel = getSongAdaptationLabel(song);
-        if (adaptLabel) {
-            const adaptSpan = document.createElement('span');
-            adaptSpan.className = 'block-source-result__adapt';
-            adaptSpan.textContent = adaptLabel;
-            titleWrap.appendChild(adaptSpan);
-        }
-        const pillWrap = document.createElement('span');
-        pillWrap.className = 'block-source-result__pills';
-        buildSongCategoryPills(song).forEach((pillData) => {
-            const pill = document.createElement('span');
-            pill.className = `block-source-pill block-source-pill--${pillData.slug}`;
-            pill.textContent = pillData.text;
-            pillWrap.appendChild(pill);
-        });
-        topRow.append(titleWrap, pillWrap);
-        const metaSpan = document.createElement('span');
-        metaSpan.className = 'block-source-result__meta';
-        metaSpan.textContent = truncateLyricsPreview(song.lyrics);
-        btn.append(topRow, metaSpan);
-        if (!restricted) {
-            btn.addEventListener('click', () => {
-                if (blockSourceTargetTextarea) {
-                    const hymnNum = shouldOmitHymnNumForSong(song) ? '' : song.hymnNum;
-                    applyLyricsToBlock(blockSourceTargetTextarea, song.lyrics, song.title, hymnNum);
-                }
-                closeBlockSourceDialog();
-            });
-        }
-        li.appendChild(btn);
-        list.appendChild(li);
+function initBlockSourceDialog() {
+    window.eclyricsEditorBlockSource?.init({
+        getBlockSourceDialogTitle,
+        applyLyricsToBlock,
+        activateBlockTypeMode,
+        pasteLyricsFromClipboard,
     });
 }
 
 function openBlockSourceDialog(textarea) {
-    const dlg = document.getElementById('block-source-dialog');
-    if (!dlg || !textarea) return;
-    blockSourceTargetTextarea = textarea;
-    resetBlockSourceDialog();
-    dlg.hidden = false;
-    dlg.setAttribute('aria-hidden', 'false');
-    focusBlockSourceSearch();
+    window.eclyricsEditorBlockSource?.open(textarea);
 }
 
 function closeBlockSourceDialog() {
-    const dlg = document.getElementById('block-source-dialog');
-    if (!dlg) return;
-    dlg.hidden = true;
-    dlg.setAttribute('aria-hidden', 'true');
-    blockSourceTargetTextarea = null;
-    resetBlockSourceDialog();
+    window.eclyricsEditorBlockSource?.close();
 }
 
 function isBlockSourceDialogOpen() {
-    const dlg = document.getElementById('block-source-dialog');
-    return !!dlg && !dlg.hidden;
+    return Boolean(window.eclyricsEditorBlockSource?.isOpen());
 }
 
-function handleBlockSourceDialogPaste(e) {
-    if (!isBlockSourceDialogOpen() || !blockSourceTargetTextarea) return;
-
-    const raw = e.clipboardData?.getData('text/plain') ?? '';
-    if (raw.trim().length < BLOCK_SOURCE_AUTO_PASTE_MIN_CHARS) return;
-
-    e.preventDefault();
-    const ta = blockSourceTargetTextarea;
-    closeBlockSourceDialog();
-    pasteLyricsFromClipboard(ta, raw);
-}
-
-function initBlockSourceDialog() {
-    const dlg = document.getElementById('block-source-dialog');
-    if (!dlg) return;
-
-    dlg.addEventListener('paste', handleBlockSourceDialogPaste, true);
-
-    document.getElementById('block-source-dialog-close')?.addEventListener('click', closeBlockSourceDialog);
-    document.getElementById('block-source-dialog-backdrop')?.addEventListener('click', closeBlockSourceDialog);
-
-    document.getElementById('block-source-type')?.addEventListener('click', () => {
-        if (!blockSourceTargetTextarea) return;
-        const ta = blockSourceTargetTextarea;
-        closeBlockSourceDialog();
-        activateBlockTypeMode(ta);
-    });
-
-    document.getElementById('block-source-paste')?.addEventListener('click', () => {
-        if (!blockSourceTargetTextarea) return;
-        const ta = blockSourceTargetTextarea;
-        closeBlockSourceDialog();
-        void pasteLyricsFromClipboard(ta);
-    });
-
-    const search = document.getElementById('block-source-search');
-    search?.addEventListener('input', () => renderBlockSourceSearchResults(search.value));
-
-    renderBlockSourceCategoryFilters();
-
-    const libraryApi = getSongLibraryApi();
-    if (libraryApi) {
-        libraryApi.onChange(() => {
-            const next = document.getElementById('block-source-search')?.value || '';
-            renderBlockSourceSearchResults(next);
-            const state = getSongLibraryState();
-            if (state.error) renderSongLibraryNote(state.error, true);
-            else if (!state.loaded) renderSongLibraryNote('Loading song library…', true);
-            else if (state.count === 0) renderSongLibraryNote('No songs found in Firestore library.', true);
-        });
-        void libraryApi.start();
-    } else {
-        renderSongLibraryNote('Song library module is not loaded.', true);
-    }
-
-    document.addEventListener('keydown', (e) => {
-        if (e.key !== 'Escape' || dlg.hidden) return;
-        e.preventDefault();
-        closeBlockSourceDialog();
-    });
-}
 
 function addTabContent(tabId) {
     const tabContent = document.getElementById('tab-content');

@@ -143,10 +143,6 @@
     --lyrics-dock-btn-hover-bg: var(--gray-6);
     --lyrics-focus-ring: var(--focus-ring);
 
-    /* Event prompter (editor chrome) */
-    --ep-brand-blue: #0070c0;
-    --ep-brand-blue-soft: #7ec8ff;
-
     --nav-active-fg: var(--blue-deep);
     --nav-active-border: rgba(37, 99, 168, 0.35);
 }

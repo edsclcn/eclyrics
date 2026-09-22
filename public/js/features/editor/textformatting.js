@@ -4,13 +4,21 @@ const validChars = [
 ];
 const closeTag = '</span>';
 
+function italicizePromptText(line) {
+    return line.replace(/\([^()\r\n]*\)|\b(?:Instrumental|Interlude)\b/gi, '<em>$&</em>');
+}
+
 function formatText(text) {
     if (!text) return '';
-    let lines = text.split('\n');
+    const normalizedText = window.eclyricsSmartQuotes?.normalizeSmartQuotes?.(text) || text;
+    let lines = normalizedText.split('\n');
 
     for (let i = 0; i < lines.length; i++) {
-        let line = lines[i];
-        if (!line || !line.includes(SYMBOL)) continue;
+        let line = italicizePromptText(lines[i]);
+        if (!line || !line.includes(SYMBOL)) {
+            lines[i] = line;
+            continue;
+        }
 
         let formattedLine = '';
         let openTags = [];

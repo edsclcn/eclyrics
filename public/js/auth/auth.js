@@ -120,10 +120,10 @@
 
         if (!firebase.apps.length) {
             if (firebaseConfigIncomplete()) {
-                console.error('eclyrics: Edit public/js/firebase-config.js with Firebase Console values.');
+                console.error('eclyrics: Edit public/js/core/firebase-config.js with Firebase Console values.');
                 if (authErrorEl) {
                     authErrorEl.textContent =
-                        'Paste your web app firebaseConfig into js/firebase-config.js (see README).';
+                        'Paste your web app firebaseConfig into js/core/firebase-config.js (see README).';
                 }
                 markAuthReadyWithoutUser();
                 return;
