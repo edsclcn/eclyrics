@@ -4,10 +4,11 @@
   "description": "",
   "main": "electron/main.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "echo \"Build not yet implemented\"",
+    "test": "node scripts/check-javascript.js && node --test test/*.test.js",
+    "build": "npm test",
     "electron": "electron .",
-    "electron:local": "ECLYRICS_APP_URL=http://127.0.0.1:5500 electron ."
+    "electron:local": "ECLYRICS_APP_URL=http://127.0.0.1:5501 electron .",
+    "dev": "firebase emulators:start --only hosting"
   },
   "repository": {
     "type": "git",
@@ -22,6 +23,7 @@
   },
   "homepage": "https://github.com/edsclcn/eclyrics#readme",
   "devDependencies": {
-    "electron": "^41.1.1"
+    "electron": "^41.1.1",
+    "firebase-admin": "^13.10.0"
   }
 }

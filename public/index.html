@@ -4,10 +4,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <script src="js/theme-init.js"></script>
+    <script src="js/ui/theme-init.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link rel="stylesheet" href="assets/css/index.css">
-    <link rel="stylesheet" href="assets/css/event-prompter.css">
     <link rel="icon" type="image/png" href="assets/images/logo.png">
     <title>EC Lyrics</title>
 </head>
@@ -23,7 +22,7 @@
             <div class="auth-gate__inner">
                 <header class="auth-gate-brand">
                     <h1 class="auth-gate-brand__title">EC Lyrics</h1>
-                    <p class="auth-gate-brand__tagline">Lyric prompts and stage preview.</p>
+                    <p class="auth-gate-brand__tagline">Lyric prompt and preview.</p>
                 </header>
                 <div class="auth-gate-card">
                     <h2 id="auth-gate-title" class="auth-gate-title">Sign in to continue</h2>
@@ -53,8 +52,7 @@
                     aria-label="Close"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
             </header>
             <div class="block-source-body" id="block-source-body">
-                <p class="block-source-dialog__lede">Search your library or paste manually. Format: <strong>title</strong>,
-                    blank line, then lyrics.</p>
+                <p class="block-source-dialog__lede">Search by title, hymn number, lyrics, or adaptation source.</p>
                 <label class="visually-hidden" for="block-source-search">Search song library</label>
                 <div class="block-source-search-wrap">
                     <i class="fa-solid fa-magnifying-glass block-source-search-icon" aria-hidden="true"></i>
@@ -65,7 +63,7 @@
                     aria-label="Filter by category"></div>
                 <ul id="block-source-results" class="block-source-results" role="listbox"
                     aria-label="Song search results"></ul>
-                <p class="block-source-library-note" id="block-source-library-note">Loading song library…</p>
+                <p class="block-source-library-note" id="block-source-library-note" role="status" aria-live="polite">Loading song library…</p>
                 <div class="block-source-alt">
                     <span class="block-source-alt__rule" aria-hidden="true">or</span>
                     <button type="button" class="block-source-option" id="block-source-type" data-block-source="type">
@@ -107,7 +105,7 @@
                 <div class="sidebar-brand-row">
                     <div class="sidebar-brand-text">
                         <h1>EC Lyrics</h1>
-                        <p class="sidebar-tagline">Lyric prompts and stage preview.</p>
+                        <p class="sidebar-tagline">Lyric prompt and preview.</p>
                     </div>
                     <button type="button" class="sidebar-pin-btn" id="sidebar-toggle" title="Collapse sidebar"
                         aria-expanded="true" aria-controls="sidebar">
@@ -129,10 +127,6 @@
                     <span class="nav-icon" aria-hidden="true"><i class="fa-solid fa-clapperboard"></i></span>
                     <span class="nav-label">Video Lyrics</span>
                 </button>
-                <button type="button" data-panel="event" aria-label="Event Prompter">
-                    <span class="nav-icon" aria-hidden="true"><i class="fa-solid fa-bullhorn"></i></span>
-                    <span class="nav-label">Event Prompter</span>
-                </button>
                 <button type="button" data-panel="admin" aria-label="Admin" id="sidebar-nav-admin" hidden>
                     <span class="nav-icon" aria-hidden="true"><i class="fa-solid fa-shield"></i></span>
                     <span class="nav-label">Admin</span>
@@ -140,6 +134,11 @@
             </nav>
             <div class="sidebar-utilities" id="sidebar-utilities">
                 <span class="sidebar-auth-user" id="auth-user-label" aria-live="polite"></span>
+                <button type="button" class="sidebar-utility-btn sidebar-help-btn" id="workspace-tour-btn"
+                    title="Help and workspace tour" aria-label="Help and workspace tour">
+                    <i class="fa-solid fa-circle-question" aria-hidden="true"></i>
+                    <span class="sidebar-utility-label">Help &amp; tour</span>
+                </button>
                 <button type="button" class="sidebar-utility-btn theme-toggle" id="theme-toggle" aria-pressed="false"
                     title="Toggle dark mode" aria-label="Dark mode">
                     <i class="fa-solid fa-moon" aria-hidden="true"></i>
@@ -151,7 +150,43 @@
                     <span class="sidebar-utility-label">Sign out</span>
                 </button>
             </div>
-        </aside>
+                </aside>
+
+        <div class="workspace-tour" id="workspace-tour-dialog" hidden role="dialog" aria-modal="true"
+            aria-labelledby="workspace-tour-title" aria-describedby="workspace-tour-description">
+            <div class="workspace-tour__backdrop" id="workspace-tour-backdrop" tabindex="-1"></div>
+            <div class="workspace-tour__card">
+                <header class="workspace-tour__head">
+                    <div>
+                        <p class="workspace-tour__eyebrow">Workspace guide</p>
+                        <h2 id="workspace-tour-title">Build your first lineup</h2>
+                    </div>
+                    <button type="button" class="workspace-tour__close" id="workspace-tour-close"
+                        aria-label="Close help and workspace tour">
+                        <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                    </button>
+                </header>
+
+                <div class="workspace-tour__content">
+                    <div class="workspace-tour__visual" id="workspace-tour-visual" aria-hidden="true"></div>
+                    <div class="workspace-tour__copy">
+                        <p class="workspace-tour__step" id="workspace-tour-step"></p>
+                        <div class="workspace-tour__control-definition" id="workspace-tour-control-definition" hidden
+                            aria-live="polite"></div>
+                        <p class="workspace-tour__description" id="workspace-tour-description"></p>
+                    </div>
+                </div>
+
+                <footer class="workspace-tour__footer">
+                    <div class="workspace-tour__progress" id="workspace-tour-progress" aria-label="Tour progress"></div>
+                    <div class="workspace-tour__actions">
+                        <button type="button" class="workspace-tour__skip" id="workspace-tour-skip">Skip tour</button>
+                        <button type="button" class="btn-toolbar" id="workspace-tour-prev">Back</button>
+                        <button type="button" class="btn-toolbar btn-toolbar-primary" id="workspace-tour-next">Next</button>
+                    </div>
+                </footer>
+            </div>
+        </div>
 
         <div class="app-column">
             <div class="app-main">
@@ -166,15 +201,12 @@
                                         <button type="button" id="add-tab-btn" title="Add another song tab">+</button>
                                     </div>
                                     <div id="button-div">
-                                        <button type="button" class="port-button" id="csv-btn" onclick="exportCSV()"
-                                            title="Download first-line titles as CSV"><i
-                                                class="fa-solid fa-file-csv"></i></button>
                                         <button type="button" class="port-button" id="export-btn"
-                                            onclick="exportLineup()" title="Download full lineup as a text file"><i
+                                            onclick="exportLineup()" title="Save lineup" aria-label="Save lineup"><i
                                                 class="fa-solid fa-download"></i></button>
                                         <button type="button" class="port-button" id="import-btn"
-                                            onclick="importLineup()" title="Load lineup from a text file"><i
-                                                class="fa-solid fa-upload"></i></button>
+                                            onclick="importLineup()" title="Load lineup from JSON" aria-label="Load lineup from JSON"><i
+                                                class="fa-solid fa-folder-open"></i></button>
                                     </div>
                                 </div>
                                 <div class="block-toolbar">
@@ -194,9 +226,13 @@
                         <aside class="workspace-preview preview-stage--lyrics" data-stage-theme="lyrics"
                             id="workspace-preview-panel"
                             aria-label="Stage preview and prompter controls">
-                            <div class="preview-header">Stage preview</div>
                             <div class="preview-frame preview-frame--prompter-focus">
-                                <div class="preview-viewfinder-label">Live on prompter (16∶9)</div>
+                                <div class="preview-viewfinder-heading">
+                                    <div class="preview-viewfinder-label">
+                                        <span>Prompter preview</span>
+                                        <span class="preview-viewfinder-format">16∶9</span>
+                                    </div>
+                                </div>
                                 <div class="preview-viewfinder-slot">
                                     <div class="preview-viewfinder-16x9" id="preview-viewfinder-stage"
                                         title="Scroll or pinch-scroll adjusts the prompter when it is open. Use [ ] for text size.">
@@ -219,9 +255,9 @@
                                         aria-controls="preview-shortcuts-dialog"
                                         aria-expanded="false"
                                         title="Prompter keyboard shortcuts and tips">
-                                        <span class="preview-shortcuts-strip-lead"><i class="fa-solid fa-keyboard" aria-hidden="true"></i><span>Shortcuts</span></span>
+                                        <span class="preview-shortcuts-strip-lead"><i class="fa-solid fa-keyboard" aria-hidden="true"></i><span>Keyboard shortcuts</span></span>
                                         <span class="preview-shortcuts-strip-chevron" aria-hidden="true"><i class="fa-solid fa-circle-info"></i></span>
-                                        <span class="preview-shortcuts-strip-hint"> View all keyboard shortcuts here.</span>
+                                        <span class="preview-shortcuts-strip-hint"> Open the shortcut reference.</span>
                                     </button>
                                     <div class="preview-prompter-toolbar">
                                         <button type="button" class="btn-toolbar btn-toolbar-primary btn-toolbar-cta preview-send-btn"
@@ -310,6 +346,46 @@
                                 </div>
                             </div>
                         </aside>
+
+                        <div class="lineup-dialog" id="lineup-dialog" hidden role="dialog" aria-modal="true"
+                            aria-labelledby="lineup-dialog-title">
+                            <div class="lineup-dialog__backdrop" id="lineup-dialog-backdrop" tabindex="-1"></div>
+                            <div class="lineup-dialog__card">
+                                <header class="lineup-dialog__head">
+                                    <div>
+                                        <p class="lineup-dialog__eyebrow">Save lineup</p>
+                                        <h3 id="lineup-dialog-title">Review blocks before download</h3>
+                                    </div>
+                                    <button type="button" class="lineup-dialog__close" id="lineup-dialog-close"
+                                        aria-label="Close"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
+                                </header>
+                                <p class="lineup-dialog__lede" id="lineup-dialog-lede">Review the current tab, then choose an export format.</p>
+                                <div class="lineup-dialog__actions" role="group" aria-label="Lineup downloads">
+                                    <button type="button" class="btn-toolbar lineup-dialog__action" id="lineup-csv-btn">
+                                        <i class="fa-solid fa-file-csv" aria-hidden="true"></i>
+                                        <span>Save titles as CSV</span>
+                                    </button>
+                                    <button type="button" class="btn-toolbar btn-toolbar-primary lineup-dialog__action" id="lineup-json-btn">
+                                        <i class="fa-solid fa-download" aria-hidden="true"></i>
+                                        <span>Download full lineup (JSON)</span>
+                                    </button>
+                                </div>
+                                <div class="lineup-dialog__table-wrap">
+                                    <table class="lineup-dialog__table">
+                                        <caption class="visually-hidden">Current lineup blocks</caption>
+                                        <thead>
+                                            <tr>
+                                                <th scope="col">Block</th>
+                                                <th scope="col">Title</th>
+                                                <th scope="col">Lyrics</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="lineup-dialog-table-body"></tbody>
+                                    </table>
+                                </div>
+                                <p class="lineup-dialog__count" id="lineup-dialog-count" aria-live="polite"></p>
+                            </div>
+                        </div>
                     </div>
                 </section>
 
@@ -325,11 +401,6 @@
                         <h2 id="panel-video-title">Video Lyrics</h2>
                         <p>Video lyric tools will be available here.</p>
                     </div>
-                </section>
-
-                <section id="panel-event" class="panel" aria-labelledby="panel-event-title">
-                    <h2 id="panel-event-title" class="visually-hidden">Event Prompter</h2>
-                    <!-- Event Prompter workspace injected by event-prompter.js -->
                 </section>
 
                 <section id="panel-admin" class="panel" aria-labelledby="panel-admin-title">
@@ -382,8 +453,8 @@
                                             placeholder="Song title" />
                                     </div>
 
-                                    <fieldset class="admin-form-field admin-form-field--categories">
-                                        <legend>Categories</legend>
+                                    <fieldset class="admin-form-field admin-form-field--categories" aria-required="true">
+                                        <legend>Categories <span class="admin-form-required" aria-hidden="true">*</span></legend>
                                         <p class="admin-form-field-hint">Select one or more. Himnario shows hymn #; Adaptation shows adapt-of.</p>
                                         <div id="admin-form-categories" class="admin-form-categories" role="group"
                                             aria-label="Song categories"></div>
@@ -398,12 +469,12 @@
                                     <div id="admin-form-field-adapt" class="admin-form-field admin-form-field--conditional">
                                         <label for="admin-form-adapt-of">Adapt of</label>
                                         <input type="text" id="admin-form-adapt-of" autocomplete="off"
-                                            placeholder="Source hymn number or title" />
+                                            placeholder="Adaptation source title" />
                                     </div>
 
                                     <div class="admin-form-field">
                                         <label for="admin-form-version">Version</label>
-                                        <input type="text" id="admin-form-version" placeholder="e.g. K&T, Original" autocomplete="off" />
+                                        <input type="text" id="admin-form-version" placeholder="e.g. K&T, original" autocomplete="off" />
                                     </div>
 
                                     <div class="admin-form-field admin-form-field--lyrics">
@@ -482,17 +553,21 @@
     <script defer src="https://www.gstatic.com/firebasejs/12.10.0/firebase-auth-compat.js"></script>
     <script defer src="https://www.gstatic.com/firebasejs/12.10.0/firebase-firestore-compat.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/minisearch@7.1.2/dist/umd/index.min.js"></script>
-    <script defer src="js/firebase-config.js"></script>
-    <script defer src="js/auth.js"></script>
-    <script defer src="js/login.js"></script>
-    <script defer src="js/song-library.js"></script>
-    <script defer src="js/admin-panel.js"></script>
-    <script defer src="js/prompter-shortcuts.js"></script>
-    <script defer src="js/prompter-sync-guard.js"></script>
-    <script defer src="js/index.js"></script>
-    <script defer src="js/port.js"></script>
-    <script defer src="js/textformatting.js"></script>
-    <script defer src="js/event-prompter.js"></script>
+    <script defer src="js/core/firebase-config.js"></script>
+    <script defer src="js/auth/auth.js"></script>
+    <script defer src="js/auth/login.js"></script>
+    <script defer src="js/features/editor/smart-quotes.js"></script>
+    <script defer src="js/library/song-model.js"></script>
+    <script defer src="js/library/song-search.js"></script>
+    <script defer src="js/library/song-library.js"></script>
+    <script defer src="js/features/admin/admin-panel.js"></script>
+    <script defer src="js/features/prompter/prompter-shortcuts.js"></script>
+    <script defer src="js/features/prompter/prompter-sync-guard.js"></script>
+    <script defer src="js/features/editor/block-source.js"></script>
+    <script defer src="js/features/editor/index.js"></script>
+    <script defer src="js/features/editor/workspace-tour.js"></script>
+    <script defer src="js/features/editor/port.js"></script>
+    <script defer src="js/features/editor/textformatting.js"></script>
 </body>
 
 </html>

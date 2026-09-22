@@ -1,7 +1,7 @@
 ---
 title: Song library search ranking and phrase narrowing
 category: frontend-search
-tags: [minisearch, song-library, fuzzy-search, ranking, revert]
+tags: [minisearch, song-library, fuzzy-search, ranking]
 date: 2026-07-08
 ---
 
@@ -9,39 +9,29 @@ date: 2026-07-08
 
 ## Problem
 
-Multi-word admin and Add lyrics search could **expand** results (OR matching) instead of narrowing them. Title matches were not prioritized over lyrics-only matches. Typos were only partially handled when MiniSearch was unavailable.
-
-## Symptoms
-
-- Adding words to a query returned **more** songs instead of fewer.
-- A song matching the query only in long lyrics text ranked the same as a title match.
-- Fallback search (before MiniSearch index ready) used whole-string substring match, not per-term AND.
-
-## Root cause
-
-`matchSongs()` on `main` called `state.searchIndex.search(q)` with MiniSearch defaults (`combineWith: 'OR'`) and no field boosts. Fallback used a single `includes(q)` check across fields.
+Multi-word Admin and Add lyrics searches could expand results instead of
+narrowing them. Title matches were not prioritized over lyrics-only matches.
 
 ## Resolution
 
-Centralized search in `public/js/song-library.js`:
+Search policy is centralized in the browser library search module:
 
-1. **`SEARCH_OPTIONS`** — `combineWith: 'AND'`, `fuzzy: 0.2`, field boosts (`title` highest, `lyrics` lowest).
-2. **`parseSearchQuery()`** — quoted `"phrases"` require contiguous match; unquoted words are AND terms.
-3. **`rankMatchedSongs()` + `computeFieldMatchScore()`** — post-rank by which field matched.
-4. **Fuzzy fallback** — Levenshtein-based token match when MiniSearch is absent.
-5. **`searchAdmin()`** — relevance order when querying; A–Z only for empty browse.
-
-Shared by `search()`, `searchAdmin()`, and `matchAllSongs`.
+1. Shared search options use AND matching, fuzzy matching, and field boosts.
+2. Query parsing supports terms and quoted phrases.
+3. Field-match scoring keeps title and adaptation-source matches above broad
+   lyrics-body matches.
+4. The same matcher powers Admin search and Add lyrics search.
 
 ## Verification
 
-- `sinisigaw ng pangalan` ⊆ results of `sinisigaw` (narrowing).
-- Title match for query term appears above lyrics-only match in top 10.
-- `"exact phrase"` query filters to songs containing that substring.
-- Revert steps documented in `docs/features/song-library-search/README.md`.
+- `sinisigaw ng pangalan` returns no more results than `sinisigaw`.
+- Title matches rank above lyrics-only matches.
+- Quoted phrases require a contiguous match.
+- Add lyrics and Admin search use the same in-memory index.
 
 ## Files
 
-- `public/js/song-library.js` — all search logic
-- `public/js/index.js` — consumes `search()` / `matchAllSongs`
-- `public/js/admin-panel.js` — consumes `searchAdmin()`
+- `public/js/library/song-search.js` — matching, parsing, and ranking helpers
+- `public/js/library/song-library.js` — Firestore listener and shared index
+- `public/js/features/editor/block-source.js` — Add lyrics rendering
+- `public/js/features/admin/admin-panel.js` — Admin rendering

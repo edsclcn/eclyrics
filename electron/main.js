@@ -4,7 +4,7 @@
  * switch to another app or window (e.g. OBS / vMix capture).
  *
  * Run from repo root: npm run electron
- * Local dev: serve hosting on 5500 (e.g. firebase serve --only hosting -p 5500), then npm run electron:local
+ * Local dev: run npm run dev, then npm run electron:local.
  *
  * On macOS you may still see harmless Chromium messages such as
  * "representedObject is not a WeakPtrToElectronMenuModelAsNSObject" or
@@ -23,7 +23,6 @@ const APP_URL =
   'https://eclyrics.web.app';
 
 const LYRICS_PROMPTER = { width: 1920, height: 1080 };
-const EVENT_PROMPTER_DISPLAY = { width: 900, height: 700 };
 
 let powerSaveBlockerId = null;
 
@@ -51,10 +50,9 @@ function createMainWindow() {
   mainWindow.webContents.setWindowOpenHandler((details) => {
     const u = details.url || '';
     const isLyricsPrompter = /\/prompter\.html(\?|$)/.test(u);
-    const isEventPrompterDisplay = /\/event-prompter-display\.html(\?|$)/.test(u);
 
-    if (isLyricsPrompter || isEventPrompterDisplay) {
-      const size = isLyricsPrompter ? LYRICS_PROMPTER : EVENT_PROMPTER_DISPLAY;
+    if (isLyricsPrompter) {
+      const size = LYRICS_PROMPTER;
       return {
         action: 'allow',
         overrideBrowserWindowOptions: {

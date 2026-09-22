@@ -24,5 +24,13 @@
     "providers": {
       "anonymous": true
     }
+  },
+  "emulators": {
+    "hosting": {
+      "port": 5501
+    },
+    "ui": {
+      "enabled": true
+    }
   }
 }

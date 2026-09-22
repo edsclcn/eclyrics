@@ -33,16 +33,8 @@ jobs:
           echo "GOOGLE_APPLICATION_CREDENTIALS=$SA_PATH" >> "$GITHUB_ENV"
           echo "FIREBASE_DEPLOY_AGENT=action-hosting-deploy" >> "$GITHUB_ENV"
 
-      - name: Deploy Firestore rules
-        run: |
-          npx --yes firebase-tools@latest deploy \
-            --only firestore:rules \
-            --project eclyrics-e8d68 \
-            --non-interactive
-
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_ECLYRICS_E8D68 }}
           projectId: eclyrics-e8d68
-gi
