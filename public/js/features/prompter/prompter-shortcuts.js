@@ -53,6 +53,7 @@
         {
             id: 'adjacentBlock',
             label: 'Prev / Next block',
+            description: 'double-press the same arrow within 400 ms',
             codes: ['ArrowLeft', 'ArrowRight'],
             scope: 'workspace',
             requiresPrompter: false,
@@ -173,6 +174,29 @@
         const def = CODE_TO_SHORTCUT.get(event.code);
         if (!def) return null;
         return { id: def.id, def, code: event.code, key: event.key || '' };
+    }
+
+    function createDoublePressMatcher(windowMs = 400) {
+        let pendingCode = '';
+        let pendingAt = 0;
+        return {
+            reset() {
+                pendingCode = '';
+                pendingAt = 0;
+            },
+            press(code, repeat = false) {
+                if (repeat) return false;
+                if (code !== 'ArrowLeft' && code !== 'ArrowRight') {
+                    this.reset();
+                    return false;
+                }
+                const now = Date.now();
+                const matches = pendingCode === code && now - pendingAt <= windowMs;
+                pendingCode = matches ? '' : code;
+                pendingAt = matches ? 0 : now;
+                return matches;
+            },
+        };
     }
 
     /** Keys the prompter popup may receive via postMessage — must match registry prompter codes. */
@@ -298,6 +322,7 @@
         isModalBlockingPrompterShortcuts,
         shouldIgnorePrompterShortcut,
         resolvePrompterShortcut,
+        createDoublePressMatcher,
         getRemotePrompterKeyCodes,
         assertRemotePrompterKeySupported,
         renderPreviewShortcutsList,

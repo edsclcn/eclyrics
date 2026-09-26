@@ -42,7 +42,7 @@ function parseBlockSummary(content) {
     while (lines[0] === '') lines.shift();
 
     // Adaptation metadata is part of the prompt heading, not the lyrics preview.
-    if (/^\(Adaptation of .+\)$/i.test((lines[0] || '').trim()) || /^Adapted from .+$/i.test((lines[0] || '').trim())) {
+    if (/^\(Adaptation(?: of .+)?\)$/i.test((lines[0] || '').trim()) || /^Adapted from .+$/i.test((lines[0] || '').trim())) {
         lines.shift();
         while (lines[0] === '') lines.shift();
     }

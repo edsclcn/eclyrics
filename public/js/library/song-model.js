@@ -42,8 +42,16 @@
     }
 
     function getSongAdaptationLabel(song) {
+        if (!songHasCategorySlug(song, 'adaptation')) return '';
+
         const adaptOf = getSongAdaptationSource(song);
-        return adaptOf ? `(Adaptation of “${adaptOf}”)` : '';
+        if (adaptOf) return `(Adaptation of “${adaptOf}”)`;
+
+        const title = String(song?.title || '').trim();
+        const source = String(song?.adaptOf || '').trim();
+        return title && source && source.localeCompare(title, undefined, { sensitivity: 'accent' }) === 0
+            ? '(Adaptation)'
+            : '';
     }
 
     function getSongAdaptationSearchLabel(song) {

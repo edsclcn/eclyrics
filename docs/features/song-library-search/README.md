@@ -25,8 +25,32 @@ lyrics dialog calls `matchAllSongs()` so category filters are applied to the
 complete match set before the visible result limit is applied. Selecting a
 result uses the already-loaded full lyric document.
 
+## Adaptation heading in the prompt
+
+When an Adaptation song is selected, its prompt heading includes adaptation
+metadata. If `adaptOf` and the song title match under the existing
+case-insensitive, accent-sensitive comparison, the heading is `(Adaptation)`.
+If they differ, it is `(Adaptation of “source title”)`. Parenthetical prompt
+text is rendered in italics by `public/js/features/editor/textformatting.js`.
+`public/js/library/song-model.js` builds the heading label, while
+`public/js/features/editor/port.js` removes that metadata from the lyrics
+preview. This heading behavior does not change the adaptation-source label
+shown in search results.
+
 ## Search behavior
 
+- In Admin search, enclose the complete phrase in ASCII (`"phrase"`) or smart
+  (`“phrase”`) double quotes to find contiguous literal text. For example,
+  `"sa 'yo"` matches occurrences of
+  `sa ’yo`, including the same spacing and punctuation, regardless of case.
+  Apostrophe variants in the quoted query are normalized to the app's smart
+  apostrophe before matching.
+- Admin exact phrase search checks `title`, `adaptOf`, `hymnNum`, and full
+  `lyrics`, and returns every match in Admin's alphabetical order.
+- Unquoted Admin queries keep the existing fuzzy MiniSearch behavior. Add
+  lyrics and shared search continue to use the existing shared search behavior;
+  the exact phrase mode applies only to Admin queries wrapped in ASCII or smart
+  double quotes.
 - Multi-word queries use AND matching.
 - Prefix and fuzzy matching are enabled through shared search options.
 - Title, adaptation source, and hymn-number matches rank above lyrics-body
@@ -35,6 +59,14 @@ result uses the already-loaded full lyric document.
 - Category filters are applied by the consuming UI.
 - Revision and archived songs remain visible but are not selectable in Add
   lyrics.
+
+For the exact phrase path, the Admin input handler calls
+`renderSearchResults()` in `public/js/features/admin/admin-panel.js`, which
+calls `searchAdmin()` through `public/js/library/song-library.js`.
+`public/js/library/song-search.js` detects a fully quoted query and checks the
+normalized phrase with literal substring matching. The Admin panel then applies
+any active category filters and renders the results. If there are no visible
+matches, it displays “No songs match your search.”
 
 ## Ownership
 

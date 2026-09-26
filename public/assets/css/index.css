@@ -193,6 +193,10 @@ a:hover {
     gap: 0.65rem;
 }
 
+.sidebar-nav button[hidden] {
+    display: none;
+}
+
 .sidebar-nav .nav-icon {
     width: 1.35rem;
     flex-shrink: 0;
@@ -2379,7 +2383,6 @@ a:hover {
 }
 
 .workspace-tour__close:focus-visible,
-.workspace-tour__skip:focus-visible,
 .workspace-tour__dot:focus-visible {
     outline: none;
     box-shadow: 0 0 0 3px var(--lyrics-focus-ring);
@@ -2554,21 +2557,6 @@ a:hover {
     align-items: center;
     justify-content: flex-end;
     gap: 0.5rem;
-}
-
-.workspace-tour__skip {
-    margin-right: 0.35rem;
-    padding: 0.55rem 0.35rem;
-    border: 0;
-    background: transparent;
-    color: var(--foreground-muted);
-    font: inherit;
-    font-size: 0.8rem;
-    cursor: pointer;
-}
-
-.workspace-tour__skip:hover {
-    color: var(--foreground);
 }
 
 /* Tour illustrations */
@@ -2770,8 +2758,7 @@ a:hover {
     font-size: 0.68rem;
 }
 
-.tour-art__library-card .block-source-pill,
-.tour-art__category-item .block-source-pill {
+.tour-art__library-card .block-source-pill {
     position: static;
     flex: 0 0 auto;
     padding: 0.14rem 0.42rem;
@@ -2828,28 +2815,6 @@ a:hover {
     color: var(--foreground-muted);
     font: inherit;
     font-size: 0.55rem;
-}
-
-.tour-art__category-art {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.45rem;
-}
-
-.tour-art__category-item {
-    display: flex;
-    align-items: flex-start;
-    gap: 0.45rem;
-    min-width: 0;
-    padding: 0.5rem;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-}
-
-.tour-art__category-item span {
-    color: var(--foreground-muted);
-    font-size: 0.57rem;
-    line-height: 1.35;
 }
 
 .tour-art__split {
@@ -3308,9 +3273,6 @@ a:hover {
         grid-template-columns: 1fr;
     }
 
-    .tour-art__category-art {
-        grid-template-columns: 1fr;
-    }
 
     .workspace-tour--controls .tour-art__control-row {
         grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -3350,9 +3312,6 @@ a:hover {
         flex-wrap: wrap;
     }
 
-    .workspace-tour__skip {
-        display: none;
-    }
 }
 
 /* ─── Preview storyboard (Interface Craft)

@@ -9,6 +9,8 @@
     const authUserLabel = document.getElementById('auth-user-label');
     const authErrorEl = document.getElementById('auth-error');
     const adminNavBtn = document.querySelector('.sidebar-nav [data-panel="admin"]');
+    const adminPanel = document.getElementById('panel-admin');
+    let roleCheckSequence = 0;
 
     function exitAdminPanelIfNeeded() {
         if (!adminNavBtn || !adminNavBtn.classList.contains('is-active')) return;
@@ -17,14 +19,17 @@
     }
 
     function setAdminNavVisibility(show) {
-        if (!adminNavBtn) return;
-        adminNavBtn.hidden = !show;
+        if (adminNavBtn) adminNavBtn.hidden = !show;
+        if (adminPanel) adminPanel.hidden = !show;
         if (!show) exitAdminPanelIfNeeded();
     }
 
     async function refreshAdminRole(user) {
+        const sequence = ++roleCheckSequence;
+        window.__eclyricsAuth.isAdmin = false;
+        setAdminNavVisibility(false);
+
         if (!user || user.isAnonymous) {
-            window.__eclyricsAuth.isAdmin = false;
             return;
         }
 
@@ -34,6 +39,7 @@
 
         try {
             const cfgSnap = await firebase.firestore().doc('rbac/config').get();
+            if (sequence !== roleCheckSequence) return;
             if (cfgSnap.exists) {
                 const raw = cfgSnap.data()?.adminEmails;
                 if (Array.isArray(raw) && emailNorm) {
@@ -48,12 +54,14 @@
             console.warn('eclyrics: rbac/config read failed', e);
         }
 
+        if (sequence !== roleCheckSequence) return;
         try {
             const snap = await firebase.firestore().collection('admins').doc(user.uid).get();
+            if (sequence !== roleCheckSequence) return;
             window.__eclyricsAuth.isAdmin = snap.exists;
         } catch (e) {
             console.error('eclyrics: admin role check failed', e);
-            window.__eclyricsAuth.isAdmin = false;
+            if (sequence === roleCheckSequence) window.__eclyricsAuth.isAdmin = false;
         }
     }
 

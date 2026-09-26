@@ -1,0 +1,67 @@
+* {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+    background: #000;
+}
+
+body {
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.image-prompter-window,
+.image-prompter-stage-frame {
+    display: grid;
+    width: 100%;
+    height: 100%;
+    place-items: center;
+    overflow: hidden;
+}
+
+.image-prompter-stage-frame {
+    position: relative;
+}
+
+.image-prompter-stage {
+    position: relative;
+    flex: none;
+    width: 1920px;
+    height: 1080px;
+    overflow: hidden;
+    transform-origin: center center;
+    background: #000;
+}
+
+.image-prompter-content {
+    display: flex;
+    min-height: 1080px;
+    width: 1920px;
+    align-items: center;
+    justify-content: center;
+    will-change: transform;
+}
+
+.image-prompter-content img {
+    display: block;
+    flex: none;
+    width: 1920px;
+    max-width: none;
+    height: auto;
+    object-fit: contain;
+    pointer-events: none;
+}
+
+.image-prompter-message {
+    width: 100%;
+    padding: 3rem;
+    color: #fff;
+    font: 32px/1.4 system-ui, sans-serif;
+    text-align: center;
+}
