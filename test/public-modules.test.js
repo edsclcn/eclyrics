@@ -136,6 +136,72 @@ test('song search fallback matches title, adaptation source, and lyrics with lim
     assert.deepEqual(search.search(songs, null, '', 2).length, 2);
 });
 
+test('Admin quoted search matches an exact phrase across fields without normalizing spacing or punctuation', () => {
+    const window = loadBrowserScript('public/js/features/editor/smart-quotes.js');
+    loadBrowserScript('public/js/library/song-search.js', { window });
+    const search = window.eclyricsSongSearch;
+    const songs = [
+        { id: 'title', title: 'Sa ’yo, Mahal' },
+        { id: 'adapt', title: 'Other', adaptOf: 'SA ’YO' },
+        { id: 'hymn', title: 'Other', hymnNum: 'sa ’yo' },
+        { id: 'lyrics', title: 'Other', lyrics: 'Sing SA ’YO today' },
+        // Quoted search normalizes the input apostrophe to match normalized saved text.
+        { id: 'smart-apostrophe', title: 'Other', lyrics: 'sa ’yo' },
+        { id: 'missing-apostrophe', title: 'Other', lyrics: 'sa yo' },
+        { id: 'extra-space', title: 'Other', lyrics: "sa  'yo" },
+        { id: 'different-punctuation', title: 'Other', lyrics: 'sa-yo' },
+    ];
+
+    const matches = search.searchAdmin(songs, null, `"sa 'yo"`);
+    assert.deepEqual(
+        matches.map((song) => song.id).sort(),
+        ['title', 'adapt', 'hymn', 'lyrics', 'smart-apostrophe'].sort(),
+    );
+
+    // The shared search still treats quoted text as a normalized phrase.
+    assert.ok(search.search(songs, null, `"sa 'yo"`, 10).some((song) => song.id === 'missing-apostrophe'));
+});
+
+test('Admin exact search accepts ASCII and smart quote delimiters while preserving hyphens', () => {
+    const window = loadBrowserScript('public/js/library/song-search.js');
+    const search = window.eclyricsSongSearch;
+    const songs = [
+        { id: 'hyphenated', title: 'Pag-ibig' },
+        { id: 'spaced', title: 'Pag ibig' },
+        { id: 'joined', title: 'Pagibig' },
+    ];
+
+    for (const query of ['"Pag-ibig"', '“Pag-ibig”']) {
+        assert.deepEqual(
+            search.searchAdmin(songs, null, query).map((song) => song.id),
+            ['hyphenated'],
+        );
+    }
+});
+
+test('Admin exact quoted search returns every match while unquoted search keeps the shared limit and ranking', () => {
+    const window = loadBrowserScript('public/js/library/song-search.js');
+    const search = window.eclyricsSongSearch;
+    const manyMatches = Array.from({ length: 12 }, (_, index) => ({
+        id: `song-${index}`,
+        title: `Song ${index}`,
+        lyrics: `Sa 'yo appears here ${index}`,
+    }));
+
+    assert.equal(search.searchAdmin(manyMatches, null, `"sa 'yo"`).length, 12);
+
+    const ordinarySongs = Array.from({ length: 14 }, (_, index) => ({
+        id: `ordinary-${index}`,
+        title: `Unique phrase ${index}`,
+        lyrics: 'An ordinary lyric',
+    }));
+    const query = 'unique phrase';
+    assert.deepEqual(
+        search.searchAdmin(ordinarySongs, null, query).map((song) => song.id),
+        search.search(ordinarySongs, null, query, 10).map((song) => song.id),
+    );
+});
+
 test('workspace help removes the category step and skip control', () => {
     const html = fs.readFileSync(path.join(repoRoot, 'public/index.html'), 'utf8');
     const tour = fs.readFileSync(path.join(repoRoot, 'public/js/features/editor/workspace-tour.js'), 'utf8');

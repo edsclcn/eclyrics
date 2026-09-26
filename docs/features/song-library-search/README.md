@@ -39,6 +39,18 @@ shown in search results.
 
 ## Search behavior
 
+- In Admin search, enclose the complete phrase in ASCII (`"phrase"`) or smart
+  (`“phrase”`) double quotes to find contiguous literal text. For example,
+  `"sa 'yo"` matches occurrences of
+  `sa ’yo`, including the same spacing and punctuation, regardless of case.
+  Apostrophe variants in the quoted query are normalized to the app's smart
+  apostrophe before matching.
+- Admin exact phrase search checks `title`, `adaptOf`, `hymnNum`, and full
+  `lyrics`, and returns every match in Admin's alphabetical order.
+- Unquoted Admin queries keep the existing fuzzy MiniSearch behavior. Add
+  lyrics and shared search continue to use the existing shared search behavior;
+  the exact phrase mode applies only to Admin queries wrapped in ASCII or smart
+  double quotes.
 - Multi-word queries use AND matching.
 - Prefix and fuzzy matching are enabled through shared search options.
 - Title, adaptation source, and hymn-number matches rank above lyrics-body
@@ -47,6 +59,14 @@ shown in search results.
 - Category filters are applied by the consuming UI.
 - Revision and archived songs remain visible but are not selectable in Add
   lyrics.
+
+For the exact phrase path, the Admin input handler calls
+`renderSearchResults()` in `public/js/features/admin/admin-panel.js`, which
+calls `searchAdmin()` through `public/js/library/song-library.js`.
+`public/js/library/song-search.js` detects a fully quoted query and checks the
+normalized phrase with literal substring matching. The Admin panel then applies
+any active category filters and renders the results. If there are no visible
+matches, it displays “No songs match your search.”
 
 ## Ownership
 

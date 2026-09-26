@@ -316,6 +316,22 @@
 
     function searchAdmin(songs, searchIndex, query) {
         const q = String(query || '').trim();
+        const exactMatch = q.match(/^(?:"([\s\S]*)"|“([\s\S]*)”)$/);
+        if (exactMatch) {
+            const rawPhrase = exactMatch[1] ?? exactMatch[2];
+            const phrase = String(
+                window.eclyricsSmartQuotes?.normalizeSmartQuotes?.(rawPhrase) || rawPhrase,
+            ).toLowerCase();
+            if (!phrase) return [];
+            return songs
+                .filter((song) =>
+                    ['title', 'adaptOf', 'hymnNum', 'lyrics'].some((field) =>
+                        String(song?.[field] ?? '').toLowerCase().includes(phrase),
+                    ),
+                )
+                .sort(compareAdminAlpha);
+        }
+
         let matches = matchSongs(songs, searchIndex, q);
         if (!q) {
             matches.sort(compareAdminAlpha);
