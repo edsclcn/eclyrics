@@ -7,6 +7,7 @@
     <script src="js/ui/theme-init.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link rel="stylesheet" href="assets/css/index.css">
+    <link rel="stylesheet" href="assets/css/image-lyrics.css">
     <link rel="icon" type="image/png" href="assets/images/logo.png">
     <title>EC Lyrics</title>
 </head>
@@ -135,9 +136,9 @@
             <div class="sidebar-utilities" id="sidebar-utilities">
                 <span class="sidebar-auth-user" id="auth-user-label" aria-live="polite"></span>
                 <button type="button" class="sidebar-utility-btn sidebar-help-btn" id="workspace-tour-btn"
-                    title="Help and workspace tour" aria-label="Help and workspace tour">
+                    title="Help" aria-label="Help">
                     <i class="fa-solid fa-circle-question" aria-hidden="true"></i>
-                    <span class="sidebar-utility-label">Help &amp; tour</span>
+                    <span class="sidebar-utility-label">Help</span>
                 </button>
                 <button type="button" class="sidebar-utility-btn theme-toggle" id="theme-toggle" aria-pressed="false"
                     title="Toggle dark mode" aria-label="Dark mode">
@@ -162,7 +163,7 @@
                         <h2 id="workspace-tour-title">Build your first lineup</h2>
                     </div>
                     <button type="button" class="workspace-tour__close" id="workspace-tour-close"
-                        aria-label="Close help and workspace tour">
+                        aria-label="Close help">
                         <i class="fa-solid fa-xmark" aria-hidden="true"></i>
                     </button>
                 </header>
@@ -180,7 +181,6 @@
                 <footer class="workspace-tour__footer">
                     <div class="workspace-tour__progress" id="workspace-tour-progress" aria-label="Tour progress"></div>
                     <div class="workspace-tour__actions">
-                        <button type="button" class="workspace-tour__skip" id="workspace-tour-skip">Skip tour</button>
                         <button type="button" class="btn-toolbar" id="workspace-tour-prev">Back</button>
                         <button type="button" class="btn-toolbar btn-toolbar-primary" id="workspace-tour-next">Next</button>
                     </div>
@@ -274,11 +274,11 @@
                                         </div>
                                         <div class="preview-toolbar-group" role="group" aria-label="Previous and next block">
                                             <button type="button" class="preview-icon-btn" id="preview-btn-prev"
-                                                title="Previous block (←)" aria-label="Previous block">
+                                                title="Previous block (double-press ←)" aria-label="Previous block">
                                                 <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
                                             </button>
                                             <button type="button" class="preview-icon-btn" id="preview-btn-next"
-                                                title="Next block (→)" aria-label="Next block">
+                                                title="Next block (double-press →)" aria-label="Next block">
                                                 <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
                                             </button>
                                         </div>
@@ -342,7 +342,7 @@
                                     </header>
                                     <p class="preview-shortcuts-dialog__lede">Use these keys anywhere in the app (except lyric text fields). Controls mirror the projected prompter so preview and stage always stay in sync.</p>
                                     <dl class="preview-shortcuts-dialog__list" id="preview-shortcuts-dialog-list"></dl>
-                                    <p class="preview-shortcuts-dialog__note">Toolbar buttons mirror keyboard shortcuts where shown. Prev/next match ← →. Scroll inside the 16∶9 strip when auto-scroll is paused.</p>
+                                    <p class="preview-shortcuts-dialog__note">Toolbar buttons mirror keyboard shortcuts where shown. Double-press the same ← or → key within 400 ms to move between blocks. Scroll inside the 16∶9 strip when auto-scroll is paused.</p>
                                 </div>
                             </div>
                         </aside>
@@ -389,10 +389,89 @@
                     </div>
                 </section>
 
-                <section id="panel-image" class="panel" aria-labelledby="panel-image-title">
-                    <div class="placeholder-panel">
-                        <h2 id="panel-image-title">Image Lyrics</h2>
-                        <p>Image-based lyric workflows will be available here.</p>
+                <section id="panel-image" class="panel image-lyrics-panel" aria-labelledby="panel-image-title">
+                    <h2 id="panel-image-title" class="visually-hidden">Image Lyrics</h2>
+                    <div class="image-lyrics-workspace" id="image-lyrics-workspace">
+                        <div class="image-lyrics-editor">
+                            <header class="image-lyrics-toolbar">
+                                <div class="image-lyrics-tabs-row">
+                                    <div class="image-lyrics-tabs-group">
+                                        <ul class="image-lyrics-tabs" id="image-lyrics-tabs" aria-label="Image lineups"></ul>
+                                        <button type="button" class="image-lyrics-add-tab" id="image-lyrics-add-tab"
+                                            title="Add another image lineup" aria-label="Add image lineup">+</button>
+                                    </div>
+                                    <div class="image-lyrics-port" aria-label="Save and load image lineups">
+                                        <button type="button" class="image-lyrics-port-button" id="image-lyrics-export" title="Save image lineup JSON" aria-label="Save image lineup JSON"><i class="fa-solid fa-download" aria-hidden="true"></i></button>
+                                        <button type="button" class="image-lyrics-port-button" id="image-lyrics-import-trigger" title="Load image lineup JSON" aria-label="Load image lineup JSON"><i class="fa-solid fa-folder-open" aria-hidden="true"></i></button>
+                                        <input type="file" id="image-lyrics-import-file" accept="application/json,.json" hidden aria-label="Choose an image lineup JSON file">
+                                    </div>
+                                </div>
+                                <div class="image-lyrics-toolbar-meta">
+                                    <span class="image-lyrics-toolbar-label"><strong id="image-lyrics-selected-title">Block 1</strong></span>
+                                    <p class="image-lyrics-hint">Add one image to each block. Drag an image onto a block or choose a file.</p>
+                                </div>
+                            </header>
+                        </div>
+                        <aside class="image-lyrics-preview workspace-preview preview-stage--lyrics" aria-label="Image prompter preview and controls">
+                            <div class="preview-frame preview-frame--prompter-focus">
+                                <div class="preview-viewfinder-heading">
+                                    <div class="preview-viewfinder-label">
+                                        <span>Prompter preview</span>
+                                        <span class="preview-viewfinder-format">16∶9</span>
+                                    </div>
+                                </div>
+                                <div class="preview-viewfinder-slot">
+                                    <div class="preview-viewfinder-16x9 image-lyrics-preview__stage" id="image-lyrics-preview-stage" aria-label="Image prompter preview">
+                                        <div class="image-lyrics-preview__empty" id="image-lyrics-preview-empty"><i class="fa-regular fa-image" aria-hidden="true"></i><span>Choose an image to preview</span></div>
+                                        <img id="image-lyrics-preview-image" alt="Image lyric preview" hidden>
+                                    </div>
+                                </div>
+                                <div class="preview-prompter-dock" id="image-lyrics-dock" aria-label="Image prompter controls">
+                                    <button type="button" class="preview-shortcuts-strip" id="image-lyrics-shortcuts-help-btn" aria-haspopup="dialog" aria-controls="image-lyrics-shortcuts-dialog" aria-expanded="false" title="Image prompter keyboard shortcuts">
+                                        <span class="preview-shortcuts-strip-lead"><i class="fa-solid fa-keyboard" aria-hidden="true"></i><span>Keyboard shortcuts</span></span>
+                                        <span class="preview-shortcuts-strip-chevron" aria-hidden="true"><i class="fa-solid fa-circle-info"></i></span>
+                                        <span class="preview-shortcuts-strip-hint">Open the Image Lyrics shortcut reference.</span>
+                                    </button>
+                                    <div class="preview-prompter-toolbar">
+                                        <button type="button" class="btn-toolbar btn-toolbar-primary btn-toolbar-cta preview-send-btn image-lyrics-send" id="image-lyrics-send" title="Send the active image block to the prompter — ` (backtick)"><i class="fa-solid fa-display" aria-hidden="true"></i><span class="preview-send-btn-label">Send to prompter</span></button>
+                                        <div class="preview-toolbar-group" role="group" aria-label="Playback"><button type="button" class="preview-icon-btn" id="image-lyrics-play" title="Play / Pause (Space)" aria-label="Play or pause" aria-pressed="false" disabled><i class="fa-solid fa-play" aria-hidden="true"></i></button></div>
+                                        <div class="preview-toolbar-group" role="group" aria-label="Previous and next image"><button type="button" class="preview-icon-btn" id="image-lyrics-prev" title="Previous image (double-press ←)" aria-label="Previous image" disabled><i class="fa-solid fa-chevron-left" aria-hidden="true"></i></button><button type="button" class="preview-icon-btn" id="image-lyrics-next" title="Next image (double-press →)" aria-label="Next image" disabled><i class="fa-solid fa-chevron-right" aria-hidden="true"></i></button></div>
+                                        <div class="preview-toolbar-group" role="group" aria-label="Manual scroll"><button type="button" class="preview-icon-btn" id="image-lyrics-scroll-up" title="Scroll up (↑)" aria-label="Scroll up" disabled><i class="fa-solid fa-chevron-up" aria-hidden="true"></i></button><button type="button" class="preview-icon-btn" id="image-lyrics-scroll-down" title="Scroll down (↓)" aria-label="Scroll down" disabled><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></button><button type="button" class="preview-icon-btn preview-icon-btn--jump-top" id="image-lyrics-scroll-top" title="Jump to top (T)" aria-label="Jump to top" disabled><i class="fa-solid fa-angles-up" aria-hidden="true"></i><span class="preview-btn-keyhint" aria-hidden="true">T</span></button></div>
+                                        <div class="preview-toolbar-group preview-toolbar-group--stage" role="group" aria-label="Scroll speed"><div class="preview-speed-control"><label class="preview-speed-label" for="image-lyrics-speed">Speed</label><input type="range" id="image-lyrics-speed" min="0.1" max="6.5" step="0.1" value="0.5" disabled><output class="preview-speed-value" id="image-lyrics-speed-value" for="image-lyrics-speed">0.5</output></div></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="preview-shortcuts-dialog" id="image-lyrics-shortcuts-dialog" hidden role="dialog" aria-modal="true" aria-labelledby="image-lyrics-shortcuts-dialog-title">
+                                <div class="preview-shortcuts-dialog__backdrop" id="image-lyrics-shortcuts-dialog-backdrop" tabindex="-1"></div>
+                                <div class="preview-shortcuts-dialog__card">
+                                    <header class="preview-shortcuts-dialog__head">
+                                        <h3 id="image-lyrics-shortcuts-dialog-title">Image prompter controls</h3>
+                                        <button type="button" class="preview-shortcuts-dialog__close" id="image-lyrics-shortcuts-dialog-close" aria-label="Close"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
+                                    </header>
+                                    <p class="preview-shortcuts-dialog__lede">These shortcuts control Image Lyrics while its panel is active. Playback and scrolling shortcuts require the image prompter to be open.</p>
+                                    <dl class="preview-shortcuts-dialog__list">
+                                        <div><dt>Send to prompter</dt><dd><kbd>`</kbd></dd></div>
+                                        <div><dt>Play / pause</dt><dd><kbd>Space</kbd></dd></div>
+                                        <div><dt>Previous / next image</dt><dd>Double-press the same <kbd>←</kbd> or <kbd>→</kbd> key within 400 ms</dd></div>
+                                        <div><dt>Manual scroll</dt><dd><kbd>↑</kbd> <kbd>↓</kbd> — 100px per step</dd></div>
+                                        <div><dt>Jump to top</dt><dd><kbd>T</kbd></dd></div>
+                                        <div><dt>Scroll speed</dt><dd><kbd>1</kbd>–<kbd>9</kbd> presets; <kbd>0</kbd> pauses</dd></div>
+                                        <div><dt>Speed increments</dt><dd>Numpad <kbd>+</kbd> / <kbd>−</kbd></dd></div>
+                                    </dl>
+                                    <p class="preview-shortcuts-dialog__note">Image Lyrics has no text-size, line-width, or theme shortcuts. Images keep their original design and scroll within the 16∶9 prompter stage.</p>
+                                </div>
+                            </div>
+                        </aside>
+                        <section class="image-lyrics-blocks" id="image-lyrics-blocks" aria-label="Image lyric blocks">
+                            <article class="image-lyrics-block is-selected" data-image-block="0" aria-label="Image block 1">
+                                <header class="image-lyrics-block__header"><h3>Block 1</h3><button type="button" class="image-lyrics-block__remove" data-image-action="remove-block" aria-label="Remove block 1" title="Remove block"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button></header>
+                                <label class="image-lyrics-dropzone" data-image-dropzone="0"><input class="image-lyrics-file-input" type="file" accept="image/*" data-image-file="0" aria-label="Choose an image for block 1"><span class="image-lyrics-dropzone__content"><i class="fa-solid fa-cloud-arrow-up" aria-hidden="true"></i><strong>Drop an image here</strong><span>or choose a file</span></span><img class="image-lyrics-block__image" data-image-thumbnail="0" alt="" hidden></label>
+                            </article>
+                            <article class="image-lyrics-block" data-image-block="1" aria-label="Image block 2">
+                                <header class="image-lyrics-block__header"><h3>Block 2</h3><button type="button" class="image-lyrics-block__remove" data-image-action="remove-block" aria-label="Remove block 2" title="Remove block"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button></header>
+                                <label class="image-lyrics-dropzone" data-image-dropzone="1"><input class="image-lyrics-file-input" type="file" accept="image/*" data-image-file="1" aria-label="Choose an image for block 2"><span class="image-lyrics-dropzone__content"><i class="fa-solid fa-cloud-arrow-up" aria-hidden="true"></i><strong>Drop an image here</strong><span>or choose a file</span></span><img class="image-lyrics-block__image" data-image-thumbnail="1" alt="" hidden></label>
+                            </article>
+                        </section>
                     </div>
                 </section>
 
@@ -567,6 +646,7 @@
     <script defer src="js/features/editor/index.js"></script>
     <script defer src="js/features/editor/workspace-tour.js"></script>
     <script defer src="js/features/editor/port.js"></script>
+    <script defer src="js/features/image-lyrics/index.js"></script>
     <script defer src="js/features/editor/textformatting.js"></script>
 </body>
 

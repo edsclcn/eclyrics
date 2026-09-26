@@ -317,13 +317,26 @@ function getPrompterShortcutsApi() {
     return typeof EclyricsPrompterShortcuts !== 'undefined' ? EclyricsPrompterShortcuts : null;
 }
 
+let adjacentBlockPressMatcher = null;
+
 function handleLocalPrompterShortcut(event) {
     const sc = getPrompterShortcutsApi();
     if (!sc) return;
     const ctx = { prompterOpen: true };
-    if (sc.shouldIgnorePrompterShortcut(event, ctx)) return;
+    if (sc.shouldIgnorePrompterShortcut(event, ctx)) {
+        adjacentBlockPressMatcher?.reset();
+        return;
+    }
     const resolved = sc.resolvePrompterShortcut(event);
     if (!resolved) return;
+    if (resolved.id === 'adjacentBlock') {
+        if (!adjacentBlockPressMatcher?.press(resolved.code, event.repeat)) {
+            event.preventDefault();
+            return;
+        }
+    } else {
+        adjacentBlockPressMatcher?.reset();
+    }
     event.preventDefault();
     dispatchResolvedPrompterShortcut(resolved);
 }
@@ -335,6 +348,7 @@ function initPrompterKeyboardShortcuts() {
         return;
     }
     sc.assertPrompterShortcutParity();
+    adjacentBlockPressMatcher = sc.createDoublePressMatcher();
     document.addEventListener('keydown', handleLocalPrompterShortcut, true);
 }
 

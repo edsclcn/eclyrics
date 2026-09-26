@@ -548,6 +548,8 @@ function getPrompterShortcutsApi() {
     return typeof EclyricsPrompterShortcuts !== 'undefined' ? EclyricsPrompterShortcuts : null;
 }
 
+let adjacentBlockPressMatcher = null;
+
 function isPreviewShortcutsDialogOpen() {
     const dlg = document.getElementById('preview-shortcuts-dialog');
     return dlg && !dlg.hidden;
@@ -555,14 +557,22 @@ function isPreviewShortcutsDialogOpen() {
 
 /** Global prompter shortcuts (preview registry) — work everywhere except text fields and modals. */
 function handleGlobalPrompterShortcut(event) {
+    if (!document.getElementById("panel-text")?.classList.contains("is-active")) {
+        adjacentBlockPressMatcher?.reset();
+        return;
+    }
     const sc = getPrompterShortcutsApi();
     if (!sc) return;
 
     const ctx = { prompterOpen: isPrompterWindowOpen() };
-    if (sc.shouldIgnorePrompterShortcut(event, ctx)) return;
+    if (sc.shouldIgnorePrompterShortcut(event, ctx)) {
+        adjacentBlockPressMatcher?.reset();
+        return;
+    }
 
     const resolved = sc.resolvePrompterShortcut(event);
     if (!resolved) return;
+    if (resolved.id !== 'adjacentBlock') adjacentBlockPressMatcher?.reset();
 
     event.preventDefault();
 
@@ -571,6 +581,7 @@ function handleGlobalPrompterShortcut(event) {
             sendActiveBlockToPrompter();
             break;
         case 'adjacentBlock':
+            if (!adjacentBlockPressMatcher?.press(resolved.code, event.repeat)) return;
             goToAdjacentBlockAndSend(resolved.code === 'ArrowLeft' ? -1 : 1);
             break;
         case 'manualScroll':
@@ -595,6 +606,7 @@ function initGlobalPrompterShortcuts() {
         return;
     }
     sc.assertPrompterShortcutParity();
+    adjacentBlockPressMatcher = sc.createDoublePressMatcher();
     sc.renderPreviewShortcutsList(document.getElementById('preview-shortcuts-dialog-list'));
     document.addEventListener('keydown', handleGlobalPrompterShortcut, true);
 }

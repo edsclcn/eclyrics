@@ -40,19 +40,6 @@
                 </div>`,
         },
         {
-            title: 'Know the library categories',
-            descriptionHtml: 'Each category describes how a song may be used:<ul><li><strong>HIMNARIO</strong> contains hymns from the Himnario, followed by Doxologia.</li><li><strong>ORIGINAL</strong> means the song was not adapted and was composed inside the church.</li><li><strong>ADAPTATION</strong> uses the tune of another song.</li><li><strong>ASOP/F</strong> is a song of praise or a song of faith.</li><li><strong>REVISION</strong> is currently under editing.</li><li><strong>ARCHIVED</strong> can no longer be used.</li></ul>',
-            visual: `
-                <div class="tour-art__window tour-art__category-art">
-                    <div class="tour-art__category-item"><em class="block-source-pill block-source-pill--himnario">HIMNARIO</em><span>Hymns from the Himnario, followed by Doxologia.</span></div>
-                    <div class="tour-art__category-item"><em class="block-source-pill block-source-pill--original">ORIGINAL</em><span>Not adapted; composed inside the church.</span></div>
-                    <div class="tour-art__category-item"><em class="block-source-pill block-source-pill--adaptation">ADAPTATION</em><span>Uses the tune of another song.</span></div>
-                    <div class="tour-art__category-item"><em class="block-source-pill block-source-pill--asop-f">ASOP/F</em><span>A song of praise or a song of faith.</span></div>
-                    <div class="tour-art__category-item"><em class="block-source-pill block-source-pill--revision">REVISION</em><span>Currently under editing.</span></div>
-                    <div class="tour-art__category-item"><em class="block-source-pill block-source-pill--archived">ARCHIVED</em><span>Cannot be used anymore.</span></div>
-                </div>`,
-        },
-        {
             title: 'Edit lyrics one block at a time',
             description: '• Select a result to fill a block.\n• Type or paste manually using a title line, blank line, then lyrics.\n• Click a block title to open the full editor. The lyrics remain connected to the block and the preview updates as you work.',
             visual: `
@@ -84,8 +71,8 @@
                     <div class="tour-art__control-row">
                         <button type="button" class="tour-art__control-button tour-art__control-button--send" data-control-name="Send to prompter" data-control-description="Open or update the live prompter with the active block." data-control-shortcut="Backtick (&#96;)"><i class="fa-solid fa-display"></i><small>Send to prompter</small></button>
                         <button type="button" class="tour-art__control-button" data-control-name="Play / pause" data-control-description="Start or pause automatic lyric scrolling." data-control-shortcut="Space"><i class="fa-solid fa-play"></i><small>Play</small></button>
-                        <button type="button" class="tour-art__control-button" data-control-name="Previous block" data-control-description="Move to the previous lyric block." data-control-shortcut="←"><i class="fa-solid fa-chevron-left"></i><small>Prev</small></button>
-                        <button type="button" class="tour-art__control-button" data-control-name="Next block" data-control-description="Move to the next lyric block." data-control-shortcut="→"><i class="fa-solid fa-chevron-right"></i><small>Next</small></button>
+                        <button type="button" class="tour-art__control-button" data-control-name="Previous block" data-control-description="Click once to move to the previous lyric block." data-control-shortcut="Double-press ←"><i class="fa-solid fa-chevron-left"></i><small>Prev</small></button>
+                        <button type="button" class="tour-art__control-button" data-control-name="Next block" data-control-description="Click once to move to the next lyric block." data-control-shortcut="Double-press →"><i class="fa-solid fa-chevron-right"></i><small>Next</small></button>
                         <button type="button" class="tour-art__control-button" data-control-name="Scroll up" data-control-description="Hold to scroll upward continuously at the current speed. Arrow ↑/↓ keys and the scroll wheel are separate fixed-step controls."><i class="fa-solid fa-chevron-up"></i><small>Up</small></button>
                         <button type="button" class="tour-art__control-button" data-control-name="Scroll down" data-control-description="Hold to scroll downward continuously at the current speed. Arrow ↑/↓ keys and the scroll wheel are separate fixed-step controls."><i class="fa-solid fa-chevron-down"></i><small>Down</small></button>
                         <button type="button" class="tour-art__control-button" data-control-name="Jump to top" data-control-description="Return to the top when automatic scrolling is paused." data-control-shortcut="T"><i class="fa-solid fa-angles-up"></i><small>Top</small></button>
@@ -109,7 +96,7 @@
                     <div class="tour-art__shortcut-row"><strong>Play / pause</strong><span><kbd>SPACE</kbd></span><span>Starts or pauses auto-scroll</span></div>
                     <div class="tour-art__shortcut-row"><strong>Scroll speed presets</strong><span><kbd>1–9</kbd><kbd>0</kbd></span><span>1–9 set speed; 0 pauses</span></div>
                     <div class="tour-art__shortcut-row"><strong>Scroll speed nudge</strong><span><kbd>NUMPAD +</kbd><kbd>NUMPAD −</kbd></span><span>Adjusts speed incrementally</span></div>
-                    <div class="tour-art__shortcut-row"><strong>Previous / next block</strong><span><kbd>←</kbd><kbd>→</kbd></span><span>Moves between blocks</span></div>
+                    <div class="tour-art__shortcut-row"><strong>Previous / next block</strong><span><kbd>←</kbd><kbd>←</kbd> / <kbd>→</kbd><kbd>→</kbd></span><span>Double-press the same arrow within 400 ms</span></div>
                     <div class="tour-art__shortcut-row"><strong>Stage theme</strong><span><kbd>P</kbd></span><span>Toggles blue / B&amp;W stage</span></div>
                     <div class="tour-art__shortcut-row"><strong>Text size</strong><span><kbd>[</kbd><kbd>]</kbd></span><span>Makes text smaller / larger</span></div>
                     <div class="tour-art__shortcut-row"><strong>Line width</strong><span><kbd>−</kbd><kbd>=</kbd></span><span>Makes lines narrower / wider</span></div>
@@ -142,7 +129,6 @@
     const previous = document.getElementById('workspace-tour-prev');
     const next = document.getElementById('workspace-tour-next');
     const close = document.getElementById('workspace-tour-close');
-    const skip = document.getElementById('workspace-tour-skip');
     let current = 0;
     let previousFocus = null;
 
@@ -212,7 +198,6 @@
     openButton.setAttribute('aria-expanded', 'false');
     openButton.addEventListener('click', open);
     close.addEventListener('click', dismiss);
-    skip.addEventListener('click', dismiss);
     document.getElementById('workspace-tour-backdrop')?.addEventListener('click', dismiss);
     previous.addEventListener('click', () => {
         if (current > 0) {

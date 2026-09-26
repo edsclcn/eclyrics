@@ -49,7 +49,7 @@ function createMainWindow() {
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
     const u = details.url || '';
-    const isLyricsPrompter = /\/prompter\.html(\?|$)/.test(u);
+    const isLyricsPrompter = /\/(?:image-)?prompter\.html(\?|$)/.test(u);
 
     if (isLyricsPrompter) {
       const size = LYRICS_PROMPTER;

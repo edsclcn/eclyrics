@@ -25,6 +25,18 @@ lyrics dialog calls `matchAllSongs()` so category filters are applied to the
 complete match set before the visible result limit is applied. Selecting a
 result uses the already-loaded full lyric document.
 
+## Adaptation heading in the prompt
+
+When an Adaptation song is selected, its prompt heading includes adaptation
+metadata. If `adaptOf` and the song title match under the existing
+case-insensitive, accent-sensitive comparison, the heading is `(Adaptation)`.
+If they differ, it is `(Adaptation of “source title”)`. Parenthetical prompt
+text is rendered in italics by `public/js/features/editor/textformatting.js`.
+`public/js/library/song-model.js` builds the heading label, while
+`public/js/features/editor/port.js` removes that metadata from the lyrics
+preview. This heading behavior does not change the adaptation-source label
+shown in search results.
+
 ## Search behavior
 
 - Multi-word queries use AND matching.
