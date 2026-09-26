@@ -193,6 +193,10 @@ a:hover {
     gap: 0.65rem;
 }
 
+.sidebar-nav button[hidden] {
+    display: none;
+}
+
 .sidebar-nav .nav-icon {
     width: 1.35rem;
     flex-shrink: 0;

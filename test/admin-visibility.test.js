@@ -106,6 +106,11 @@ test('Admin navigation and panel start hidden in the page markup', () => {
     assert.match(html, /<section[^>]*id="panel-admin"[^>]*\shidden(?:\s|>)/);
 });
 
+test('hidden Admin navigation remains display-none despite sidebar flex styles', () => {
+    const css = fs.readFileSync(path.join(repoRoot, 'public/assets/css/index.css'), 'utf8');
+    assert.match(css, /\.sidebar-nav\s+button\[hidden\]\s*\{\s*display:\s*none(?:\s*!important)?\s*;\s*\}/);
+});
+
 test('signed-out and non-admin users do not see Admin', async () => {
     const auth = await setupAuth();
     assert.equal(auth.adminNav.hidden, true);
