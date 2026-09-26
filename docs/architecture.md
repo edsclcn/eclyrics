@@ -4,6 +4,17 @@ EC Lyrics is a static Firebase Hosting frontend, an Electron shell that loads
 that frontend, and a Firestore-backed browser library. Firebase Authentication
 and Firestore rules protect admin mutations.
 
+## Admin access
+
+After sign-in, `public/js/auth/auth.js` resolves the user's admin role from a
+case-normalized email match in `rbac/config.adminEmails` or the presence of an
+`admins/{uid}` document. The Admin sidebar entry and panel start hidden and are
+shown only after an admin role is confirmed. The Admin panel also checks the
+role before loading. Firestore rules independently enforce authorization for
+protected `lyrics` and `admin_data` access, so hiding the UI is not the security
+boundary. The `adminEmails` entries in Firestore must be lowercase for the
+rules' email check.
+
 ## Repository layout
 
 ```text
