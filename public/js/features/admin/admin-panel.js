@@ -363,7 +363,14 @@
 
             const metaSpan = document.createElement('span');
             metaSpan.className = 'block-source-result__meta';
-            metaSpan.textContent = truncateLyricsPreviewForRow(song.lyrics);
+            const exactPhraseSearch = /^(?:"[\s\S]*"|“[\s\S]*”)$/.test(q);
+            appendLyricsSearchPreview(
+                metaSpan,
+                q
+                    ? songDisplay()?.getLyricsSearchPreviewDetails?.(song, q, 150, { exactPhrase: exactPhraseSearch })
+                    : null,
+                truncateLyricsPreviewForRow(song.lyrics),
+            );
 
             btn.append(topRow, metaSpan);
             btn.addEventListener('click', () => {
@@ -380,6 +387,25 @@
             li.appendChild(btn);
             list.appendChild(li);
         });
+    }
+
+    function appendLyricsSearchPreview(container, details, fallback) {
+        const text = details?.text || fallback || '';
+        if (!text) return;
+        const ranges = (details?.titleMatch ? [] : details?.ranges || [])
+            .filter((range) => range.start >= 0 && range.end > range.start && range.end <= text.length)
+            .sort((a, b) => a.start - b.start);
+        let cursor = 0;
+        ranges.forEach(({ start, end }) => {
+            if (start < cursor) return;
+            container.appendChild(document.createTextNode(text.slice(cursor, start)));
+            const mark = document.createElement('mark');
+            mark.className = 'block-source-result__highlight';
+            mark.textContent = text.slice(start, end);
+            container.appendChild(mark);
+            cursor = end;
+        });
+        container.appendChild(document.createTextNode(text.slice(cursor)));
     }
 
     function readFormData() {

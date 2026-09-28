@@ -1812,6 +1812,17 @@ a:hover {
     overflow: hidden;
 }
 
+.block-source-result__meta .block-source-result__highlight {
+    color: inherit;
+    background: color-mix(in srgb, var(--primary) 16%, transparent);
+    border-radius: 0.16em;
+    padding: 0 0.04em;
+}
+
+.dark .block-source-result__meta .block-source-result__highlight {
+    background: color-mix(in srgb, var(--primary) 28%, transparent);
+}
+
 .block-source-results-empty,
 .block-source-library-note {
     font-size: 0.75rem;
