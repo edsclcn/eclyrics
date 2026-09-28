@@ -37,12 +37,14 @@ already-loaded full lyric document.
   may match different fields among title, adaptation source, hymn number, and
   lyrics.
 - A phrase in straight double quotes must match a contiguous sequence of word
-  tokens in one field. It cannot span fields. Hyphen/dash punctuation inside a
-  compound is compacted for both unquoted terms and quoted phrases: `pagibig`
-  matches `Pag-ibig`; `"pagibig mong wagas"` matches `Pag-ibig Mong Wagas`.
-  Admin unquoted and mixed queries use this same Add lyrics matcher.
-  Fully quoted Admin exact search preserves literal punctuation, so
-  `"pagibig"` does not match `Pag-ibig`.
+  tokens in one field. It cannot span fields. Punctuation joining adjacent
+  words is compacted for unquoted terms and quoted phrases: `sayo` matches
+  `Sa 'Yo` and `Sa-yo`; `"sayo"` also matches both forms. Whitespace alone
+  keeps words separate, so `sayo` and `"sayo"` do not match `Sa yo`, while
+  `"sa yo"` matches those two adjacent words. Admin unquoted and mixed queries
+  use this same Add lyrics matcher. Fully quoted Admin exact search remains
+  literal and punctuation-sensitive, so `"sayo"` does not match `Sa 'Yo` or
+  `Sa-yo`.
 - Results are grouped by whole-query relevance, in this order: all components
   match the title without fuzzy matching; the complete ordered query matches
   contiguously in lyrics; all components match without fuzzy matching in one

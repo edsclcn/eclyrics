@@ -21,11 +21,12 @@ Add lyrics is routed through `matchSongsForAddLyrics()` in
 directly; it does not use MiniSearch candidate retrieval. Every query component
 must match somewhere in the song, while unquoted terms may match across fields.
 Quoted phrases must match a contiguous sequence of word tokens in a single
-field. Both unquoted terms and quoted phrases compact hyphen/dash punctuation
-inside compounds: `pagibig` can match `Pag-ibig`; `"pagibig mong wagas"` can
-match `Pag-ibig Mong Wagas`. Admin unquoted and mixed queries use these same
-rules. Fully quoted Admin exact search preserves literal punctuation;
-`"pagibig"` does not match `Pag-ibig`.
+field. Both unquoted terms and quoted phrases compact punctuation joining
+adjacent words: `sayo` and `"sayo"` match `Sa 'Yo` and `Sa-yo`. Whitespace
+alone keeps words separate, so `sayo` and `"sayo"` do not match `Sa yo`, while
+`"sa yo"` matches the adjacent words. Admin unquoted and mixed queries use
+these same rules. Fully quoted Admin exact search remains literal and
+punctuation-sensitive; `"sayo"` does not match `Sa 'Yo` or `Sa-yo`.
 
 The Add lyrics ranker uses these relevance tiers:
 

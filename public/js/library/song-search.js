@@ -250,7 +250,7 @@
             });
         }
         if (!words.length) return null;
-        const singleWordMatches = [...words, ...addLyricsHyphenatedWords(lyrics)];
+        const singleWordMatches = [...words, ...addLyricsPunctuationJoinedWords(lyrics)];
         const collapsedWords = addLyricsCollapsedFieldWords(lyrics);
 
         const phraseCandidates = [
@@ -459,9 +459,9 @@
         return words;
     }
 
-    function addLyricsHyphenatedWords(value) {
+    function addLyricsPunctuationJoinedWords(value) {
         const words = [];
-        const pattern = /[\p{L}\p{N}]+(?:\p{Pd}[\p{L}\p{N}]+)+/gu;
+        const pattern = /[\p{L}\p{N}]+(?:\s*\p{P}+\s*[\p{L}\p{N}]+)+/gu;
         const text = String(value || '');
         let match;
         while ((match = pattern.exec(text))) {
@@ -472,7 +472,7 @@
 
     function addLyricsCollapsedFieldWords(value) {
         const words = [];
-        const pattern = /[\p{L}\p{N}]+(?:\p{Pd}[\p{L}\p{N}]+)*/gu;
+        const pattern = /[\p{L}\p{N}]+(?:\s*\p{P}+\s*[\p{L}\p{N}]+)+|[\p{L}\p{N}]+/gu;
         const text = String(value || '');
         let match;
         while ((match = pattern.exec(text))) {
@@ -491,7 +491,7 @@
 
     function addLyricsFieldQuality(song, field, component) {
         if (component.phrase) return addLyricsPhraseMatch(song?.[field], component.text)?.quality || 0;
-        return [...addLyricsFieldWords(song?.[field]), ...addLyricsHyphenatedWords(song?.[field])].reduce(
+        return [...addLyricsFieldWords(song?.[field]), ...addLyricsPunctuationJoinedWords(song?.[field])].reduce(
             (best, word) => Math.max(best, addLyricsTokenMatchQuality(word.normalized, component.text)),
             0,
         );

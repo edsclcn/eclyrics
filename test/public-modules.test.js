@@ -343,6 +343,47 @@ test('fully quoted Admin exact search does not compact-match different punctuati
     assert.deepEqual(window.eclyricsSongSearch.searchAdmin([song], null, '"pagibig mong wagas"'), []);
 });
 
+test('Add Lyrics treats punctuation-joined Sa Yo as a compound in titles and lyrics', () => {
+    const window = loadBrowserScript('public/js/library/song-search.js');
+    const search = window.eclyricsSongSearch;
+    const songs = [
+        { id: 'title-apostrophe', title: "Sa 'Yo", lyrics: '' },
+        { id: 'title-hyphen', title: 'Sa-yo', lyrics: '' },
+        { id: 'lyrics-apostrophe', title: 'A Song', lyrics: "Singing Sa 'Yo today" },
+        { id: 'lyrics-hyphen', title: 'Another Song', lyrics: 'Singing Sa-yo today' },
+        { id: 'plain-spaced', title: 'Sa yo', lyrics: '' },
+    ];
+    const expected = ['title-apostrophe', 'title-hyphen', 'lyrics-apostrophe', 'lyrics-hyphen'];
+
+    assert.deepEqual(search.matchSongsForAddLyrics(songs, 'sayo').map((song) => song.id), expected);
+    assert.deepEqual(search.searchAdmin(songs, null, 'sayo').map((song) => song.id), expected);
+    assert.deepEqual(search.matchSongsForAddLyrics(songs, '"sayo"').map((song) => song.id), expected);
+    assert.deepEqual(search.matchSongsForAddLyrics([songs[4]], 'sayo').map((song) => song.id), []);
+});
+
+test('Add Lyrics preview highlights the original punctuation compound and exact Admin stays literal', () => {
+    const window = loadBrowserScript('public/js/features/editor/smart-quotes.js');
+    loadBrowserScript('public/js/library/song-search.js', { window });
+    const search = window.eclyricsSongSearch;
+    const song = { id: 'lyrics-apostrophe', title: 'A Song', lyrics: "Singing Sa 'Yo today" };
+    const details = search.getLyricsSearchPreviewDetails(song, 'sayo');
+
+    assert.ok(
+        details.ranges.some(({ start, end }) => details.text.slice(start, end).includes("Sa 'Yo")),
+        'the highlight should include the original apostrophe compound',
+    );
+    assert.deepEqual(search.matchSongsForAddLyrics([song], '"sayo"').map((match) => match.id), ['lyrics-apostrophe']);
+    assert.deepEqual(search.searchAdmin([song], null, '"sayo"'), []);
+});
+
+test('Add Lyrics still rejects arbitrary infixes when matching punctuation compounds', () => {
+    const window = loadBrowserScript('public/js/library/song-search.js');
+    const search = window.eclyricsSongSearch;
+    const song = { id: 'pagibig', title: 'Ama Salamat (Sa Pag-ibig Mong Wagas)', lyrics: '' };
+
+    assert.deepEqual(search.matchSongsForAddLyrics([song], 'gibi').map((match) => match.id), []);
+});
+
 test('Add Lyrics preview centers a later exact lyric match', () => {
     const window = loadBrowserScript('public/js/library/song-search.js');
     const lyrics = `BEGINNING-ONLY MARKER. ${'pre match filler '.repeat(20)}Here is the promised light for everyone. ${'post match filler '.repeat(20)}`;
