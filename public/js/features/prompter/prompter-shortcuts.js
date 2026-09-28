@@ -20,15 +20,6 @@
     /** Single source of truth — keep preview dialog and handlers aligned. */
     const PROMPTER_SHORTCUT_REGISTRY = [
         {
-            id: 'send',
-            label: 'Send to prompter',
-            description: 'backtick — works anywhere except inside a text field',
-            codes: ['Backquote'],
-            scope: 'workspace',
-            requiresPrompter: false,
-            allowRepeat: false,
-        },
-        {
             id: 'playPause',
             label: 'Play / pause',
             codes: ['Space'],
@@ -220,7 +211,6 @@
 
     function formatShortcutKeys(def) {
         const map = {
-            Backquote: '`',
             Space: 'Space',
             ArrowLeft: '←',
             ArrowRight: '→',
@@ -244,7 +234,6 @@
 
     function formatShortcutKeysPlain(def) {
         const map = {
-            Backquote: '`',
             Space: 'Space',
             ArrowLeft: '←',
             ArrowRight: '→',
@@ -297,6 +286,17 @@
             row.appendChild(dd);
             container.appendChild(row);
         }
+
+        const holdRow = document.createElement('div');
+        const holdLabel = document.createElement('dt');
+        const holdIcon = document.createElement('i');
+        holdIcon.className = 'preview-shortcuts-dialog__hold-icon fa-regular fa-circle';
+        holdIcon.setAttribute('aria-hidden', 'true');
+        holdLabel.append(holdIcon, document.createTextNode('Hold to send'));
+        const holdDescription = document.createElement('dd');
+        holdDescription.textContent = 'Click and hold a text block to send it to the prompter';
+        holdRow.append(holdLabel, holdDescription);
+        container.appendChild(holdRow);
     }
 
     function assertPrompterShortcutParity() {

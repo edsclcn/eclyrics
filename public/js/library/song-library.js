@@ -7,7 +7,7 @@
      * Development switch: set false to use the local song cache only.
      * Set true before release so users receive Firestore updates in realtime.
      */
-    const ENABLE_LYRICS_REALTIME_SYNC = true; // Set to true for production release. Check before committing.
+    const ENABLE_LYRICS_REALTIME_SYNC = false; // Set to true for production release. Check before committing.
     const songModel = window.eclyricsSongModel;
     const songSearch = window.eclyricsSongSearch;
 

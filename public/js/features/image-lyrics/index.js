@@ -10,6 +10,8 @@ const ids={play:'image-lyrics-play',prev:'image-lyrics-prev',next:'image-lyrics-
 const controls=Object.fromEntries(Object.entries(ids).map(([key,id])=>[key,$(id)]));
 let tabs=[], tabId=0, active=0, selected=0, popup=null, ready=false, paused=true, speed=.5, scrollTop=0;
 let pendingImageArrow='', pendingImageArrowAt=0;
+let pendingImageSendHold=null;
+const IMAGE_SEND_HOLD_MS=600, IMAGE_SEND_MOVE_TOLERANCE=8;
 function matchImageArrow(code,repeat=false){if(repeat)return false;if(code!=='ArrowLeft'&&code!=='ArrowRight'){pendingImageArrow='';pendingImageArrowAt=0;return false}const now=Date.now(),matched=pendingImageArrow===code&&now-pendingImageArrowAt<=400;pendingImageArrow=matched?'':code;pendingImageArrowAt=matched?0:now;return matched}
 function resetImageArrow(){pendingImageArrow='';pendingImageArrowAt=0}
 const tab=()=>tabs.find(t=>t.id===active), block=()=>tab()?.blocks[selected];
@@ -62,10 +64,10 @@ label.addEventListener('click',e=>{if(b.file){e.preventDefault();choose(i)}});
 ['dragenter','dragover'].forEach(k=>label.addEventListener(k,e=>{e.preventDefault();label.classList.add('is-dragging')}));
 ['dragleave','drop'].forEach(k=>label.addEventListener(k,e=>{e.preventDefault();label.classList.remove('is-dragging')}));
 label.addEventListener('drop',e=>assign(i,e.dataTransfer?.files?.[0]));a.onclick=e=>{if(e.target.closest('button,label,input'))return;choose(i)};a.onkeydown=e=>{if(e.target===a&&['Enter',' '].includes(e.key)){e.preventDefault();choose(i)}};a.append(label);return a}
-function renderBlocks(){blocksEl.replaceChildren();tab().blocks.forEach((b,i)=>blocksEl.append(makeBlock(b,i,tab().blocks.length)));$('image-lyrics-selected-title').textContent=block()?.file?.name||('Block '+(selected+1))}
+function renderBlocks(){resetImageSendHold();blocksEl.replaceChildren();tab().blocks.forEach((b,i)=>blocksEl.append(makeBlock(b,i,tab().blocks.length)));$('image-lyrics-selected-title').textContent=block()?.file?.name||('Block '+(selected+1))}
 function updatePreviewPosition(){if(preview.hidden||!preview.naturalWidth||!stage.clientWidth)return;const renderedHeight=preview.naturalHeight*stage.clientWidth/preview.naturalWidth,scrollScale=stage.clientWidth/1920,maxPreviewScroll=Math.max(0,renderedHeight-stage.clientHeight);preview.style.position='absolute';preview.style.left='0';preview.style.top=renderedHeight<=stage.clientHeight?(stage.clientHeight-renderedHeight)/2+'px':-Math.min(maxPreviewScroll,Math.max(0,scrollTop*scrollScale))+'px';preview.style.margin='0';preview.style.transform=''}
 function updatePreview(){const b=block(),sourceUrl=b?.url||'',visible=!!sourceUrl&&preview.dataset.previewFailedUrl!==sourceUrl;preview.hidden=!visible;empty.hidden=visible;if(visible){if(preview.dataset.previewUrl!==sourceUrl){preview.dataset.previewUrl=sourceUrl;preview.dataset.previewFailedUrl='';preview.onload=updatePreviewPosition;preview.onerror=()=>{if(preview.dataset.previewUrl!==sourceUrl||block()?.url!==sourceUrl)return;preview.dataset.previewFailedUrl=sourceUrl;preview.hidden=true;empty.hidden=false;preview.removeAttribute('src');status('Unable to preview this image. Choose another file.',true)};preview.src=sourceUrl}updatePreviewPosition()}else{preview.dataset.previewUrl='';preview.onload=null;preview.onerror=null;if(preview.hasAttribute('src'))preview.removeAttribute('src');preview.style.transform=''}
-const has=lineup().length>0;sendBtn.disabled=!has;const enabled=has&&popup&&!popup.closed;Object.values(controls).forEach(e=>e.disabled=!enabled);controls.play.setAttribute('aria-pressed',String(!paused));const icon=controls.play.querySelector('i');if(icon)icon.className=paused?'fa-solid fa-play':'fa-solid fa-pause'}
+const has=lineup().length>0;sendBtn.disabled=!has;sendBtn.title=has?'Send the active lineup to the prompter':'Add content to the active lineup before sending';const enabled=has&&popup&&!popup.closed;Object.values(controls).forEach(e=>e.disabled=!enabled);controls.play.setAttribute('aria-pressed',String(!paused));const icon=controls.play.querySelector('i');if(icon)icon.className=paused?'fa-solid fa-play':'fa-solid fa-pause'}
 function render(){renderTabs();renderBlocks();updatePreview()}
 function send(m){if(popup&&!popup.closed)popup.postMessage(m,location.origin==='null'?'*':location.origin)}
 function sendInit(){const l=lineup();send({type:prefix+'init',lineup:l,currentIndex:Math.max(0,l.findIndex(x=>x.blockIndex===selected)),speed,paused,scrollTop})}
@@ -121,6 +123,38 @@ async function loadLineup(file){
 }
 function control(action,extra={}){send({type:prefix+'control',action,...extra})}
 function open(){if(!lineup().length){status('Add at least one image before sending it to the prompter.',true);return}popup=window.open(new URL('image-prompter.html',location.href).href,'eclyricsImagePrompter','width=1920,height=1080,resizable=yes');if(!popup){status('Allow pop-ups to open the image prompter.',true);return}ready=false;popup.focus();setTimeout(sendInit,300);updatePreview()}
+function resetImageSendHold(){const hold=pendingImageSendHold;if(!hold)return;clearTimeout(hold.timer);clearTimeout(hold.visibilityTimer);cancelAnimationFrame(hold.animationFrame);hold.indicator.classList.remove('is-pending');hold.indicator.style.setProperty('--image-send-hold-progress','0deg');pendingImageSendHold=null}
+document.addEventListener('pointerdown',event=>{
+    if(!event.isPrimary||event.button!==0)return;
+    resetImageSendHold();
+    if(!panel.classList.contains('is-active'))return;
+    const target=event.target,article=target?.closest?.('.image-lyrics-block');
+    if(!article||target.closest?.('button, input'))return;
+    const currentTab=tab(),index=Array.prototype.indexOf.call(blocksEl.children,article),imageBlock=currentTab?.blocks[index];
+    if(!imageBlock?.file||article.getClientRects().length===0)return;
+    let indicator=article.querySelector('.image-lyrics-send-hold-indicator');
+    if(!indicator){indicator=document.createElement('span');indicator.className='image-lyrics-send-hold-indicator';indicator.setAttribute('aria-hidden','true');article.append(indicator)}
+    indicator.style.setProperty('--image-send-hold-progress','0deg');
+    const hold={pointerId:event.pointerId,tab:currentTab,block:imageBlock,article,indicator,startX:event.clientX,startY:event.clientY,startedAt:performance.now(),timer:0,visibilityTimer:0,animationFrame:0};
+    pendingImageSendHold=hold;
+    hold.visibilityTimer=setTimeout(()=>{if(pendingImageSendHold===hold)indicator.classList.add('is-pending')},140);
+    const updateProgress=now=>{if(pendingImageSendHold!==hold)return;const progress=Math.min((now-hold.startedAt)/IMAGE_SEND_HOLD_MS,1);indicator.style.setProperty('--image-send-hold-progress',`${progress*360}deg`);if(progress<1)hold.animationFrame=requestAnimationFrame(updateProgress)};
+    hold.animationFrame=requestAnimationFrame(updateProgress);
+    hold.timer=setTimeout(()=>{
+        if(pendingImageSendHold!==hold)return;
+        const index=hold.tab.blocks.indexOf(hold.block),valid=hold.tab===tab()&&active===hold.tab.id&&index>=0&&!!hold.block.file&&panel.classList.contains('is-active')&&hold.article.isConnected&&blocksEl.contains(hold.article)&&hold.article.getClientRects().length>0;
+        resetImageSendHold();
+        if(!valid)return;
+        selected=index;scrollTop=0;render();open();
+    },IMAGE_SEND_HOLD_MS);
+},true);
+document.addEventListener('pointermove',event=>{
+    const hold=pendingImageSendHold;if(!hold||event.pointerId!==hold.pointerId)return;
+    const dx=event.clientX-hold.startX,dy=event.clientY-hold.startY;
+    if(dx*dx+dy*dy>IMAGE_SEND_MOVE_TOLERANCE**2)resetImageSendHold();
+});
+const cancelImageSendForPointer=event=>{if(event.pointerId===pendingImageSendHold?.pointerId)resetImageSendHold()};
+document.addEventListener('pointerup',cancelImageSendForPointer);document.addEventListener('pointercancel',cancelImageSendForPointer);document.addEventListener('lostpointercapture',cancelImageSendForPointer);window.addEventListener('blur',resetImageSendHold);
 exportButton.addEventListener('click',saveLineup);
 importButton.addEventListener('click',()=>importInput.click());
 importInput.addEventListener('change',event=>{
