@@ -58,6 +58,10 @@
     gap: 0.35rem;
 }
 
+.image-lyrics-port[hidden] {
+    display: none;
+}
+
 .image-lyrics-port-button {
     display: grid;
     place-items: center;
@@ -346,6 +350,7 @@
 }
 
 .image-lyrics-block {
+    position: relative;
     min-width: 0;
     padding: 0;
     border: 0;
@@ -353,6 +358,31 @@
     background: transparent;
     box-shadow: none;
     cursor: pointer;
+}
+
+.image-lyrics-send-hold-indicator {
+    position: absolute;
+    z-index: 3;
+    right: 10px;
+    bottom: 10px;
+    display: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: conic-gradient(var(--blue-mid) 0deg var(--image-send-hold-progress, 0deg), color-mix(in srgb, var(--blue-mid) 18%, transparent) var(--image-send-hold-progress, 0deg) 360deg);
+    pointer-events: none;
+}
+
+.image-lyrics-send-hold-indicator::after {
+    position: absolute;
+    inset: 2.5px;
+    border-radius: inherit;
+    background: var(--card);
+    content: '';
+}
+
+.image-lyrics-send-hold-indicator.is-pending {
+    display: block;
 }
 
 .image-lyrics-block:focus-visible {
@@ -543,10 +573,6 @@
     font-size: 1.6rem;
 }
 
-.image-lyrics-send {
-    min-width: 10rem;
-}
-
 @media (max-width: 1200px) {
     .image-lyrics-workspace {
         grid-template-columns: minmax(0, 1fr);
@@ -611,9 +637,6 @@
         gap: 0.25rem 0.5rem;
     }
 
-    .image-lyrics-send {
-        min-width: 0;
-    }
 }
 
 @media (max-width: 480px) {

@@ -25,6 +25,8 @@ const PROMPTER_POPUP_H = 1080;
 const PROMPTER_BC_NAME = 'eclyrics-prompter';
 /** Single reused popup name so Send never opens a second window while the first is open. */
 const PROMPTER_WINDOW_NAME = 'eclyricsPrompter';
+const TEXT_BLOCK_SEND_HOLD_MS = 600;
+const TEXT_BLOCK_SEND_MOVE_TOLERANCE = 8;
 
 let tabCount = 0;
 let prompterBroadcast = null;
@@ -44,6 +46,7 @@ let textNum = {};
 /** @type {{ blockTabId: string, sourceId: string, pane: HTMLElement, editor: HTMLTextAreaElement } | null} */
 let blockEditorSession = null;
 let activeBlockTabId = null;
+let pendingTextBlockSend = null;
 /** @type {Record<string, ReturnType<typeof setTimeout>>} */
 const prompterLineupSyncTimers = {};
 
@@ -577,9 +580,6 @@ function handleGlobalPrompterShortcut(event) {
     event.preventDefault();
 
     switch (resolved.id) {
-        case 'send':
-            sendActiveBlockToPrompter();
-            break;
         case 'adjacentBlock':
             if (!adjacentBlockPressMatcher?.press(resolved.code, event.repeat)) return;
             goToAdjacentBlockAndSend(resolved.code === 'ArrowLeft' ? -1 : 1);
@@ -868,9 +868,6 @@ function handlePrompterWorkspaceShortcutMessage(event) {
     const msg = event.data;
     if (!msg || msg.type !== 'eclyrics-workspace-shortcut') return;
     switch (msg.id) {
-        case 'send':
-            sendActiveBlockToPrompter();
-            break;
         case 'adjacentBlock': {
             const delta = msg.delta === 1 ? 1 : msg.delta === -1 ? -1 : 0;
             if (delta) goToAdjacentBlockAndSend(delta);
@@ -949,18 +946,27 @@ function refreshAllBlockLabelsInTab(tabId) {
     document.querySelectorAll(`#tab-${tabId} textarea`).forEach((ta) => updateBlockCellLabel(ta));
 }
 
+function hasSendableContentInTab(tabId) {
+    if (tabId == null) return false;
+    return [...document.querySelectorAll(`#tab-${tabId} textarea`)].some((ta) => !isBlockEmpty(ta));
+}
+
 function updateActiveBlockToolbar() {
     const titleEl = document.getElementById('selected-block-title');
     const titleBtn = document.getElementById('selected-block-title-btn');
     const sendBtn = document.getElementById('send-prompter-btn');
+    const canSend = hasSendableContentInTab(getActiveTabId());
+    const sendTitle = canSend
+        ? 'Send the active lineup to the prompter'
+        : 'Add content to the active lineup before sending';
     const ta = getSelectedTextareaForActiveTab();
 
     if (!ta || !document.body.contains(ta)) {
         if (titleEl) titleEl.textContent = '—';
         if (titleBtn) titleBtn.disabled = true;
         if (sendBtn) {
-            sendBtn.disabled = false;
-            sendBtn.title = 'Send the active block to the prompter (`) — updates an open window';
+            sendBtn.disabled = !canSend;
+            sendBtn.title = sendTitle;
         }
         updatePreviewAdjacentBlockButtons();
         return;
@@ -974,9 +980,8 @@ function updateActiveBlockToolbar() {
     if (titleBtn) titleBtn.disabled = false;
 
     if (sendBtn) {
-        sendBtn.disabled = false;
-        sendBtn.title =
-            'Send the active block to the prompter (`) — replaces the lineup in an open prompter window';
+        sendBtn.disabled = !canSend;
+        sendBtn.title = sendTitle;
     }
     updatePreviewAdjacentBlockButtons();
 }
@@ -1296,9 +1301,103 @@ function sendActiveBlockToPrompter() {
     const sendBtn = document.getElementById('send-prompter-btn');
     if (sendBtn?.disabled) return;
     const ta = getSelectedTextareaForActiveTab();
-    if (!ta) return;
-    const parts = ta.id.split('-');
-    sendPrompt(parseInt(parts[1], 10), parseInt(parts[2], 10));
+    sendTextareaToPrompter(ta);
+}
+
+function sendTextareaToPrompter(textarea) {
+    const match = textarea?.id.match(/^textarea-(\d+)-(\d+)$/);
+    if (!match) return;
+    sendPrompt(parseInt(match[1], 10), parseInt(match[2], 10));
+}
+
+function visibleTextBlockTextarea(target) {
+    const textarea = target?.closest?.('#tab-content .textarea-cell textarea');
+    if (!textarea || textarea.closest('.textarea-cell')?.classList.contains('is-empty')) return null;
+    const style = getComputedStyle(textarea);
+    return style.display !== 'none' && style.visibility !== 'hidden' && textarea.getClientRects().length
+        ? textarea
+        : null;
+}
+
+function resetTextBlockSendHold() {
+    const hold = pendingTextBlockSend;
+    if (!hold) return;
+    clearTimeout(hold.timer);
+    clearTimeout(hold.visibilityTimer);
+    cancelAnimationFrame(hold.animationFrame);
+    hold.indicator.classList.remove('is-pending');
+    hold.indicator.style.setProperty('--send-hold-progress', '0deg');
+    pendingTextBlockSend = null;
+}
+
+function initTextBlockHoldSend() {
+    document.addEventListener('pointerdown', (event) => {
+        if (!event.isPrimary || event.button !== 0) return;
+        const textarea = visibleTextBlockTextarea(event.target);
+        const body = textarea?.closest('.textarea-cell-body');
+        if (!textarea || !body) return;
+
+        resetTextBlockSendHold();
+        let indicator = body.querySelector('.textarea-send-hold-indicator');
+        if (!indicator) {
+            indicator = document.createElement('span');
+            indicator.className = 'textarea-send-hold-indicator';
+            indicator.setAttribute('aria-hidden', 'true');
+            body.appendChild(indicator);
+        }
+        indicator.style.setProperty('--send-hold-progress', '0deg');
+        const hold = {
+            pointerId: event.pointerId,
+            textarea,
+            indicator,
+            startX: event.clientX,
+            startY: event.clientY,
+            startedAt: performance.now(),
+            timer: 0,
+            visibilityTimer: 0,
+            animationFrame: 0,
+        };
+        pendingTextBlockSend = hold;
+        hold.visibilityTimer = setTimeout(() => {
+            if (pendingTextBlockSend === hold) indicator.classList.add('is-pending');
+        }, 140);
+
+        const updateProgress = (now) => {
+            if (pendingTextBlockSend !== hold) return;
+            const progress = Math.min((now - hold.startedAt) / TEXT_BLOCK_SEND_HOLD_MS, 1);
+            indicator.style.setProperty('--send-hold-progress', `${progress * 360}deg`);
+            if (progress < 1) hold.animationFrame = requestAnimationFrame(updateProgress);
+        };
+        hold.animationFrame = requestAnimationFrame(updateProgress);
+        hold.timer = setTimeout(() => {
+            if (pendingTextBlockSend !== hold) return;
+            const targetTextarea =
+                hold.textarea.isConnected && visibleTextBlockTextarea(hold.textarea) === hold.textarea
+                ? hold.textarea
+                : null;
+            resetTextBlockSendHold();
+            if (targetTextarea) sendTextareaToPrompter(targetTextarea);
+        }, TEXT_BLOCK_SEND_HOLD_MS);
+    }, true);
+
+    document.addEventListener('pointermove', (event) => {
+        const hold = pendingTextBlockSend;
+        if (!hold || event.pointerId !== hold.pointerId) return;
+        const dx = event.clientX - hold.startX;
+        const dy = event.clientY - hold.startY;
+        if (dx * dx + dy * dy > TEXT_BLOCK_SEND_MOVE_TOLERANCE ** 2) {
+            resetTextBlockSendHold();
+            return;
+        }
+    });
+
+    const cancelForPointer = (event) => {
+        if (event.pointerId === pendingTextBlockSend?.pointerId) resetTextBlockSendHold();
+    };
+    document.addEventListener('pointerup', cancelForPointer);
+    document.addEventListener('pointercancel', cancelForPointer);
+    document.addEventListener('lostpointercapture', cancelForPointer);
+    window.addEventListener('blur', resetTextBlockSendHold);
 }
 
 function initShell() {
@@ -1372,6 +1471,7 @@ function initShell() {
 
     const tc = document.getElementById('tab-content');
     if (tc) {
+        initTextBlockHoldSend();
         tc.addEventListener('focusin', (e) => {
             if (e.target.matches && e.target.matches('textarea')) selectTextarea(e.target);
         });
@@ -1606,8 +1706,7 @@ function onBlockContentChanged(textarea) {
     updateBlockCellLabel(textarea);
     const blockTabId = blockTabIdForTextarea(textarea);
     if (blockTabId && blockEditorSession?.sourceId === textarea.id) refreshBlockTabChrome(blockTabId);
-    const cur = textNum[tabId.toString()]?.[2];
-    if (cur === textarea) updateActiveBlockToolbar();
+    if (tabId === getActiveTabId()) updateActiveBlockToolbar();
     maintainEmptySlotForTab(tabId);
 }
 

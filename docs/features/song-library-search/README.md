@@ -6,9 +6,9 @@ tags: [minisearch, song-library, fuzzy-search, ranking]
 
 # Song library search
 
-The Add lyrics dialog and Admin panel share the same Firestore-backed browser
-library and MiniSearch index. Firestore remains the source of truth; matching
-is performed in memory after the library is loaded.
+The Add lyrics dialog and Admin panel use the same Firestore-backed browser
+library, but they use separate matching paths. Firestore remains the source of
+truth; search runs against the songs already loaded in memory.
 
 ## Flow
 
@@ -16,14 +16,85 @@ is performed in memory after the library is loaded.
 Firestore onSnapshot(lyrics)
   -> normalizeLyricsDoc
   -> song-library state
-  -> MiniSearch index
-  -> Add lyrics and Admin search
+  -> Add lyrics: matchSongsForAddLyrics -> category/restricted filters -> results
+  -> Admin: searchAdmin -> empty alphabetical browse, exact quoted path, or Add lyrics matcher/ranker
 ```
 
-MiniSearch indexes `hymnNum`, `title`, `adaptOf`, and full `lyrics`. The Add
-lyrics dialog calls `matchAllSongs()` so category filters are applied to the
-complete match set before the visible result limit is applied. Selecting a
-result uses the already-loaded full lyric document.
+The library builds a MiniSearch index over `hymnNum`, `title`, `adaptOf`, and
+`lyrics` for the shared `matchSongs()` API. Add lyrics calls
+`matchSongsForAddLyrics()` and scans loaded songs with its own matcher and
+ranker; it does not use MiniSearch to retrieve candidates. Admin uses
+`searchAdmin()`: empty queries browse alphabetically, fully quoted queries use
+literal exact matching, and all other nonempty queries use
+`matchSongsForAddLyrics()` with a ten-result cap. The Add lyrics UI applies
+category and restricted-song rules after matching, then displays up to ten
+results for a query or twenty while browsing. Selecting a result uses the
+already-loaded full lyric document.
+
+## Add lyrics matching and ranking
+
+- Every query component must match somewhere in the song (AND). Unquoted terms
+  may match different fields among title, adaptation source, hymn number, and
+  lyrics.
+- A phrase in straight double quotes must match a contiguous sequence of word
+  tokens in one field. It cannot span fields. Punctuation joining adjacent
+  words is compacted for unquoted terms and quoted phrases: `sayo` matches
+  `Sa 'Yo` and `Sa-yo`; `"sayo"` also matches both forms. Whitespace alone
+  keeps words separate, so `sayo` and `"sayo"` do not match `Sa yo`, while
+  `"sa yo"` matches those two adjacent words. Admin unquoted and mixed queries
+  use this same Add lyrics matcher. Fully quoted Admin exact search remains
+  literal and punctuation-sensitive, so `"sayo"` does not match `Sa 'Yo` or
+  `Sa-yo`.
+- Results are grouped by whole-query relevance, in this order: all components
+  match the title without fuzzy matching; the complete ordered query matches
+  contiguously in lyrics; all components match without fuzzy matching in one
+  field; then scattered or fuzzy matches. Within a tier, exact word matches
+  rank above prefixes, and prefixes rank above fuzzy matches. Field match
+  quality further orders results within each tier.
+- Matching is against whole normalized words, with prefix matching allowed.
+  Arbitrary infix matches are not accepted. Adjacent transposition of two
+  letters is accepted. Levenshtein typo tolerance is disabled for terms under
+  three characters, allows one edit for terms of 3–9 characters, and up to two
+  edits for terms of 10 or more characters.
+- If a query is fully satisfied by the title without fuzzy matching, the row
+  keeps the plain opening lyric preview. Otherwise, when lyrics contain a
+  matching ordered query, quoted phrase, or best matching word, the preview
+  centers an excerpt on that occurrence and subtly highlights the matched lyric
+  text. For typo matches, the highlight shows the spelling from the lyrics.
+  Metadata-only matches fall back to the opening preview.
+- Revision and archived songs remain visible but are not selectable in Add
+  lyrics. Category filters are applied by the dialog.
+
+## Admin and shared search behavior
+
+- In Admin search, enclose the complete query in ASCII (`"phrase"`) or smart
+  (`“phrase”`) double quotes to use its separate exact phrase mode. It checks
+  literal, case-insensitive text in `title`, `adaptOf`, `hymnNum`, and `lyrics`,
+  normalizing query apostrophes with the smart-quotes helper. Results use
+  Admin's alphabetical order and are not limited to ten.
+- Unquoted queries and mixed queries that are not fully wrapped in quotes use
+  `matchSongsForAddLyrics()` and its matching, ranking, and typo rules, capped
+  at ten results. For these nonempty queries, Admin rows use the Add lyrics
+  preview behavior: title-complete matches keep the plain opening preview;
+  otherwise, an excerpt centers on an actual lyric match and subtly highlights
+  the matched text, using the lyrics' spelling for typo matches. Metadata-only
+  matches fall back to the opening preview.
+- An empty Admin query lists songs in alphabetical order. Its rows use the
+  opening lyric preview.
+- For a fully quoted exact Admin query, a title exact match keeps the plain
+  opening preview. If the title is not the exact match but the literal phrase
+  occurs in lyrics, Admin centers the excerpt on that lyric occurrence and
+  highlights it. An exact match in another metadata field without a lyric
+  occurrence uses the opening preview.
+- The shared `matchSongs()` API remains on MiniSearch candidate retrieval and
+  its existing shared matcher/ranker. This path is separate from Add lyrics and
+  unquoted Admin search.
+
+For the exact phrase path, the Admin input handler calls `renderSearchResults()`
+in `public/js/features/admin/admin-panel.js`, which calls `searchAdmin()` through
+`public/js/library/song-library.js`. The exact phrase check and alphabetical
+sort are in `public/js/library/song-search.js`. If there are no visible matches,
+the Admin panel displays “No songs match your search.”
 
 ## Adaptation heading in the prompt
 
@@ -37,44 +108,17 @@ text is rendered in italics by `public/js/features/editor/textformatting.js`.
 preview. This heading behavior does not change the adaptation-source label
 shown in search results.
 
-## Search behavior
-
-- In Admin search, enclose the complete phrase in ASCII (`"phrase"`) or smart
-  (`“phrase”`) double quotes to find contiguous literal text. For example,
-  `"sa 'yo"` matches occurrences of
-  `sa ’yo`, including the same spacing and punctuation, regardless of case.
-  Apostrophe variants in the quoted query are normalized to the app's smart
-  apostrophe before matching.
-- Admin exact phrase search checks `title`, `adaptOf`, `hymnNum`, and full
-  `lyrics`, and returns every match in Admin's alphabetical order.
-- Unquoted Admin queries keep the existing fuzzy MiniSearch behavior. Add
-  lyrics and shared search continue to use the existing shared search behavior;
-  the exact phrase mode applies only to Admin queries wrapped in ASCII or smart
-  double quotes.
-- Multi-word queries use AND matching.
-- Prefix and fuzzy matching are enabled through shared search options.
-- Title, adaptation source, and hymn-number matches rank above lyrics-body
-  matches.
-- Empty queries use browse ordering and result limits.
-- Category filters are applied by the consuming UI.
-- Revision and archived songs remain visible but are not selectable in Add
-  lyrics.
-
-For the exact phrase path, the Admin input handler calls
-`renderSearchResults()` in `public/js/features/admin/admin-panel.js`, which
-calls `searchAdmin()` through `public/js/library/song-library.js`.
-`public/js/library/song-search.js` detects a fully quoted query and checks the
-normalized phrase with literal substring matching. The Admin panel then applies
-any active category filters and renders the results. If there are no visible
-matches, it displays “No songs match your search.”
-
 ## Ownership
 
 - `public/js/library/song-model.js` — document normalization and display data
-- `public/js/library/song-search.js` — MiniSearch construction, parsing, and ranking
-- `public/js/library/song-library.js` — Firestore listener, local cache, and shared API
-- `public/js/features/editor/block-source.js` — Add lyrics search and selection UI
-- `public/js/features/admin/admin-panel.js` — Admin search and category filters
+- `public/js/library/song-search.js` — MiniSearch/shared search, Add lyrics
+  matching and ranking, and lyric search previews
+- `public/js/library/song-library.js` — Firestore listener, local cache, and
+  search API routing
+- `public/js/features/editor/block-source.js` — Add lyrics filters, result
+  display, preview, and selection UI
+- `public/js/features/admin/admin-panel.js` — Admin search, category filters,
+  and query-centered lyric previews
 
 ## Current read behavior
 

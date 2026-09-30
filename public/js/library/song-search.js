@@ -91,7 +91,7 @@
     function parseSearchQuery(query) {
         const q = String(query || '').trim();
         if (!q) {
-            return { phrases: [], terms: [], miniSearchQuery: '' };
+            return { phrases: [], terms: [], orderedTerms: [], miniSearchQuery: '' };
         }
 
         const phrases = [];
@@ -108,6 +108,11 @@
             .filter(Boolean)
             .map(normalizeSearchQueryToken)
             .filter(Boolean);
+        const orderedTerms = normalizeSearchText(q.replace(/"/g, ' '))
+            .split(/\s+/)
+            .filter(Boolean)
+            .map(normalizeSearchQueryToken)
+            .filter(Boolean);
 
         const miniSearchTerms = [];
         phrases.forEach((phrase) => {
@@ -121,8 +126,162 @@
         return {
             phrases,
             terms,
+            orderedTerms,
             miniSearchQuery: [...new Set(miniSearchTerms)].join(' '),
         };
+    }
+
+    function lyricWordMatchesPhrase(words, phraseWords) {
+        if (!phraseWords.length || phraseWords.length > words.length) return null;
+        for (let start = 0; start <= words.length - phraseWords.length; start += 1) {
+            const qualities = phraseWords.map((word, offset) =>
+                addLyricsTokenMatchQuality(words[start + offset].normalized, word),
+            );
+            if (qualities.every((quality) => quality > 0)) {
+                return {
+                    start: words[start].start,
+                    end: words[start + phraseWords.length - 1].end,
+                    ranges: words.slice(start, start + phraseWords.length).map(({ start: wordStart, end: wordEnd }) => ({
+                        start: wordStart,
+                        end: wordEnd,
+                    })),
+                    quality: Math.min(...qualities),
+                };
+            }
+        }
+        return null;
+    }
+
+    function makeLyricsExcerptDetails(lyrics, match, maxChars) {
+        const limit = Math.max(1, Number(maxChars) || 150);
+        if (lyrics.length <= limit) {
+            const leading = lyrics.length - lyrics.trimStart().length;
+            const text = lyrics.trim();
+            return {
+                text,
+                ranges: (match.ranges || [{ start: match.start, end: match.end }])
+                    .filter((range) => range.start >= leading && range.end <= leading + text.length)
+                    .map((range) => ({ start: range.start - leading, end: range.end - leading })),
+            };
+        }
+
+        const hasLeadingEllipsis = match.start > 0;
+        const hasTrailingEllipsis = match.end < lyrics.length;
+        const contentLimit = Math.max(1, limit - Number(hasLeadingEllipsis) - Number(hasTrailingEllipsis));
+        const matchLength = match.end - match.start;
+        let start = Math.max(0, match.start - Math.floor((contentLimit - matchLength) / 2));
+        let end = Math.min(lyrics.length, start + contentLimit);
+        start = Math.max(0, end - contentLimit);
+
+        if (start > 0) {
+            const whitespaceOffset = lyrics.slice(start).search(/\s/);
+            const nextWhitespace = whitespaceOffset < 0 ? -1 : start + whitespaceOffset;
+            if (nextWhitespace >= 0 && nextWhitespace < match.start) start = nextWhitespace + 1;
+        }
+        if (end < lyrics.length) {
+            const previousWhitespace = lyrics.slice(0, end).match(/\s\S*$/)?.index ?? -1;
+            if (previousWhitespace > match.end) end = previousWhitespace;
+        }
+
+        const rawExcerpt = lyrics.slice(start, end);
+        const leading = rawExcerpt.length - rawExcerpt.trimStart().length;
+        const excerpt = rawExcerpt.trim();
+        const excerptStart = start + leading;
+        const prefix = excerptStart > 0 ? '…' : '';
+        const text = `${prefix}${excerpt}${end < lyrics.length ? '…' : ''}`;
+        const sourceRanges = match.ranges || [{ start: match.start, end: match.end }];
+        return {
+            text,
+            ranges: sourceRanges
+                .filter((range) => range.start >= excerptStart && range.end <= excerptStart + excerpt.length)
+                .map((range) => ({ start: prefix.length + range.start - excerptStart, end: prefix.length + range.end - excerptStart })),
+        };
+    }
+
+    function getLyricsSearchPreview(song, query, maxChars = 150) {
+        return getLyricsSearchPreviewDetails(song, query, maxChars)?.text || null;
+    }
+
+    function escapeRegExp(value) {
+        return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    function getLyricsSearchPreviewDetails(song, query, maxChars = 150, options = {}) {
+        const lyrics = String(song?.lyrics || '');
+        if (!lyrics) return null;
+        const q = String(query || '').trim();
+        const parsed = parseSearchQuery(query);
+        const components = addLyricsQueryComponents(parsed);
+        let titleMatch = components.length > 0 && components.every(
+            (component) => addLyricsFieldQuality(song, 'title', component) > 1,
+        );
+
+        if (options.exactPhrase) {
+            const exact = q.match(/^(?:"([\s\S]*)"|“([\s\S]*)”)$/);
+            const phrase = exact?.[1] ?? exact?.[2] ?? '';
+            const exactPhrase = String(
+                window.eclyricsSmartQuotes?.normalizeSmartQuotes?.(phrase) || phrase,
+            );
+            if (!exactPhrase) return null;
+            const exactPattern = new RegExp(escapeRegExp(exactPhrase), 'iu');
+            titleMatch = exactPattern.test(String(song?.title || ''));
+            if (titleMatch) return { text: null, ranges: [], titleMatch };
+            const literalMatch = exactPattern.exec(lyrics);
+            if (!literalMatch) return { text: null, ranges: [], titleMatch };
+            const matchAt = literalMatch.index;
+            const match = {
+                start: matchAt,
+                end: matchAt + literalMatch[0].length,
+                ranges: [{ start: matchAt, end: matchAt + literalMatch[0].length }],
+            };
+            return { ...makeLyricsExcerptDetails(lyrics, match, maxChars), titleMatch };
+        }
+
+        if (titleMatch) return { text: null, ranges: [], titleMatch };
+
+        const words = [];
+        const wordPattern = /[\p{L}\p{N}]+/gu;
+        let wordMatch;
+        while ((wordMatch = wordPattern.exec(lyrics))) {
+            words.push({
+                normalized: normalizeSearchCompact(wordMatch[0]),
+                start: wordMatch.index,
+                end: wordMatch.index + wordMatch[0].length,
+            });
+        }
+        if (!words.length) return null;
+        const singleWordMatches = [...words, ...addLyricsPunctuationJoinedWords(lyrics)];
+        const collapsedWords = addLyricsCollapsedFieldWords(lyrics);
+
+        const phraseCandidates = [
+            ...(parsed.orderedTerms.length > 1 ? [parsed.orderedTerms] : []),
+            ...parsed.phrases.map((phrase) => normalizeSearchText(phrase).split(/\s+/).filter(Boolean)),
+            ...(parsed.terms.length > 1 ? [parsed.terms] : []),
+        ];
+        for (const phraseWords of phraseCandidates) {
+            const normalizedWords = phraseWords.map(normalizeSearchCompact).filter(Boolean);
+            const match =
+                lyricWordMatchesPhrase(words, normalizedWords) ||
+                lyricWordMatchesPhrase(collapsedWords, normalizedWords);
+            if (match) {
+                return { ...makeLyricsExcerptDetails(lyrics, match, maxChars), titleMatch };
+            }
+        }
+
+        let bestMatch = null;
+        for (const term of [...parsed.terms, ...parsed.phrases.flatMap((phrase) => phrase.split(/\s+/))]) {
+            const normalizedTerm = normalizeSearchQueryToken(term);
+            if (!normalizedTerm) continue;
+            singleWordMatches.forEach((word) => {
+                const quality = addLyricsTokenMatchQuality(word.normalized, normalizedTerm);
+                if (!quality) return;
+                if (!bestMatch || quality > bestMatch.quality) {
+                    bestMatch = { start: word.start, end: word.end, ranges: [{ start: word.start, end: word.end }], quality };
+                }
+            });
+        }
+        if (!bestMatch) return { text: null, ranges: [], titleMatch };
+        return { ...makeLyricsExcerptDetails(lyrics, bestMatch, maxChars), titleMatch };
     }
 
     function levenshteinDistance(a, b) {
@@ -231,24 +390,13 @@
         return score;
     }
 
-    function resolveStoredSong(entry, songsById) {
-        if (!entry) return null;
-        const id = typeof entry === 'string' ? entry : entry.id;
-        if (id && songsById.has(id)) return songsById.get(id);
-        if (entry && entry.id && entry.title) return entry;
-        return null;
-    }
-
     function rankMatchedSongs(entries, parsed, songsById) {
         return entries
             .map((entry) => {
                 const song = resolveStoredSong(entry, songsById);
                 if (!song) return null;
                 const indexScore = typeof entry?.score === 'number' ? entry.score : 0;
-                return {
-                    song,
-                    score: indexScore + computeFieldMatchScore(song, parsed),
-                };
+                return { song, score: indexScore + computeFieldMatchScore(song, parsed) };
             })
             .filter(Boolean)
             .sort((a, b) => b.score - a.score)
@@ -263,6 +411,153 @@
             .map((song) => ({ song, score: computeFieldMatchScore(song, searchParts) }))
             .sort((a, b) => b.score - a.score)
             .map((entry) => entry.song);
+    }
+
+    function adjacentTranspositionMatch(token, term) {
+        if (token.length !== term.length) return false;
+        let first = -1;
+        let second = -1;
+        for (let index = 0; index < token.length; index += 1) {
+            if (token[index] === term[index]) continue;
+            if (first < 0) first = index;
+            else if (second < 0) second = index;
+            else return false;
+        }
+        return (
+            second === first + 1 &&
+            token[first] === term[second] &&
+            token[second] === term[first]
+        );
+    }
+
+    function addLyricsMaxFuzzyDistance(term) {
+        const length = String(term || '').length;
+        if (length < 3) return 0;
+        return Math.min(2, Math.max(1, Math.floor(length * 0.2)));
+    }
+
+    function addLyricsTokenMatchQuality(token, term) {
+        const normalizedToken = normalizeSearchCompact(token);
+        const normalizedTerm = normalizeSearchQueryToken(term);
+        if (!normalizedToken || !normalizedTerm) return 0;
+        if (normalizedToken === normalizedTerm) return 4;
+        if (normalizedToken.startsWith(normalizedTerm)) return 3;
+        if (adjacentTranspositionMatch(normalizedToken, normalizedTerm)) return 1;
+        return levenshteinDistance(normalizedToken, normalizedTerm) <= addLyricsMaxFuzzyDistance(normalizedTerm)
+            ? 1
+            : 0;
+    }
+
+    function addLyricsFieldWords(value) {
+        const words = [];
+        const pattern = /[\p{L}\p{N}]+/gu;
+        const text = String(value || '');
+        let match;
+        while ((match = pattern.exec(text))) {
+            words.push({ normalized: normalizeSearchCompact(match[0]), start: match.index, end: pattern.lastIndex });
+        }
+        return words;
+    }
+
+    function addLyricsPunctuationJoinedWords(value) {
+        const words = [];
+        const pattern = /[\p{L}\p{N}]+(?:\s*\p{P}+\s*[\p{L}\p{N}]+)+/gu;
+        const text = String(value || '');
+        let match;
+        while ((match = pattern.exec(text))) {
+            words.push({ normalized: normalizeSearchCompact(match[0]), start: match.index, end: pattern.lastIndex });
+        }
+        return words;
+    }
+
+    function addLyricsCollapsedFieldWords(value) {
+        const words = [];
+        const pattern = /[\p{L}\p{N}]+(?:\s*\p{P}+\s*[\p{L}\p{N}]+)+|[\p{L}\p{N}]+/gu;
+        const text = String(value || '');
+        let match;
+        while ((match = pattern.exec(text))) {
+            words.push({ normalized: normalizeSearchCompact(match[0]), start: match.index, end: pattern.lastIndex });
+        }
+        return words;
+    }
+
+    function addLyricsPhraseMatch(value, phrase) {
+        const phraseWords = normalizeSearchText(phrase).split(/\s+/).filter(Boolean);
+        return (
+            lyricWordMatchesPhrase(addLyricsFieldWords(value), phraseWords) ||
+            lyricWordMatchesPhrase(addLyricsCollapsedFieldWords(value), phraseWords)
+        );
+    }
+
+    function addLyricsFieldQuality(song, field, component) {
+        if (component.phrase) return addLyricsPhraseMatch(song?.[field], component.text)?.quality || 0;
+        return [...addLyricsFieldWords(song?.[field]), ...addLyricsPunctuationJoinedWords(song?.[field])].reduce(
+            (best, word) => Math.max(best, addLyricsTokenMatchQuality(word.normalized, component.text)),
+            0,
+        );
+    }
+
+    function addLyricsQueryComponents(parsed) {
+        return [
+            ...parsed.phrases.map((text) => ({ text, phrase: true })),
+            ...parsed.terms.map((text) => ({ text, phrase: false })),
+        ];
+    }
+
+    function addLyricsSongMatches(song, components) {
+        const fields = ['title', 'adaptOf', 'hymnNum', 'lyrics'];
+        return components.every((component) =>
+            fields.some((field) => addLyricsFieldQuality(song, field, component) > 0),
+        );
+    }
+
+    function addLyricsMatchRank(song, parsed, components) {
+        const fields = ['title', 'adaptOf', 'hymnNum', 'lyrics'];
+        const qualities = Object.fromEntries(
+            fields.map((field) => [field, components.map((component) => addLyricsFieldQuality(song, field, component))]),
+        );
+        const completeInField = (field) => qualities[field].every((quality) => quality > 1);
+        const completeTitle = completeInField('title');
+        const lyricsPhrase =
+            parsed.orderedTerms.length > 1 &&
+            (addLyricsPhraseMatch(song?.lyrics, parsed.orderedTerms.join(' '))?.quality || 0) > 1;
+        const completeField = fields.some((field) => completeInField(field));
+        const tier = completeTitle ? 0 : lyricsPhrase ? 1 : completeField ? 2 : 3;
+        const bestComponentQualities = components.map((_, index) =>
+            Math.max(...fields.map((field) => qualities[field][index])),
+        );
+        const exactCount = bestComponentQualities.filter((quality) => quality === 4).length;
+        const prefixCount = bestComponentQualities.filter((quality) => quality === 3).length;
+        const totals = fields.map((field) => qualities[field].reduce((sum, quality) => sum + quality, 0));
+        return [tier, exactCount, prefixCount, totals[0], totals[1], totals[2], totals[3]];
+    }
+
+    function addLyricsCompareRanks(a, b) {
+        for (let index = 0; index < a.length; index += 1) {
+            if (a[index] !== b[index]) return index === 0 ? a[index] - b[index] : b[index] - a[index];
+        }
+        return 0;
+    }
+
+    function matchSongsForAddLyrics(songs, query) {
+        const q = String(query || '').trim();
+        if (!q) return songs.slice();
+        const parsed = parseSearchQuery(q);
+        const components = addLyricsQueryComponents(parsed);
+        if (!components.length) return [];
+        return songs
+            .filter((song) => addLyricsSongMatches(song, components))
+            .map((song) => ({ song, rank: addLyricsMatchRank(song, parsed, components) }))
+            .sort((a, b) => addLyricsCompareRanks(a.rank, b.rank))
+            .map((entry) => entry.song);
+    }
+
+    function resolveStoredSong(entry, songsById) {
+        if (!entry) return null;
+        const id = typeof entry === 'string' ? entry : entry.id;
+        if (id && songsById.has(id)) return songsById.get(id);
+        if (entry && entry.id && entry.title) return entry;
+        return null;
     }
 
     function matchSongs(songs, searchIndex, query) {
@@ -316,6 +611,8 @@
 
     function searchAdmin(songs, searchIndex, query) {
         const q = String(query || '').trim();
+        if (!q) return songs.slice().sort(compareAdminAlpha);
+
         const exactMatch = q.match(/^(?:"([\s\S]*)"|“([\s\S]*)”)$/);
         if (exactMatch) {
             const rawPhrase = exactMatch[1] ?? exactMatch[2];
@@ -332,11 +629,7 @@
                 .sort(compareAdminAlpha);
         }
 
-        let matches = matchSongs(songs, searchIndex, q);
-        if (!q) {
-            matches.sort(compareAdminAlpha);
-            return matches;
-        }
+        const matches = matchSongsForAddLyrics(songs, q);
         return matches.slice(0, LIMITS.SEARCH);
     }
 
@@ -380,7 +673,10 @@
         SEARCH_OPTIONS,
         buildSearchIndex,
         parseSearchQuery,
+        getLyricsSearchPreview,
+        getLyricsSearchPreviewDetails,
         matchSongs,
+        matchSongsForAddLyrics,
         search,
         searchAdmin,
         sortSongsForCategoryFilters,

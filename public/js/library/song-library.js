@@ -7,7 +7,7 @@
      * Development switch: set false to use the local song cache only.
      * Set true before release so users receive Firestore updates in realtime.
      */
-    const ENABLE_LYRICS_REALTIME_SYNC = true; // Set to true for production release. Check before committing.
+    const ENABLE_LYRICS_REALTIME_SYNC = false; // Set to true for production release. Check before committing.
     const songModel = window.eclyricsSongModel;
     const songSearch = window.eclyricsSongSearch;
 
@@ -403,7 +403,7 @@
         search: (query, limitOrOptions) => songSearch.search(state.songs, state.searchIndex, query, limitOrOptions),
         searchAdmin: (query) => songSearch.searchAdmin(state.songs, state.searchIndex, query),
         sortSongsForCategoryFilters: songSearch.sortSongsForCategoryFilters,
-        matchAllSongs: (query) => songSearch.matchSongs(state.songs, state.searchIndex, query),
+        matchAllSongs: (query) => songSearch.matchSongsForAddLyrics(state.songs, query),
         getSongs,
         createLyric,
         updateLyric,
@@ -414,6 +414,8 @@
         getSongAdaptationSearchLabel: songModel.getSongAdaptationSearchLabel,
         formatSongVersionDisplay: songModel.formatSongVersionDisplay,
         truncateLyricsPreview: songModel.truncateLyricsPreview,
+        getLyricsSearchPreview: songSearch.getLyricsSearchPreview,
+        getLyricsSearchPreviewDetails: songSearch.getLyricsSearchPreviewDetails,
         onChange,
         getState,
         LIMITS: songSearch.LIMITS,

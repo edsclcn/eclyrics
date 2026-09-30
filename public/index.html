@@ -254,15 +254,15 @@
                                         aria-haspopup="dialog"
                                         aria-controls="preview-shortcuts-dialog"
                                         aria-expanded="false"
-                                        title="Prompter keyboard shortcuts and tips">
-                                        <span class="preview-shortcuts-strip-lead"><i class="fa-solid fa-keyboard" aria-hidden="true"></i><span>Keyboard shortcuts</span></span>
+                                        title="Prompter shortcuts and tips">
+                                        <span class="preview-shortcuts-strip-lead"><i class="fa-solid fa-keyboard" aria-hidden="true"></i><span>Shortcuts</span></span>
                                         <span class="preview-shortcuts-strip-chevron" aria-hidden="true"><i class="fa-solid fa-circle-info"></i></span>
-                                        <span class="preview-shortcuts-strip-hint"> Open the shortcut reference.</span>
+                                        <span class="preview-shortcuts-strip-hint"> Open the Text lyrics shortcut reference.</span>
                                     </button>
                                     <div class="preview-prompter-toolbar">
                                         <button type="button" class="btn-toolbar btn-toolbar-primary btn-toolbar-cta preview-send-btn"
                                             id="send-prompter-btn"
-                                            title="Send the active block to the prompter — ` (backtick) anywhere except in a text field">
+                                            title="Click and hold a text block to send it">
                                             <i class="fa-solid fa-display" aria-hidden="true"></i>
                                             <span class="preview-send-btn-label">Send to prompter</span>
                                         </button>
@@ -342,7 +342,6 @@
                                     </header>
                                     <p class="preview-shortcuts-dialog__lede">Use these keys anywhere in the app (except lyric text fields). Controls mirror the projected prompter so preview and stage always stay in sync.</p>
                                     <dl class="preview-shortcuts-dialog__list" id="preview-shortcuts-dialog-list"></dl>
-                                    <p class="preview-shortcuts-dialog__note">Toolbar buttons mirror keyboard shortcuts where shown. Double-press the same ← or → key within 400 ms to move between blocks. Scroll inside the 16∶9 strip when auto-scroll is paused.</p>
                                 </div>
                             </div>
                         </aside>
@@ -400,7 +399,7 @@
                                         <button type="button" class="image-lyrics-add-tab" id="image-lyrics-add-tab"
                                             title="Add another image lineup" aria-label="Add image lineup">+</button>
                                     </div>
-                                    <div class="image-lyrics-port" aria-label="Save and load image lineups">
+                                    <div class="image-lyrics-port" aria-label="Save and load image lineups" hidden>
                                         <button type="button" class="image-lyrics-port-button" id="image-lyrics-export" title="Save image lineup JSON" aria-label="Save image lineup JSON"><i class="fa-solid fa-download" aria-hidden="true"></i></button>
                                         <button type="button" class="image-lyrics-port-button" id="image-lyrics-import-trigger" title="Load image lineup JSON" aria-label="Load image lineup JSON"><i class="fa-solid fa-folder-open" aria-hidden="true"></i></button>
                                         <input type="file" id="image-lyrics-import-file" accept="application/json,.json" hidden aria-label="Choose an image lineup JSON file">
@@ -427,13 +426,13 @@
                                     </div>
                                 </div>
                                 <div class="preview-prompter-dock" id="image-lyrics-dock" aria-label="Image prompter controls">
-                                    <button type="button" class="preview-shortcuts-strip" id="image-lyrics-shortcuts-help-btn" aria-haspopup="dialog" aria-controls="image-lyrics-shortcuts-dialog" aria-expanded="false" title="Image prompter keyboard shortcuts">
-                                        <span class="preview-shortcuts-strip-lead"><i class="fa-solid fa-keyboard" aria-hidden="true"></i><span>Keyboard shortcuts</span></span>
+                                    <button type="button" class="preview-shortcuts-strip" id="image-lyrics-shortcuts-help-btn" aria-haspopup="dialog" aria-controls="image-lyrics-shortcuts-dialog" aria-expanded="false" title="Image prompter shortcuts">
+                                        <span class="preview-shortcuts-strip-lead"><i class="fa-solid fa-keyboard" aria-hidden="true"></i><span>Shortcuts</span></span>
                                         <span class="preview-shortcuts-strip-chevron" aria-hidden="true"><i class="fa-solid fa-circle-info"></i></span>
                                         <span class="preview-shortcuts-strip-hint">Open the Image Lyrics shortcut reference.</span>
                                     </button>
                                     <div class="preview-prompter-toolbar">
-                                        <button type="button" class="btn-toolbar btn-toolbar-primary btn-toolbar-cta preview-send-btn image-lyrics-send" id="image-lyrics-send" title="Send the active image block to the prompter — ` (backtick)"><i class="fa-solid fa-display" aria-hidden="true"></i><span class="preview-send-btn-label">Send to prompter</span></button>
+                                        <button type="button" class="btn-toolbar btn-toolbar-primary btn-toolbar-cta preview-send-btn image-lyrics-send" id="image-lyrics-send" title="Send the active image block to the prompter"><i class="fa-solid fa-display" aria-hidden="true"></i><span class="preview-send-btn-label">Send to prompter</span></button>
                                         <div class="preview-toolbar-group" role="group" aria-label="Playback"><button type="button" class="preview-icon-btn" id="image-lyrics-play" title="Play / Pause (Space)" aria-label="Play or pause" aria-pressed="false" disabled><i class="fa-solid fa-play" aria-hidden="true"></i></button></div>
                                         <div class="preview-toolbar-group" role="group" aria-label="Previous and next image"><button type="button" class="preview-icon-btn" id="image-lyrics-prev" title="Previous image (double-press ←)" aria-label="Previous image" disabled><i class="fa-solid fa-chevron-left" aria-hidden="true"></i></button><button type="button" class="preview-icon-btn" id="image-lyrics-next" title="Next image (double-press →)" aria-label="Next image" disabled><i class="fa-solid fa-chevron-right" aria-hidden="true"></i></button></div>
                                         <div class="preview-toolbar-group" role="group" aria-label="Manual scroll"><button type="button" class="preview-icon-btn" id="image-lyrics-scroll-up" title="Scroll up (↑)" aria-label="Scroll up" disabled><i class="fa-solid fa-chevron-up" aria-hidden="true"></i></button><button type="button" class="preview-icon-btn" id="image-lyrics-scroll-down" title="Scroll down (↓)" aria-label="Scroll down" disabled><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></button><button type="button" class="preview-icon-btn preview-icon-btn--jump-top" id="image-lyrics-scroll-top" title="Jump to top (T)" aria-label="Jump to top" disabled><i class="fa-solid fa-angles-up" aria-hidden="true"></i><span class="preview-btn-keyhint" aria-hidden="true">T</span></button></div>
@@ -450,6 +449,7 @@
                                     </header>
                                     <p class="preview-shortcuts-dialog__lede">These shortcuts control Image Lyrics while its panel is active. Playback and scrolling shortcuts require the image prompter to be open.</p>
                                     <dl class="preview-shortcuts-dialog__list">
+                                        <div><dt><i class="preview-shortcuts-dialog__hold-icon fa-regular fa-circle" aria-hidden="true"></i>Hold to send</dt><dd>Click and hold an image block to send it to the prompter</dd></div>
                                         <div><dt>Send to prompter</dt><dd><kbd>`</kbd></dd></div>
                                         <div><dt>Play / pause</dt><dd><kbd>Space</kbd></dd></div>
                                         <div><dt>Previous / next image</dt><dd>Double-press the same <kbd>←</kbd> or <kbd>→</kbd> key within 400 ms</dd></div>
@@ -582,8 +582,7 @@
             </div>
 
             <footer class="app-footer">
-                <p>&copy; MCGI Productions EDSA Caloocan · Jeremias 9:24 · <a href="https://github.com/edsclcn"
-                        target="_blank" rel="noopener noreferrer">GitHub</a></p>
+                <p>&copy; MCGI Productions EDSA Caloocan · Jeremias 9:24 </p>
             </footer>
         </div>
     </div>

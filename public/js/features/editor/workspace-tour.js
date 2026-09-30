@@ -69,7 +69,7 @@
                 <div class="tour-art__window tour-art__controls-art">
                     <p class="tour-art__control-instruction">Click any control below to see what it does. The selected control shows its keyboard shortcut when one exists.</p>
                     <div class="tour-art__control-row">
-                        <button type="button" class="tour-art__control-button tour-art__control-button--send" data-control-name="Send to prompter" data-control-description="Open or update the live prompter with the active block." data-control-shortcut="Backtick (&#96;)"><i class="fa-solid fa-display"></i><small>Send to prompter</small></button>
+                        <button type="button" class="tour-art__control-button tour-art__control-button--send" data-control-name="Send to prompter" data-control-description="Click and hold a text block to send it; the filling ring shows the hold progress."><i class="fa-solid fa-display"></i><small>Send to prompter</small></button>
                         <button type="button" class="tour-art__control-button" data-control-name="Play / pause" data-control-description="Start or pause automatic lyric scrolling." data-control-shortcut="Space"><i class="fa-solid fa-play"></i><small>Play</small></button>
                         <button type="button" class="tour-art__control-button" data-control-name="Previous block" data-control-description="Click once to move to the previous lyric block." data-control-shortcut="Double-press ←"><i class="fa-solid fa-chevron-left"></i><small>Prev</small></button>
                         <button type="button" class="tour-art__control-button" data-control-name="Next block" data-control-description="Click once to move to the next lyric block." data-control-shortcut="Double-press →"><i class="fa-solid fa-chevron-right"></i><small>Next</small></button>
@@ -92,7 +92,6 @@
             visual: `
                 <div class="tour-art__window tour-art__shortcut-art">
                     <div class="tour-art__shortcut-table-head"><span>Action</span><span>Keys</span><span>What it does</span></div>
-                    <div class="tour-art__shortcut-row"><strong>Send to prompter</strong><span><kbd>` + '`' + `</kbd></span><span>Sends the active block</span></div>
                     <div class="tour-art__shortcut-row"><strong>Play / pause</strong><span><kbd>SPACE</kbd></span><span>Starts or pauses auto-scroll</span></div>
                     <div class="tour-art__shortcut-row"><strong>Scroll speed presets</strong><span><kbd>1–9</kbd><kbd>0</kbd></span><span>1–9 set speed; 0 pauses</span></div>
                     <div class="tour-art__shortcut-row"><strong>Scroll speed nudge</strong><span><kbd>NUMPAD +</kbd><kbd>NUMPAD −</kbd></span><span>Adjusts speed incrementally</span></div>
