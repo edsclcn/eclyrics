@@ -13,6 +13,18 @@
       "**/.*",
       "**/node_modules/**"
     ],
+    "redirects": [
+      {
+        "source": "/index.html",
+        "destination": "/text-lyrics",
+        "type": 301
+      },
+      {
+        "source": "/public/index.html",
+        "destination": "/text-lyrics",
+        "type": 301
+      }
+    ],
     "rewrites": [
       {
         "source": "**",

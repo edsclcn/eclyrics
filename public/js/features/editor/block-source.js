@@ -36,7 +36,7 @@ let blockSourceActiveCategoryFilters = new Set();
 
 function getBlockSourceDialogTitle(textarea) {
     const label = editorCallbacks.getBlockSourceDialogTitle?.(textarea) || '';
-    return label && label !== '—' ? `Add lyrics · ${label}` : 'Add lyrics to block';
+    return label && label !== '—' ? label : 'Add lyrics to block';
 }
 
 function renderSongLibraryNote(message, show = true) {

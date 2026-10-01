@@ -143,10 +143,11 @@ test('Image Send CTA remains disabled without images and enabled for a populated
 });
 
 test('Text and Image Send CTAs share label, dimensions, and disabled styling', () => {
-    const html = fs.readFileSync(path.join(repoRoot, 'public/index.html'), 'utf8');
+    const textHtml = fs.readFileSync(path.join(repoRoot, 'public/modules/text-lyrics.html'), 'utf8');
+    const imageHtml = fs.readFileSync(path.join(repoRoot, 'public/modules/image-lyrics.html'), 'utf8');
     const css = fs.readFileSync(path.join(repoRoot, 'public/assets/css/index.css'), 'utf8');
-    const textButton = html.match(/<button[^>]*id="send-prompter-btn"[^>]*>([\s\S]*?)<\/button>/);
-    const imageButton = html.match(/<button[^>]*id="image-lyrics-send"[^>]*>([\s\S]*?)<\/button>/);
+    const textButton = textHtml.match(/<button[^>]*id="send-prompter-btn"[^>]*>([\s\S]*?)<\/button>/);
+    const imageButton = imageHtml.match(/<button[^>]*id="image-lyrics-send"[^>]*>([\s\S]*?)<\/button>/);
     const dimensions = [...css.matchAll(/\.preview-send-btn\s*\{([^}]+)\}/g)]
         .find((match) => /width:\s*10rem/.test(match[1]));
     const disabledStyle = css.match(/\.preview-send-btn:disabled\s*\{([^}]+)\}/);
