@@ -24,7 +24,7 @@ test('image lyrics uses a separate popup page and message namespace from text pr
 
 test('image blocks accept image files and validate picker and dropped files', () => {
     const editor = read('public/js/features/image-lyrics/index.js');
-    const html = read('public/index.html');
+    const html = read('public/modules/image-lyrics.html');
     const workspaceCss = read('public/assets/css/image-lyrics.css');
     const dropzone = workspaceCss.match(/\.image-lyrics-dropzone\s*\{([^}]+)\}/)?.[1];
     const thumbnail = workspaceCss.match(/\.image-lyrics-block__image\s*\{([^}]+)\}/)?.[1];
@@ -77,12 +77,11 @@ test('image lineups save and load the versioned JSON format with embedded image 
 });
 
 test('image workspace exposes only controls and shortcuts relevant to image prompting', () => {
-    const html = read('public/index.html');
+    const html = read('public/modules/image-lyrics.html');
     const editor = read('public/js/features/image-lyrics/index.js');
     const imagePrompter = read('public/js/features/image-prompter/prompter.js');
-    const imagePanelMatch = html.match(/<section id="panel-image"[\s\S]*?(?=<section id="panel-video")/);
-    assert.ok(imagePanelMatch, 'expected image panel markup');
-    const imagePanel = imagePanelMatch[0];
+    const imagePanel = html;
+    assert.match(imagePanel, /^<section id="panel-image"/);
     assert.equal((imagePanel.match(/data-image-block="\d+"/g) || []).length, 2, 'initial image panel should contain exactly two blocks');
     assert.match(imagePanel, /<span class="image-lyrics-toolbar-label"><strong id="image-lyrics-selected-title">Block 1<\/strong><\/span>/);
     assert.doesNotMatch(imagePanel.match(/<div class="image-lyrics-toolbar-meta">([\s\S]*?)<\/div>/)?.[1] || '', /Editing\s*:/i);
@@ -115,13 +114,13 @@ test('image workspace exposes only controls and shortcuts relevant to image prom
 });
 
 test('image right panel reuses the Text Lyrics viewer and dock structure', () => {
-    const html = read('public/index.html');
-    const textStart = html.indexOf('<aside class="workspace-preview preview-stage--lyrics"');
-    const imageStart = html.indexOf('<aside class="image-lyrics-preview workspace-preview preview-stage--lyrics"');
-    const videoStart = html.indexOf('<section id="panel-video"');
-    assert.ok(textStart >= 0 && imageStart > textStart && videoStart > imageStart, 'expected Text and Image Lyrics preview markup');
-    const textPreview = html.slice(textStart, html.indexOf('</aside>', textStart) + '</aside>'.length);
-    const imagePreview = html.slice(imageStart, videoStart);
+    const textHtml = read('public/modules/text-lyrics.html');
+    const imageHtml = read('public/modules/image-lyrics.html');
+    const textStart = textHtml.indexOf('<aside class="workspace-preview preview-stage--lyrics"');
+    const imageStart = imageHtml.indexOf('<aside class="image-lyrics-preview workspace-preview preview-stage--lyrics"');
+    assert.ok(textStart >= 0 && imageStart >= 0, 'expected Text and Image Lyrics preview markup');
+    const textPreview = textHtml.slice(textStart, textHtml.indexOf('</aside>', textStart) + '</aside>'.length);
+    const imagePreview = imageHtml.slice(imageStart, imageHtml.indexOf('</aside>', imageStart) + '</aside>'.length);
 
     const classTokens = markup => new Set([...markup.matchAll(/class="([^"]+)"/g)].flatMap(match => match[1].split(/\s+/)));
     const textClasses = classTokens(textPreview);
@@ -144,7 +143,7 @@ test('image right panel reuses the Text Lyrics viewer and dock structure', () =>
 });
 
 test('image shortcut reference documents the current Image Lyrics keyboard handler and popup controls', () => {
-    const html = read('public/index.html');
+    const html = read('public/modules/image-lyrics.html');
     const editor = read('public/js/features/image-lyrics/index.js');
     const prompter = read('public/js/features/image-prompter/prompter.js');
     const dialog = html.match(/<dl class="preview-shortcuts-dialog__list">([\s\S]*?)<\/dl>/)?.[1];
@@ -185,10 +184,10 @@ test('image shortcut reference documents the current Image Lyrics keyboard handl
 });
 
 test('image shortcut dialog opens, closes, restores focus, and handles Escape', () => {
-    const html = read('public/index.html');
+    const html = read('public/modules/image-lyrics.html');
     const editor = read('public/js/features/image-lyrics/index.js');
-    const imagePanel = html.match(/<section id="panel-image"[\s\S]*?(?=<section id="panel-video")/)?.[0];
-    assert.ok(imagePanel, 'expected Image Lyrics panel');
+    const imagePanel = html;
+    assert.match(imagePanel, /^<section id="panel-image"/);
     assert.match(imagePanel, /id="image-lyrics-shortcuts-help-btn"[^>]*aria-haspopup="dialog"[^>]*aria-controls="image-lyrics-shortcuts-dialog"[^>]*aria-expanded="false"/);
     assert.match(imagePanel, /id="image-lyrics-shortcuts-dialog"[^>]*hidden role="dialog" aria-modal="true" aria-labelledby="image-lyrics-shortcuts-dialog-title"/);
     assert.match(imagePanel, /id="image-lyrics-shortcuts-dialog-close" aria-label="Close"/);
@@ -204,9 +203,9 @@ test('image shortcut dialog opens, closes, restores focus, and handles Escape', 
 });
 
 test('image preview follows the Text Lyrics responsive right-panel ordering', () => {
-    const html = read('public/index.html');
+    const html = read('public/modules/image-lyrics.html');
     const workspaceCss = read('public/assets/css/image-lyrics.css');
-    const panel = html.match(/<section id="panel-image"[\s\S]*?(?=<section id="panel-video")/)?.[0];
+    const panel = html;
     const workspaceRule = workspaceCss.match(/\.image-lyrics-workspace\s*\{([^}]+)\}/)?.[1];
     const responsive = workspaceCss.match(/@media\s*\(max-width:\s*1200px\)\s*\{([\s\S]*?)(?=@media|$)/)?.[1];
     assert.ok(panel, 'expected Image Lyrics panel markup');

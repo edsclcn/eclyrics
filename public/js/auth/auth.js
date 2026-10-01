@@ -12,16 +12,9 @@
     const adminPanel = document.getElementById('panel-admin');
     let roleCheckSequence = 0;
 
-    function exitAdminPanelIfNeeded() {
-        if (!adminNavBtn || !adminNavBtn.classList.contains('is-active')) return;
-        const textBtn = document.querySelector('.sidebar-nav [data-panel="text"]');
-        if (textBtn) textBtn.click();
-    }
-
     function setAdminNavVisibility(show) {
         if (adminNavBtn) adminNavBtn.hidden = !show;
         if (adminPanel) adminPanel.hidden = !show;
-        if (!show) exitAdminPanelIfNeeded();
     }
 
     async function refreshAdminRole(user) {

@@ -122,7 +122,7 @@ async function loadLineup(file){
     }
 }
 function control(action,extra={}){send({type:prefix+'control',action,...extra})}
-function open(){if(!lineup().length){status('Add at least one image before sending it to the prompter.',true);return}popup=window.open(new URL('image-prompter.html',location.href).href,'eclyricsImagePrompter','width=1920,height=1080,resizable=yes');if(!popup){status('Allow pop-ups to open the image prompter.',true);return}ready=false;popup.focus();setTimeout(sendInit,300);updatePreview()}
+function open(){if(!lineup().length){status('Add at least one image before sending it to the prompter.',true);return}popup=window.open(new URL('image-prompter.html',document.baseURI).href,'eclyricsImagePrompter','width=1920,height=1080,resizable=yes');if(!popup){status('Allow pop-ups to open the image prompter.',true);return}ready=false;popup.focus();setTimeout(sendInit,300);updatePreview()}
 function resetImageSendHold(){const hold=pendingImageSendHold;if(!hold)return;clearTimeout(hold.timer);clearTimeout(hold.visibilityTimer);cancelAnimationFrame(hold.animationFrame);hold.indicator.classList.remove('is-pending');hold.indicator.style.setProperty('--image-send-hold-progress','0deg');pendingImageSendHold=null}
 document.addEventListener('pointerdown',event=>{
     if(!event.isPrimary||event.button!==0)return;

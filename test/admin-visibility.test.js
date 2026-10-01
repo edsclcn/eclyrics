@@ -22,8 +22,7 @@ function makeElement(initial = {}) {
 }
 
 async function setupAuth({ adminEmails = [], adminUidExists = false } = {}) {
-    let textWasClicked = false;
-    const textNav = makeElement({ onClick: () => { textWasClicked = true; } });
+    const textNav = makeElement();
     const adminNav = makeElement({ hidden: true });
     const adminPanel = makeElement({ hidden: true });
     const signOut = makeElement();
@@ -93,7 +92,6 @@ async function setupAuth({ adminEmails = [], adminUidExists = false } = {}) {
         adminPanel,
         signOut,
         userLabel,
-        wasTextClicked: () => textWasClicked,
         async changeUser(user) {
             await authStateChanged(user);
         },
@@ -101,9 +99,10 @@ async function setupAuth({ adminEmails = [], adminUidExists = false } = {}) {
 }
 
 test('Admin navigation and panel start hidden in the page markup', () => {
-    const html = fs.readFileSync(path.join(repoRoot, 'public/index.html'), 'utf8');
-    assert.match(html, /<button[^>]*data-panel="admin"[^>]*\shidden(?:\s|>)/);
-    assert.match(html, /<section[^>]*id="panel-admin"[^>]*\shidden(?:\s|>)/);
+    const shell = fs.readFileSync(path.join(repoRoot, 'public/index.html'), 'utf8');
+    const adminModule = fs.readFileSync(path.join(repoRoot, 'public/modules/admin.html'), 'utf8');
+    assert.match(shell, /<button[^>]*data-panel="admin"[^>]*\shidden(?:\s|>)/);
+    assert.match(adminModule, /<section[^>]*id="panel-admin"[^>]*\shidden(?:\s|>)/);
 });
 
 test('hidden Admin navigation remains display-none despite sidebar flex styles', () => {
@@ -127,7 +126,7 @@ test('signed-out and non-admin users do not see Admin', async () => {
     assert.equal(auth.adminPanel.hidden, true);
 });
 
-test('an email listed in RBAC can see Admin; losing the role hides it and exits to Text', async () => {
+test('an email listed in RBAC can see Admin; losing the role hides Admin navigation and panel', async () => {
     const adminEmails = ['admin@example.com'];
     const auth = await setupAuth({
         adminEmails,
@@ -144,5 +143,4 @@ test('an email listed in RBAC can see Admin; losing the role hides it and exits 
     assert.equal(auth.window.__eclyricsAuth.isAdmin, false);
     assert.equal(auth.adminNav.hidden, true);
     assert.equal(auth.adminPanel.hidden, true);
-    assert.equal(auth.wasTextClicked(), true);
 });

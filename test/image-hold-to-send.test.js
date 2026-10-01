@@ -194,13 +194,14 @@ test('Image Lyrics retains ordinary block selection, file selection, and Backquo
 });
 
 test('Image Lyrics hold ring, Shortcuts label, and hold-to-send help remain visible in the UI contract', () => {
-    const html = fs.readFileSync(path.join(repoRoot, 'public/index.html'), 'utf8');
+    const textHtml = fs.readFileSync(path.join(repoRoot, 'public/modules/text-lyrics.html'), 'utf8');
+    const imageHtml = fs.readFileSync(path.join(repoRoot, 'public/modules/image-lyrics.html'), 'utf8');
     const css = fs.readFileSync(path.join(repoRoot, 'public/assets/css/image-lyrics.css'), 'utf8');
     const textCss = fs.readFileSync(path.join(repoRoot, 'public/assets/css/index.css'), 'utf8');
     const indicatorRule = css.match(/\.image-lyrics-send-hold-indicator\s*\{([^}]+)\}/);
     const textIndicatorRule = textCss.match(/\.textarea-send-hold-indicator\s*\{([^}]+)\}/);
-    const imageShortcutButton = html.match(/<button[^>]*id="image-lyrics-shortcuts-help-btn"[^>]*>([\s\S]*?)<\/button>/);
-    const textShortcutButton = html.match(/<button[^>]*id="preview-shortcuts-help-btn"[^>]*>([\s\S]*?)<\/button>/);
+    const imageShortcutButton = imageHtml.match(/<button[^>]*id="image-lyrics-shortcuts-help-btn"[^>]*>([\s\S]*?)<\/button>/);
+    const textShortcutButton = textHtml.match(/<button[^>]*id="preview-shortcuts-help-btn"[^>]*>([\s\S]*?)<\/button>/);
 
     assert.ok(indicatorRule, 'expected Image Lyrics hold progress ring CSS');
     assert.match(indicatorRule[1], /width:\s*18px/);
@@ -212,5 +213,5 @@ test('Image Lyrics hold ring, Shortcuts label, and hold-to-send help remain visi
     assert.ok(textShortcutButton);
     assert.match(imageShortcutButton[1], /<span>Shortcuts<\/span>/);
     assert.match(textShortcutButton[1], /<span>Shortcuts<\/span>/);
-    assert.match(html, /<i class="preview-shortcuts-dialog__hold-icon fa-regular fa-circle" aria-hidden="true"><\/i>Hold to send<\/dt><dd>Click and hold an image block to send it to the prompter<\/dd>/);
+    assert.match(imageHtml, /<i class="preview-shortcuts-dialog__hold-icon fa-regular fa-circle" aria-hidden="true"><\/i>Hold to send<\/dt><dd>Click and hold an image block to send it to the prompter<\/dd>/);
 });

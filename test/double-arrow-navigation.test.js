@@ -116,24 +116,25 @@ test('Image workspace and Image popup use separate local double-arrow matcher st
 test('prev and next controls still navigate immediately on a single click', () => {
     const editor = read('public/js/features/editor/index.js');
     const imageWorkspace = read('public/js/features/image-lyrics/index.js');
-    const html = read('public/index.html');
+    const textHtml = read('public/modules/text-lyrics.html');
+    const imageHtml = read('public/modules/image-lyrics.html');
 
     assert.match(editor, /prevBtn\.addEventListener\('click',\s*\(\)\s*=>\s*\{\s*if \(prevBtn\.disabled\) return;\s*goToAdjacentBlockAndSend\(-1\);/);
     assert.match(editor, /nextBtn\.addEventListener\('click',\s*\(\)\s*=>\s*\{\s*if \(nextBtn\.disabled\) return;\s*goToAdjacentBlockAndSend\(1\);/);
     assert.match(imageWorkspace, /controls\.prev\.onclick=\(\)=>control\('previous'\)/);
     assert.match(imageWorkspace, /controls\.next\.onclick=\(\)=>control\('next'\)/);
-    assert.match(html, /id="preview-btn-prev"\s+title="Previous block \(double-press ←\)"/);
-    assert.match(html, /id="preview-btn-next"\s+title="Next block \(double-press →\)"/);
-    assert.match(html, /id="image-lyrics-prev"\s+title="Previous image \(double-press ←\)"/);
-    assert.match(html, /id="image-lyrics-next"\s+title="Next image \(double-press →\)"/);
+    assert.match(textHtml, /id="preview-btn-prev"\s+title="Previous block \(double-press ←\)"/);
+    assert.match(textHtml, /id="preview-btn-next"\s+title="Next block \(double-press →\)"/);
+    assert.match(imageHtml, /id="image-lyrics-prev"\s+title="Previous image \(double-press ←\)"/);
+    assert.match(imageHtml, /id="image-lyrics-next"\s+title="Next image \(double-press →\)"/);
     assert.doesNotMatch(editor.match(/if \(prevBtn\) \{([\s\S]*?)\n    \}/)?.[1] || '', /PressMatcher/);
     assert.doesNotMatch(editor.match(/if \(nextBtn\) \{([\s\S]*?)\n    \}/)?.[1] || '', /PressMatcher/);
 });
 
 test('Text and Image shortcut help both explain the double-press arrow behavior', () => {
     const shortcutRegistry = read('public/js/features/prompter/prompter-shortcuts.js');
-    const html = read('public/index.html');
+    const imageHtml = read('public/modules/image-lyrics.html');
 
     assert.match(shortcutRegistry, /description: 'double-press the same arrow within 400 ms'/);
-    assert.match(html, /<dt>Previous \/ next image<\/dt><dd>Double-press the same <kbd>←<\/kbd> or <kbd>→<\/kbd> key within 400 ms<\/dd>/);
+    assert.match(imageHtml, /<dt>Previous \/ next image<\/dt><dd>Double-press the same <kbd>←<\/kbd> or <kbd>→<\/kbd> key within 400 ms<\/dd>/);
 });

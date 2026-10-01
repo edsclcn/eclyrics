@@ -1,0 +1,197 @@
+<section id="panel-text" class="panel is-active" aria-labelledby="panel-text-title">
+                    <h2 id="panel-text-title" class="visually-hidden">Text Lyrics</h2>
+                    <div class="workspace" id="workspace">
+                        <div class="workspace-editor">
+                            <div class="lyrics-toolbar">
+                                <div class="tabs-toolbar-row">
+                                    <div class="song-tabs-group">
+                                        <ul id="tabs-list"></ul>
+                                        <button type="button" id="add-tab-btn" title="Add another song tab">+</button>
+                                    </div>
+                                    <div id="button-div">
+                                        <button type="button" class="port-button" id="export-btn"
+                                            onclick="exportLineup()" title="Save lineup" aria-label="Save lineup"><i
+                                                class="fa-solid fa-download"></i></button>
+                                        <button type="button" class="port-button" id="import-btn"
+                                            onclick="importLineup()" title="Load lineup from JSON" aria-label="Load lineup from JSON"><i
+                                                class="fa-solid fa-folder-open"></i></button>
+                                    </div>
+                                </div>
+                                <div class="block-toolbar">
+                                    <span class="block-toolbar-label">Editing: <button type="button"
+                                            class="block-toolbar-title-btn" id="selected-block-title-btn"
+                                            title="Open full lyrics for this block" disabled><span
+                                                id="selected-block-title">—</span></button></span>
+                                    <p class="hint-inline hint-inline--toolbar">Use <strong>+</strong> on a block to
+                                        search the library or paste lyrics. Click a block title to edit full lyrics
+                                        (one block at a time). Edits sync to the live preview and prompter after you send.</p>
+                                </div>
+                            </div>
+                            <section id="tab-content" aria-label="Lyric blocks"></section>
+                            <section id="block-tab-content" class="block-tab-content" hidden
+                                aria-label="Block full lyrics"></section>
+                        </div>
+                        <aside class="workspace-preview preview-stage--lyrics" data-stage-theme="lyrics"
+                            id="workspace-preview-panel"
+                            aria-label="Stage preview and prompter controls">
+                            <div class="preview-frame preview-frame--prompter-focus">
+                                <div class="preview-viewfinder-heading">
+                                    <div class="preview-viewfinder-label">
+                                        <span>Prompter preview</span>
+                                        <span class="preview-viewfinder-format">16∶9</span>
+                                    </div>
+                                </div>
+                                <div class="preview-viewfinder-slot">
+                                    <div class="preview-viewfinder-16x9" id="preview-viewfinder-stage"
+                                        title="Scroll or pinch-scroll adjusts the prompter when it is open. Use [ ] for text size.">
+                                        <div class="preview-viewfinder-stage-bg" aria-hidden="true"></div>
+                                        <div class="preview-viewfinder-clip">
+                                            <div class="preview-viewfinder-pan" id="preview-viewfinder-pan">
+                                                <div id="lyrics-preview-viewfinder" class="preview-empty"></div>
+                                            </div>
+                                        </div>
+                                        <div class="preview-scroll-progress" id="preview-scroll-progress" role="progressbar"
+                                            aria-label="Prompt scroll position" aria-valuemin="0" aria-valuemax="100"
+                                            aria-valuenow="0" hidden>
+                                            <div class="preview-scroll-progress__fill" id="preview-scroll-progress-fill"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="preview-prompter-dock" id="preview-prompter-dock" aria-label="Live prompter controls">
+                                    <button type="button" class="preview-shortcuts-strip" id="preview-shortcuts-help-btn"
+                                        aria-haspopup="dialog"
+                                        aria-controls="preview-shortcuts-dialog"
+                                        aria-expanded="false"
+                                        title="Prompter shortcuts and tips">
+                                        <span class="preview-shortcuts-strip-lead"><i class="fa-solid fa-keyboard" aria-hidden="true"></i><span>Shortcuts</span></span>
+                                        <span class="preview-shortcuts-strip-chevron" aria-hidden="true"><i class="fa-solid fa-circle-info"></i></span>
+                                        <span class="preview-shortcuts-strip-hint"> Open the Text lyrics shortcut reference.</span>
+                                    </button>
+                                    <div class="preview-prompter-toolbar">
+                                        <button type="button" class="btn-toolbar btn-toolbar-primary btn-toolbar-cta preview-send-btn"
+                                            id="send-prompter-btn"
+                                            title="Click and hold a text block to send it">
+                                            <i class="fa-solid fa-display" aria-hidden="true"></i>
+                                            <span class="preview-send-btn-label">Send to prompter</span>
+                                        </button>
+                                        <div class="preview-toolbar-group" role="group" aria-label="Playback">
+                                            <button type="button" class="preview-icon-btn" id="preview-btn-play"
+                                                title="Play / Pause (Space)" aria-pressed="false" disabled>
+                                                <i class="fa-solid fa-play" aria-hidden="true"></i>
+                                            </button>
+                                        </div>
+                                        <div class="preview-toolbar-group" role="group" aria-label="Previous and next block">
+                                            <button type="button" class="preview-icon-btn" id="preview-btn-prev"
+                                                title="Previous block (double-press ←)" aria-label="Previous block">
+                                                <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
+                                            </button>
+                                            <button type="button" class="preview-icon-btn" id="preview-btn-next"
+                                                title="Next block (double-press →)" aria-label="Next block">
+                                                <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
+                                            </button>
+                                        </div>
+                                        <div class="preview-toolbar-group" role="group" aria-label="Manual scroll">
+                                            <button type="button" class="preview-icon-btn" id="preview-btn-scroll-up"
+                                                title="Scroll up (↑)" disabled aria-label="Scroll up">
+                                                <i class="fa-solid fa-chevron-up" aria-hidden="true"></i>
+                                            </button>
+                                            <button type="button" class="preview-icon-btn" id="preview-btn-scroll-down"
+                                                title="Scroll down (↓)" disabled aria-label="Scroll down">
+                                                <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+                                            </button>
+                                            <button type="button" class="preview-icon-btn preview-icon-btn--jump-top" id="preview-btn-scroll-top"
+                                                title="Jump to top of lyrics (T)" disabled aria-label="Jump to top (T)">
+                                                <i class="fa-solid fa-angles-up" aria-hidden="true"></i>
+                                                <span class="preview-btn-keyhint" aria-hidden="true">T</span>
+                                            </button>
+                                        </div>
+                                        <div class="preview-toolbar-group" role="group" aria-label="Text size and line width">
+                                            <button type="button" class="preview-icon-btn" id="preview-btn-font-smaller"
+                                                title="Smaller text ([)" disabled aria-label="Smaller text">
+                                                <i class="fa-solid fa-font preview-icon-glyph preview-icon-glyph--sm" aria-hidden="true"></i>
+                                            </button>
+                                            <button type="button" class="preview-icon-btn" id="preview-btn-font-larger"
+                                                title="Larger text (])" disabled aria-label="Larger text">
+                                                <i class="fa-solid fa-font preview-icon-glyph preview-icon-glyph--lg" aria-hidden="true"></i>
+                                            </button>
+                                            <button type="button" class="preview-icon-btn" id="preview-btn-width-narrow"
+                                                title="Narrower lines (−)" disabled aria-label="Narrower lines">
+                                                <i class="fa-solid fa-arrows-left-right preview-icon-glyph preview-icon-glyph--narrow" aria-hidden="true"></i>
+                                            </button>
+                                            <button type="button" class="preview-icon-btn" id="preview-btn-width-wider"
+                                                title="Wider lines (=)" disabled aria-label="Wider lines">
+                                                <i class="fa-solid fa-arrows-left-right preview-icon-glyph preview-icon-glyph--wide" aria-hidden="true"></i>
+                                            </button>
+                                        </div>
+                                        <div class="preview-toolbar-group preview-toolbar-group--stage" role="group" aria-label="Stage appearance and speed">
+                                            <button type="button" class="preview-icon-btn" id="preview-btn-theme"
+                                                title="Toggle blue lyrics vs black &amp; white (P)" aria-pressed="true" disabled aria-label="Toggle stage theme">
+                                                <i class="fa-solid fa-palette" aria-hidden="true"></i>
+                                            </button>
+                                            <div class="preview-speed-control">
+                                                <label class="preview-speed-label" for="preview-prompter-speed">Speed</label>
+                                                <input type="range" id="preview-prompter-speed" min="0.1" max="6.5"
+                                                    step="0.1" value="0.5" disabled />
+                                                <output class="preview-speed-value" id="preview-prompter-speed-val" for="preview-prompter-speed">0.5</output>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="preview-shortcuts-dialog" id="preview-shortcuts-dialog" hidden role="dialog"
+                                aria-modal="true" aria-labelledby="preview-shortcuts-dialog-title">
+                                <div class="preview-shortcuts-dialog__backdrop" id="preview-shortcuts-dialog-backdrop" tabindex="-1"></div>
+                                <div class="preview-shortcuts-dialog__card">
+                                    <header class="preview-shortcuts-dialog__head">
+                                        <h3 id="preview-shortcuts-dialog-title">Prompter controls</h3>
+                                        <button type="button" class="preview-shortcuts-dialog__close" id="preview-shortcuts-dialog-close"
+                                            aria-label="Close"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
+                                    </header>
+                                    <p class="preview-shortcuts-dialog__lede">Use these keys anywhere in the app (except lyric text fields). Controls mirror the projected prompter so preview and stage always stay in sync.</p>
+                                    <dl class="preview-shortcuts-dialog__list" id="preview-shortcuts-dialog-list"></dl>
+                                </div>
+                            </div>
+                        </aside>
+
+                        <div class="lineup-dialog" id="lineup-dialog" hidden role="dialog" aria-modal="true"
+                            aria-labelledby="lineup-dialog-title">
+                            <div class="lineup-dialog__backdrop" id="lineup-dialog-backdrop" tabindex="-1"></div>
+                            <div class="lineup-dialog__card">
+                                <header class="lineup-dialog__head">
+                                    <div>
+                                        <p class="lineup-dialog__eyebrow">Save lineup</p>
+                                        <h3 id="lineup-dialog-title">Review blocks before download</h3>
+                                    </div>
+                                    <button type="button" class="lineup-dialog__close" id="lineup-dialog-close"
+                                        aria-label="Close"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
+                                </header>
+                                <p class="lineup-dialog__lede" id="lineup-dialog-lede">Review the current tab, then choose an export format.</p>
+                                <div class="lineup-dialog__actions" role="group" aria-label="Lineup downloads">
+                                    <button type="button" class="btn-toolbar lineup-dialog__action" id="lineup-csv-btn">
+                                        <i class="fa-solid fa-file-csv" aria-hidden="true"></i>
+                                        <span>Save titles as CSV</span>
+                                    </button>
+                                    <button type="button" class="btn-toolbar btn-toolbar-primary lineup-dialog__action" id="lineup-json-btn">
+                                        <i class="fa-solid fa-download" aria-hidden="true"></i>
+                                        <span>Download full lineup (JSON)</span>
+                                    </button>
+                                </div>
+                                <div class="lineup-dialog__table-wrap">
+                                    <table class="lineup-dialog__table">
+                                        <caption class="visually-hidden">Current lineup blocks</caption>
+                                        <thead>
+                                            <tr>
+                                                <th scope="col">Block</th>
+                                                <th scope="col">Title</th>
+                                                <th scope="col">Lyrics</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="lineup-dialog-table-body"></tbody>
+                                    </table>
+                                </div>
+                                <p class="lineup-dialog__count" id="lineup-dialog-count" aria-live="polite"></p>
+                            </div>
+                        </div>
+                    </div>
+                </section>\n

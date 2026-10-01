@@ -1436,25 +1436,120 @@ function initShell() {
         });
     }
 
+    const panelRoutes = {
+        text: '/text-lyrics',
+        image: '/image-lyrics',
+        video: '/video-lyrics',
+        admin: '/admin',
+    };
+    const signInRoute = '/sign-in';
+    const routePanels = Object.fromEntries(Object.entries(panelRoutes).map(([id, route]) => [route, id]));
+    const normalizePath = (pathname) => (pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname);
+    const currentRoute = () => {
+        const pathname = window.location.pathname;
+        const normalizedPath = normalizePath(pathname);
+        if (normalizedPath === signInRoute) {
+            if (pathname !== signInRoute) {
+                window.history.replaceState(null, '', `${signInRoute}${window.location.search}${window.location.hash}`);
+            }
+            return { id: 'sign-in', path: signInRoute };
+        }
+        const id = routePanels[normalizedPath];
+        if (id) {
+            if (pathname !== normalizedPath) {
+                window.history.replaceState(null, '', `${normalizedPath}${window.location.search}${window.location.hash}`);
+            }
+            return { id, path: normalizedPath };
+        }
+        window.history.replaceState(null, '', `${panelRoutes.text}${window.location.search}${window.location.hash}`);
+        return { id: 'text', path: panelRoutes.text };
+    };
+    const allowedReturnTo = (value) => {
+        if (typeof value !== 'string' || !value.startsWith('/') || value.startsWith('//')) return null;
+        try {
+            const url = new URL(value, window.location.origin);
+            if (url.origin !== window.location.origin) return null;
+            const pathname = normalizePath(url.pathname);
+            if (!routePanels[pathname]) return null;
+            return `${pathname}${url.search}${url.hash}`;
+        } catch {
+            return null;
+        }
+    };
+    const navigateTo = (destination, replace = true) => {
+        if (replace) window.history.replaceState(null, '', destination);
+        else window.history.pushState(null, '', destination);
+        syncRoute();
+    };
+    const clearPanelSelection = () => {
+        document.querySelectorAll('.sidebar-nav button').forEach((button) => {
+            button.classList.remove('is-active');
+            button.removeAttribute('aria-current');
+        });
+        document.querySelectorAll('.app-main .panel').forEach((panel) => panel.classList.remove('is-active'));
+    };
+    const selectPanel = (id) => {
+        if (id === 'admin' && !window.__eclyricsAuth?.isAdmin) return false;
+        const panel = document.getElementById(`panel-${id}`);
+        const button = document.querySelector(`.sidebar-nav button[data-panel="${id}"]`);
+        if (!panel || !button) return false;
+
+        document.querySelectorAll('.sidebar-nav button').forEach((btn) => {
+            const selected = btn === button;
+            btn.classList.toggle('is-active', selected);
+            if (selected) btn.setAttribute('aria-current', 'page');
+            else btn.removeAttribute('aria-current');
+        });
+        document.querySelectorAll('.app-main .panel').forEach((item) => item.classList.toggle('is-active', item === panel));
+        if (id === 'admin' && typeof window.eclyricsLoadAdminPanel === 'function') {
+            window.eclyricsLoadAdminPanel();
+        }
+        return true;
+    };
+    const syncRoute = () => {
+        const route = currentRoute();
+        const auth = window.__eclyricsAuth || {};
+        if (route.id === 'sign-in') clearPanelSelection();
+        if (!auth.ready) return;
+
+        if (!auth.user) {
+            if (route.id === 'sign-in') return;
+            const destination = `${route.path}${window.location.search}${window.location.hash}`;
+            navigateTo(`${signInRoute}?returnTo=${encodeURIComponent(destination)}`);
+            return;
+        }
+
+        if (route.id === 'sign-in') {
+            const requested = new URLSearchParams(window.location.search).get('returnTo');
+            const destination = allowedReturnTo(requested) || panelRoutes.text;
+            const destinationUrl = new URL(destination, window.location.origin);
+            const destinationPath = normalizePath(destinationUrl.pathname);
+            if (destinationPath === panelRoutes.admin && !auth.isAdmin) {
+                navigateTo(`${panelRoutes.text}${destinationUrl.search}${destinationUrl.hash}`);
+                return;
+            }
+            navigateTo(destination);
+            return;
+        }
+
+        if (route.id === 'admin' && !auth.isAdmin) {
+            navigateTo(`${panelRoutes.text}${window.location.search}${window.location.hash}`);
+            return;
+        }
+        selectPanel(route.id);
+    };
+
+    syncRoute();
+    window.addEventListener('popstate', syncRoute);
+    document.addEventListener('eclyrics-auth-changed', syncRoute);
+
     document.querySelectorAll('.sidebar-nav button').forEach((btn) => {
         btn.addEventListener('click', () => {
             const id = btn.dataset.panel;
-            if (id === 'admin') {
-                const a = window.__eclyricsAuth;
-                if (!a?.isAdmin) return;
-            }
-            document.querySelectorAll('.sidebar-nav button').forEach((b) => {
-                b.classList.toggle('is-active', b === btn);
-            });
-            document.querySelectorAll('.app-main .panel').forEach((p) => p.classList.remove('is-active'));
-            const panel = document.getElementById(`panel-${id}`);
-            if (panel) panel.classList.add('is-active');
-            document.querySelectorAll('.sidebar-nav button').forEach((b) => {
-                if (b === btn) b.setAttribute('aria-current', 'page');
-                else b.removeAttribute('aria-current');
-            });
-            if (id === 'admin' && typeof window.eclyricsLoadAdminPanel === 'function') {
-                window.eclyricsLoadAdminPanel();
+            if (!selectPanel(id)) return;
+            const route = panelRoutes[id];
+            if (route) {
+                window.history.pushState(null, '', `${route}${window.location.search}${window.location.hash}`);
             }
         });
     });
@@ -2204,11 +2299,21 @@ document.getElementById('tabs-list').addEventListener('click', (e) => {
     }
 });
 
-document.addEventListener('DOMContentLoaded', initShell);
-window.onload = () => {
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initShell, { once: true });
+} else {
+    initShell();
+}
+
+const initializeInitialTab = () => {
     addTab();
     applyViewfinderFromPrompterSync();
 };
+if (document.readyState === 'complete') {
+    initializeInitialTab();
+} else {
+    window.addEventListener('load', initializeInitialTab, { once: true });
+}
 
 window.addEventListener('beforeunload', function () {
     for (let i = 1; i <= tabCount; i++) {
