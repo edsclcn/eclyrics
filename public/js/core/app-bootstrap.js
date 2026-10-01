@@ -22,7 +22,7 @@
         'js/features/admin/admin-panel.js',
         'js/features/prompter/prompter-shortcuts.js',
         'js/features/prompter/prompter-sync-guard.js',
-        'js/features/editor/block-source.js',
+        'js/features/editor/block-source.js?v=20261002-title-fix',
         'js/features/editor/index.js',
         'js/features/editor/workspace-tour.js',
         'js/features/editor/port.js',

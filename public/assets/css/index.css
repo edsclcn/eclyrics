@@ -337,6 +337,23 @@ a:hover {
     display: flex;
 }
 
+.lyrics-mode-heading {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 0 0 auto;
+    margin: 0 0 0.45rem;
+    color: var(--lyrics-label-selected);
+    font-size: 0.8rem;
+    font-weight: 700;
+    line-height: 1.25;
+}
+
+.lyrics-mode-heading i {
+    color: var(--blue-mid);
+    font-size: 0.9em;
+}
+
 .placeholder-panel {
     flex: 1;
     display: flex;
@@ -363,27 +380,27 @@ a:hover {
     display: flex;
     flex: 1;
     min-height: 0;
-    gap: 1rem;
+    gap: clamp(0.75rem, 1.15vw, 1.25rem);
     align-items: stretch;
     overflow: hidden;
 }
 
 .workspace-editor {
-    flex: 1 1 44%;
+    flex: 1 1 48%;
     min-width: 0;
     min-height: 0;
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
+    gap: clamp(0.75rem, 1.15vw, 1.25rem);
     overflow: hidden;
 }
 
 .lyrics-toolbar {
     background: var(--card);
     border: 1px solid var(--border);
-    border-left: 3px solid var(--blue-mid);
+    border-left: 2px solid var(--blue-mid);
     border-radius: var(--radius-lg);
-    padding: 0.75rem 1rem;
+    padding: 0.8rem 1rem 0.85rem;
     box-shadow: var(--shadow-sm);
     flex-shrink: 0;
 }
@@ -393,8 +410,8 @@ a:hover {
     flex-wrap: wrap;
     align-items: center;
     gap: 0.5rem 0.75rem;
-    margin-bottom: 0.65rem;
-    padding-bottom: 0.65rem;
+    margin-bottom: 0.7rem;
+    padding-bottom: 0.7rem;
     border-bottom: 1px solid var(--border);
 }
 
@@ -1006,6 +1023,12 @@ a:hover {
     padding-right: 4px;
 }
 
+#tab-content {
+    display: flex;
+    flex-direction: column;
+    padding-right: 0;
+}
+
 #tab-content[hidden],
 .block-tab-content[hidden] {
     display: none !important;
@@ -1013,10 +1036,11 @@ a:hover {
 
 .tab-pane {
     display: none;
-    background: var(--panel-bg);
+    flex: 1 0 auto;
+    background: var(--background-subtle);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
-    padding: 1rem;
+    padding: 1.25rem;
     box-shadow: var(--shadow-sm);
 }
 
@@ -3452,7 +3476,7 @@ a:hover {
 
 /* Preview column — always visible in Text Lyrics workspace */
 .workspace-preview {
-    flex: 1 1 56%;
+    flex: 1 1 52%;
     min-width: min(100%, 280px);
     display: flex;
     flex-direction: column;
@@ -3506,7 +3530,7 @@ a:hover {
  * feel like a deliberate destination rather than a second competing panel.
  */
 .app-main {
-    padding: clamp(0.7rem, 1.2vw, 1.25rem) clamp(0.75rem, 1.4vw, 1.4rem) 0;
+    padding: clamp(0.7rem, 1.2vw, 1.25rem) clamp(0.75rem, 1.4vw, 1.4rem) clamp(0.75rem, 1.15vw, 1.25rem);
 }
 
 .workspace {
@@ -3723,10 +3747,6 @@ a:hover {
     transition: opacity 0.2s ease;
     container-type: inline-size;
     container-name: preview-dock;
-}
-
-.preview-prompter-dock.is-inactive {
-    opacity: 0.55;
 }
 
 .preview-shortcuts-strip {
@@ -4667,7 +4687,7 @@ a:hover {
     .workspace {
         display: flex;
         flex-direction: column;
-        gap: 0.65rem;
+        gap: clamp(0.75rem, 1.15vw, 1.25rem);
         min-height: 0;
     }
 
