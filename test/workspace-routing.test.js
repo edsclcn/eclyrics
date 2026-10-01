@@ -132,7 +132,7 @@ test('sign-in fragment mounts into the auth gate before auth scripts load', () =
     const signIn = fs.readFileSync(path.join(repoRoot, 'public/modules/sign-in.html'), 'utf8');
 
     assert.match(shell, /<div id="auth-gate-mount"><\/div>/);
-    assert.match(shell, /<script defer src="js\/core\/app-bootstrap\.js"><\/script>/);
+    assert.match(shell, /<script defer src="js\/core\/app-bootstrap\.js(?:\?[^\"]*)?"><\/script>/);
     assert.match(bootstrap, /\{ file: 'sign-in\.html', mountId: 'auth-gate-mount', rootId: 'auth-gate' \}/);
     assert.match(signIn, /<div id="auth-gate" class="auth-gate"/);
     assert.match(signIn, /id="auth-sign-in-google"/);
