@@ -17,6 +17,12 @@
     let formMode = 'create';
     let unsubscribeLibrary = null;
     let statusTimer = 0;
+    let searchRenderTimer = 0;
+    let searchRenderRequestId = 0;
+    let browseRenderFrame = 0;
+
+    const SEARCH_RENDER_DEBOUNCE_MS = 100;
+    const BROWSE_RESULTS_PER_FRAME = 20;
 
     function $(id) {
         return document.getElementById(id);
@@ -269,6 +275,16 @@
     }
 
     function renderSearchResults(query) {
+        const requestId = ++searchRenderRequestId;
+        if (browseRenderFrame) {
+            window.cancelAnimationFrame(browseRenderFrame);
+            browseRenderFrame = 0;
+        }
+        if (searchRenderTimer) {
+            window.clearTimeout(searchRenderTimer);
+            searchRenderTimer = 0;
+        }
+
         const list = $('admin-results');
         const note = $('admin-results-note');
         if (!list) return;
@@ -312,7 +328,8 @@
             note.hidden = false;
         }
 
-        matches.forEach((song) => {
+        const exactPhraseSearch = /^(?:"[\s\S]*"|“[\s\S]*”)$/.test(q);
+        const appendSongRow = (song) => {
             const li = document.createElement('li');
             li.className = 'admin-results-item';
             if (song.id === selectedSongId) li.classList.add('admin-results-item--selected');
@@ -363,7 +380,6 @@
 
             const metaSpan = document.createElement('span');
             metaSpan.className = 'block-source-result__meta';
-            const exactPhraseSearch = /^(?:"[\s\S]*"|“[\s\S]*”)$/.test(q);
             appendLyricsSearchPreview(
                 metaSpan,
                 q
@@ -386,7 +402,39 @@
 
             li.appendChild(btn);
             list.appendChild(li);
-        });
+        };
+
+        if (q) {
+            matches.forEach(appendSongRow);
+            return;
+        }
+
+        let nextIndex = 0;
+        const appendBrowseBatch = () => {
+            browseRenderFrame = 0;
+            if (requestId !== searchRenderRequestId) return;
+
+            const endIndex = Math.min(nextIndex + BROWSE_RESULTS_PER_FRAME, matches.length);
+            for (; nextIndex < endIndex; nextIndex += 1) appendSongRow(matches[nextIndex]);
+
+            if (nextIndex < matches.length) {
+                browseRenderFrame = window.requestAnimationFrame(appendBrowseBatch);
+            }
+        };
+        browseRenderFrame = window.requestAnimationFrame(appendBrowseBatch);
+    }
+
+    function scheduleSearchResultsRender() {
+        searchRenderRequestId += 1;
+        if (browseRenderFrame) {
+            window.cancelAnimationFrame(browseRenderFrame);
+            browseRenderFrame = 0;
+        }
+        if (searchRenderTimer) window.clearTimeout(searchRenderTimer);
+        searchRenderTimer = window.setTimeout(() => {
+            searchRenderTimer = 0;
+            renderSearchResults($('admin-search')?.value || '');
+        }, SEARCH_RENDER_DEBOUNCE_MS);
     }
 
     function appendLyricsSearchPreview(container, details, fallback) {
@@ -583,7 +631,7 @@
 
         const search = $('admin-search');
         if (search) {
-            search.addEventListener('input', () => renderSearchResults(search.value));
+            search.addEventListener('input', scheduleSearchResultsRender);
         }
     }
 
