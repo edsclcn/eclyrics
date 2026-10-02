@@ -1,5 +1,6 @@
 (function () {
 let blockSourceTargetTextarea = null;
+let blockSourceSelectionContext = null;
 let blockSourceSearchRequest = 0;
 let blockSourceSearchTimer = null;
 let editorCallbacks = {};
@@ -268,6 +269,10 @@ function updateBlockSourceDialogHeader(textarea) {
 
 function resetBlockSourceDialog(shouldLoad = true) {
     blockSourceSearchRequest += 1;
+    blockSourceSelectionContext = null;
+    document.getElementById('block-source-dialog')?.classList.remove('block-source-dialog--song-selection');
+    const manualOptions = document.querySelector('.block-source-alt');
+    if (manualOptions) manualOptions.hidden = false;
     const search = document.getElementById('block-source-search');
     blockSourceActiveCategoryFilters.clear();
     renderBlockSourceCategoryFilters();
@@ -402,6 +407,14 @@ async function renderBlockSourceSearchResults(query) {
         btn.append(topRow, metaSpan);
         if (!restricted) {
             btn.addEventListener('click', () => {
+                if (blockSourceSelectionContext) {
+                    try {
+                        blockSourceSelectionContext.onSelectSong(song);
+                    } finally {
+                        close();
+                    }
+                    return;
+                }
                 if (!blockSourceTargetTextarea) return;
                 const hymnNum = shouldOmitHymnNumForSong(song) ? '' : song.hymnNum;
                 editorCallbacks.applyLyricsToBlock?.(blockSourceTargetTextarea, song.lyrics, song.title, hymnNum, {
@@ -444,13 +457,32 @@ function open(textarea) {
     focusBlockSourceSearch();
 }
 
+function openForSongSelection({ title = 'Add lyrics to block', onSelectSong, showManualOptions = true, onManualType, onPasteLyrics, onClose } = {}) {
+    const dlg = document.getElementById('block-source-dialog');
+    if (!dlg || typeof onSelectSong !== 'function') return;
+    blockSourceTargetTextarea = null;
+    resetBlockSourceDialog();
+    blockSourceSelectionContext = { onSelectSong, onManualType, onPasteLyrics, onClose };
+    dlg.classList.add('block-source-dialog--song-selection');
+    const titleEl = document.getElementById('block-source-dialog-title');
+    if (titleEl) titleEl.textContent = title;
+    const manualOptions = document.querySelector('.block-source-alt');
+    if (manualOptions) manualOptions.hidden = !showManualOptions;
+    dlg.hidden = false;
+    dlg.setAttribute('aria-hidden', 'false');
+    focusBlockSourceSearch();
+}
+
 function close() {
     const dlg = document.getElementById('block-source-dialog');
-    if (!dlg) return;
-    dlg.hidden = true;
-    dlg.setAttribute('aria-hidden', 'true');
+    const selectionContext = blockSourceSelectionContext;
+    if (dlg) {
+        dlg.hidden = true;
+        dlg.setAttribute('aria-hidden', 'true');
+    }
     blockSourceTargetTextarea = null;
     resetBlockSourceDialog(false);
+    if (selectionContext?.onClose) selectionContext.onClose();
 }
 
 function isOpen() {
@@ -459,15 +491,17 @@ function isOpen() {
 }
 
 function handleBlockSourceDialogPaste(e) {
-    if (!isOpen() || !blockSourceTargetTextarea) return;
+    if (!isOpen() || (!blockSourceTargetTextarea && !blockSourceSelectionContext?.onPasteLyrics)) return;
 
     const raw = e.clipboardData?.getData('text/plain') ?? '';
     if (raw.trim().length < BLOCK_SOURCE_AUTO_PASTE_MIN_CHARS) return;
 
     e.preventDefault();
     const ta = blockSourceTargetTextarea;
+    const onPaste = blockSourceSelectionContext?.onPasteLyrics;
     close();
-    editorCallbacks.pasteLyricsFromClipboard?.(ta, raw);
+    if (onPaste) onPaste(raw);
+    else editorCallbacks.pasteLyricsFromClipboard?.(ta, raw);
 }
 
 function init(context = {}) {
@@ -482,8 +516,10 @@ function init(context = {}) {
 
     document.getElementById('block-source-dialog-close')?.addEventListener('click', close);
     document.getElementById('block-source-dialog-backdrop')?.addEventListener('click', close);
+    document.querySelector('.block-source-alt')?.removeAttribute('hidden');
 
     document.getElementById('block-source-type')?.addEventListener('click', () => {
+        if (blockSourceSelectionContext?.onManualType) { const callback = blockSourceSelectionContext.onManualType; close(); callback(); return; }
         if (!blockSourceTargetTextarea) return;
         const ta = blockSourceTargetTextarea;
         close();
@@ -491,6 +527,7 @@ function init(context = {}) {
     });
 
     document.getElementById('block-source-paste')?.addEventListener('click', () => {
+        if (blockSourceSelectionContext?.onPasteLyrics) { const callback = blockSourceSelectionContext.onPasteLyrics; close(); callback(); return; }
         if (!blockSourceTargetTextarea) return;
         const ta = blockSourceTargetTextarea;
         close();
@@ -528,6 +565,7 @@ function init(context = {}) {
 window.eclyricsEditorBlockSource = {
     init,
     open,
+    openForSongSelection,
     close,
     isOpen,
     AUTO_PASTE_MIN_CHARS: BLOCK_SOURCE_AUTO_PASTE_MIN_CHARS,

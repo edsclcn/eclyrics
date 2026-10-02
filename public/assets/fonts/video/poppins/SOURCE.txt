@@ -1,0 +1,8 @@
+Poppins
+Official Google Fonts repository (SIL OFL 1.1).
+https://raw.githubusercontent.com/google/fonts/main/ofl/poppins/Poppins-Black.ttf
+https://raw.githubusercontent.com/google/fonts/main/ofl/poppins/Poppins-Bold.ttf
+https://raw.githubusercontent.com/google/fonts/main/ofl/poppins/Poppins-ExtraBold.ttf
+https://raw.githubusercontent.com/google/fonts/main/ofl/poppins/Poppins-Medium.ttf
+https://raw.githubusercontent.com/google/fonts/main/ofl/poppins/Poppins-Regular.ttf
+https://raw.githubusercontent.com/google/fonts/main/ofl/poppins/Poppins-SemiBold.ttf

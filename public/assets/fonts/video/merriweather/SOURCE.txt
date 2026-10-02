@@ -1,0 +1,3 @@
+https://raw.githubusercontent.com/google/fonts/main/ofl/merriweather/Merriweather%5Bopsz%2Cwdth%2Cwght%5D.ttf
+Source git blob: cb775b80fa0a6f3b2aea114869a7171695b50a62
+License: SIL Open Font License 1.1 (OFL.txt)

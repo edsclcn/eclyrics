@@ -1,0 +1,4 @@
+Lobster Two
+Official Google Fonts repository (SIL OFL 1.1).
+https://raw.githubusercontent.com/google/fonts/main/ofl/lobstertwo/LobsterTwo-Bold.ttf
+https://raw.githubusercontent.com/google/fonts/main/ofl/lobstertwo/LobsterTwo-Regular.ttf

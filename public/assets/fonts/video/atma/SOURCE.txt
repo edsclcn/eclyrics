@@ -1,0 +1,6 @@
+Atma
+Official Google Fonts repository (SIL OFL 1.1).
+https://raw.githubusercontent.com/google/fonts/main/ofl/atma/Atma-Bold.ttf
+https://raw.githubusercontent.com/google/fonts/main/ofl/atma/Atma-Medium.ttf
+https://raw.githubusercontent.com/google/fonts/main/ofl/atma/Atma-Regular.ttf
+https://raw.githubusercontent.com/google/fonts/main/ofl/atma/Atma-SemiBold.ttf
