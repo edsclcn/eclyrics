@@ -321,17 +321,14 @@ function getPrompterShortcutsApi() {
 let adjacentBlockPressMatcher = null;
 
 function handleLocalPrompterShortcut(event) {
-    if (event.code === 'Escape' && !event.repeat && document.fullscreenElement) {
+    if (event.code === 'Escape' && !event.repeat && getFullscreenElement()) {
         event.preventDefault();
-        document.exitFullscreen()?.catch(() => {});
+        exitFullscreen();
         return;
     }
-    if (event.code === 'KeyF' && !event.repeat && !event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey) {
+    if ((event.code === 'KeyF' || event.code === 'F11') && !event.repeat && !event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey) {
         event.preventDefault();
-        const action = document.fullscreenElement
-            ? document.exitFullscreen()
-            : document.documentElement.requestFullscreen();
-        action?.catch(() => {});
+        toggleFullscreen();
         return;
     }
 
@@ -469,12 +466,25 @@ if (sessionStorage.getItem('prompterType') === 'LYRICS_PROMPTER') {
     prompterContainer.classList.add('blackwhite');
 }
 
-//Full Screen — initial open only; keyboard shortcuts live in the main workspace.
+//Full Screen
+function getFullscreenElement() {
+    return document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.mozFullscreenElement;
+}
+
+function toggleFullscreen() {
+    if (getFullscreenElement()) exitFullscreen();
+    else requestFullscreen();
+}
+
 function requestFullscreen() {
     const body = document.documentElement;
-    if (body.requestFullscreen) body.requestFullscreen();
-    else if (body.webkitRequestFullscreen) body.webkitRequestFullscreen();
-    else if (body.mozRequestFullscreen) body.mozRequestFullscreen();
+    const action = body.requestFullscreen || body.webkitRequestFullscreen || body.mozRequestFullScreen || body.mozRequestFullscreen;
+    action?.call(body)?.catch(() => {});
+}
+
+function exitFullscreen() {
+    const action = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.mozCancelFullscreen;
+    action?.call(document)?.catch(() => {});
 }
 
 //Keyboard Shortcuts — remote only (see prompter-shortcuts.js in main app)

@@ -27,6 +27,15 @@ function popupKeyHandler(kind) {
     };
     const context = {
         document,
+        getFullscreenElement: () => document.fullscreenElement,
+        toggleFullscreen() {
+            if (document.fullscreenElement) context.exitFullscreen();
+            else {
+                calls.request++;
+                document.fullscreenElement = {};
+            }
+        },
+        exitFullscreen() { calls.exit++; document.fullscreenElement = null; },
         resetNavigationArrow() { calls.reset++; },
         getPrompterShortcutsApi: () => ({
             shouldIgnorePrompterShortcut: () => false,
@@ -61,18 +70,30 @@ for (const kind of ['text', 'image', 'video']) {
         press('KeyF', { repeat: true });
         assert.equal(calls.exit, 1, 'held F does not request repeated exits');
 
+        document.fullscreenElement = null;
+        const f11 = press('F11');
+        assert.equal(f11.prevented, true);
+        assert.equal(calls.request, 2, 'F11 enters webpage fullscreen through the same API as F');
+        press('F11', { repeat: true });
+        assert.equal(calls.request, 2, 'held F11 does not repeatedly toggle fullscreen');
+
+        document.fullscreenElement = {};
+        const exitWithF11 = press('F11');
+        assert.equal(exitWithF11.prevented, true);
+        assert.equal(calls.exit, 2, 'F11 exits webpage fullscreen through the same API as F');
+        press('F11', { repeat: true });
+        assert.equal(calls.exit, 2, 'held F11 does not request repeated exits');
+
+        document.fullscreenElement = {};
         const escape = press('Escape');
         assert.equal(escape.prevented, true);
-        assert.equal(calls.exit, 2, 'Escape exits fullscreen on the first press');
+        assert.equal(calls.exit, 3, 'Escape exits fullscreen on the first press');
         press('Escape', { repeat: true });
-        assert.equal(calls.exit, 2, 'held Escape does not request repeated exits');
+        assert.equal(calls.exit, 3, 'held Escape does not request repeated exits');
 
         document.fullscreenElement = null;
         const plainEscape = press('Escape');
         assert.equal(plainEscape.prevented, undefined, 'Escape outside fullscreen keeps its existing behavior');
-        assert.equal(calls.exit, 2, 'Escape outside fullscreen does not request an exit');
-        const f11 = press('F11');
-        assert.equal(f11.prevented, undefined, 'F11 is left to the browser’s native fullscreen behavior');
-        assert.equal(calls.request, 1);
+        assert.equal(calls.exit, 3, 'Escape outside fullscreen does not request an exit');
     });
 }

@@ -57,18 +57,31 @@
         if (applied && state.revision === revision) send({ type: 'ack', revision: state.revision });
     });
     start.onclick = async () => { try { await stage.play(); start.hidden = true; } catch { send({ type: 'error', message: 'Video playback could not start. Choose another background.' }); } };
+    function getFullscreenElement() {
+        return document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.mozFullscreenElement;
+    }
+    function toggleFullscreen() {
+        if (getFullscreenElement()) exitFullscreen();
+        else requestFullscreen();
+    }
+    function requestFullscreen() {
+        const root = document.documentElement;
+        const action = root.requestFullscreen || root.webkitRequestFullscreen || root.mozRequestFullScreen || root.mozRequestFullscreen;
+        action?.call(root)?.catch(() => {});
+    }
+    function exitFullscreen() {
+        const action = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.mozCancelFullscreen;
+        action?.call(document)?.catch(() => {});
+    }
     document.addEventListener('keydown', event => {
-        if (event.code === 'Escape' && !event.repeat && document.fullscreenElement) {
+        if (event.code === 'Escape' && !event.repeat && getFullscreenElement()) {
             event.preventDefault();
-            document.exitFullscreen()?.catch(() => {});
+            exitFullscreen();
             return;
         }
-        if (event.code === 'KeyF' && !event.repeat && !event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        if ((event.code === 'KeyF' || event.code === 'F11') && !event.repeat && !event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey) {
             event.preventDefault();
-            const action = document.fullscreenElement
-                ? document.exitFullscreen()
-                : document.documentElement.requestFullscreen();
-            action?.catch(() => {});
+            toggleFullscreen();
             return;
         }
         if (event.ctrlKey || event.metaKey || event.altKey || !['ArrowUp', 'ArrowDown'].includes(event.key) || event.repeat) return;
