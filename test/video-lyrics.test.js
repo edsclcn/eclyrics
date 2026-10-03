@@ -25,14 +25,28 @@ test('preparing another song isolates live output; removing live clears lyrics b
 });
 test('song title is the first audience cue, then manual navigation skips blank lines and clamps', () => {
     const m = model(); m.advance(1); m.add(song);
-    assert.deepEqual(Array.from(m.getState().lineup[0].cues, c => [c.text, c.section, c.isTitle]), [['Song', -1, true], ['First', 0, undefined], ['Second', 1, undefined], ['Third', 1, undefined]]);
+    assert.deepEqual(Array.from(m.getState().lineup[0].cues, c => [c.text, c.section, c.isTitle, c.isOutro]), [['Song', -1, true, undefined], ['First', 0, undefined, undefined], ['Second', 1, undefined, undefined], ['Third', 1, undefined, undefined], ['To God be the Glory', 1, undefined, true]]);
     assert.equal(m.getState().live, null);
     m.advance(1); assert.equal(m.getState().live.text, 'Song');
     m.advance(1); assert.equal(m.getState().live.text, 'First');
     m.advance(-1); assert.equal(m.getState().live.index, 0);
-    m.advance(1); m.advance(1); m.advance(1); m.advance(1); assert.equal(m.getState().live.index, 3);
-    m.cue(99); assert.equal(m.getState().live.index, 3);
+    m.advance(1); m.advance(1); m.advance(1); m.advance(1); assert.equal(m.getState().live.index, 4);
+    assert.equal(m.getState().live.text, 'To God be the Glory');
+    m.cue(99); assert.equal(m.getState().live.index, 4);
     m.remove(m.getState().lineup[0].id); assert.equal(m.getState().live, null);
+});
+test('automatic closing cue appears once after the lyrics and remains last after edits', () => {
+    const m = model();
+    const empty = m.add({ ...song, title: 'Empty', lyrics: '' });
+    assert.deepEqual(Array.from(m.getState().lineup[0].cues, cue => cue.text), ['Empty', 'To God be the Glory']);
+    const hasOutro = m.add({ ...song, title: 'Has Outro', lyrics: 'Line\nTo God be the Glory' });
+    const entry = m.getState().lineup.find(item => item.id === hasOutro);
+    assert.deepEqual(Array.from(entry.cues, cue => cue.text), ['Has Outro', 'Line', 'To God be the Glory']);
+    m.prepare(hasOutro); m.cue(2);
+    m.edit(hasOutro, { title: 'Has Outro', lyrics: 'Line\nAnother line' });
+    assert.equal(m.getState().live.text, 'To God be the Glory');
+    assert.equal(m.getState().live.index, m.getState().lineup.find(item => item.id === hasOutro).cues.length - 1);
+    m.remove(empty);
 });
 test('blank output clears the live lyric, notifies subscribers, and keeps prepared song and background', () => {
     const m = model(), first = m.add(song), next = m.add({ ...song, title: 'Next song', lyrics: 'Next lyric' });

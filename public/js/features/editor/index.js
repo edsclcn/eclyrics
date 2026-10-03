@@ -22,6 +22,7 @@ const PREVIEW_KEYBOARD_SCROLL_PX = 100;
 const PREVIEW_WHEEL_SCROLL_PX = 50;
 const PROMPTER_POPUP_W = 1920;
 const PROMPTER_POPUP_H = 1080;
+const DEFAULT_PROMPTER_WIDTH_PX = 1444;
 const PROMPTER_BC_NAME = 'eclyrics-prompter';
 /** Single reused popup name so Send never opens a second window while the first is open. */
 const PROMPTER_WINDOW_NAME = 'eclyricsPrompter';
@@ -67,7 +68,7 @@ function defaultPrompterSync() {
         fs: !Number.isNaN(fs) ? fs : 138,
         ls: theme === 'lyrics' ? '2.5px' : 'normal',
         lh: '1.2em',
-        cw: !Number.isNaN(cw) ? cw : PROMPTER_POPUP_W * 0.7,
+        cw: !Number.isNaN(cw) ? cw : DEFAULT_PROMPTER_WIDTH_PX,
         speed: !Number.isNaN(sp) ? sp : PREVIEW_PROMPTER.defaultSpeed,
         playing: false,
         theme,
@@ -323,7 +324,7 @@ function applyViewfinderFromPrompterSync() {
     const k = getPreviewScaleFactor(wrap);
     const top = typeof data.top === 'number' ? data.top : 0;
     const fs = data.fs || 138;
-    const cw = data.cw || PROMPTER_POPUP_W * 0.7;
+    const cw = data.cw || DEFAULT_PROMPTER_WIDTH_PX;
     const lsPx = parsePrompterCssPx(data.ls, data.theme === 'bw' ? 0 : 2.5);
 
     /* Match prompter pixel-for-pixel, then scale from viewport top-center. */

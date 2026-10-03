@@ -81,7 +81,7 @@ body {
     white-space: pre-line;
     word-wrap: break-word;
     /* Fixed logical width — set in px via JS; never vw (browser zoom resizes vw). */
-    width: 1344px;
+    width: 1444px;
     max-width: none;
 }
 
