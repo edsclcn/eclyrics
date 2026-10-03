@@ -631,16 +631,7 @@
 
         const search = $('admin-search');
         if (search) {
-            const clearSearch = $('admin-search-clear');
-            search.addEventListener('input', () => {
-                if (clearSearch) clearSearch.hidden = !search.value.trim();
-                scheduleSearchResultsRender();
-            });
-            clearSearch?.addEventListener('click', () => {
-                search.value = '';
-                search.dispatchEvent(new Event('input', { bubbles: true }));
-                search.focus();
-            });
+            search.addEventListener('input', scheduleSearchResultsRender);
         }
     }
 

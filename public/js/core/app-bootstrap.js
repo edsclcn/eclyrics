@@ -19,7 +19,7 @@
         'js/library/song-model.js',
         'js/library/song-search.js',
         'js/library/song-library.js',
-        'js/features/admin/admin-panel.js?v=20261003-admin-search-clear',
+        'js/features/admin/admin-panel.js',
         'js/features/prompter/prompter-shortcuts.js',
         'js/features/prompter/prompter-sync-guard.js',
         'js/features/editor/block-source.js?v=20261003-video-lyrics-grid-upload',
