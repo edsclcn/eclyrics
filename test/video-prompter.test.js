@@ -18,10 +18,18 @@ function stageHarness() {
         play() { this.plays++; return Promise.resolve(); }
         pause() {} load() {} removeAttribute() {}
         cloneNode() { const n = new Node(); n.textContent = this.textContent; n.style = { ...this.style }; return n; }
+        getBoundingClientRect() { return { width: this.className === 'video-stage-lyric' ? 1600 : 1920 }; }
         animate(frames, options) { const animation = { frames, options, cancelled: false, cancel() { this.cancelled = true; } }; this.animations.push(animation); return animation; }
     }
     const window = {}, host = new Node();
-    const document = { createElement: () => new Node(), fonts: { load: () => new Promise(resolve => fonts.push(resolve)) } };
+    const document = {
+        createElement: () => new Node(),
+        createRange: () => {
+            let element;
+            return { selectNodeContents(node) { element = node; }, getBoundingClientRect() { return { width: element.textContent.length * Number.parseFloat(element.style.fontSize || '64') * .6 }; } };
+        },
+        fonts: { load: () => new Promise(resolve => fonts.push(resolve)) },
+    };
     vm.runInNewContext(read('video-lyrics/stage.js'), { window, document, Blob, URL, location: { href: 'https://example.org/', origin: 'https://example.org' }, ResizeObserver: class { observe() {} disconnect() {} }, matchMedia: () => ({ matches: false }) });
     return { api: window.eclyricsVideoStage, renderer: window.eclyricsVideoStage.create(host), host, nodes, fonts };
 }

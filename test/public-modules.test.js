@@ -755,6 +755,7 @@ test('shared picker manual and clipboard callbacks close the picker before openi
         replaceChildren(...children) { this.children = children; }
         appendChild(child) { this.children.push(child); return child; }
         classList = { add() {}, remove() {}, contains: () => false };
+        focus() {}
         click() { this.listeners.click?.forEach(callback => callback()); }
     }
     const elements = new Map(), dialog = new Element(), manualOptions = new Element();
