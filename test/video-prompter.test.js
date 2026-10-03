@@ -5,7 +5,7 @@ const vm = require('node:vm');
 const read = file => fs.readFileSync(`public/js/features/${file}`, 'utf8');
 const settings = { fontFamily: 'Satoshi', fontWeight: 700, fontSize: 64, color: '#ffffff', alignment: 'center', fadeMs: 300 };
 const state = (revision, text, extra = {}) => ({ revision, text, settings: { ...settings }, ...extra });
-function stageHarness() {
+function stageHarness({ reducedMotion = false } = {}) {
     const nodes = [], fonts = [];
     class Node {
         constructor() { this.children = []; this.style = {}; this.listeners = {}; this.textContent = ''; this.classList = { add() {} }; this.clientWidth = 1920; this.clientHeight = 1080; this.plays = 0; this.animations = []; nodes.push(this); }
@@ -26,7 +26,7 @@ function stageHarness() {
         createElement: () => new Node(),
         fonts: { load: () => new Promise(resolve => fonts.push(resolve)) },
     };
-    vm.runInNewContext(read('video-lyrics/stage.js'), { window, document, Blob, URL, location: { href: 'https://example.org/', origin: 'https://example.org' }, ResizeObserver: class { observe() {} disconnect() {} }, matchMedia: () => ({ matches: false }) });
+    vm.runInNewContext(read('video-lyrics/stage.js'), { window, document, Blob, URL, location: { href: 'https://example.org/', origin: 'https://example.org' }, ResizeObserver: class { observe() {} disconnect() {} }, matchMedia: () => ({ matches: reducedMotion }) });
     return { api: window.eclyricsVideoStage, renderer: window.eclyricsVideoStage.create(host), host, nodes, fonts };
 }
 test('stage validation rejects malformed settings, revisions and media; renders a fixed-size two-line cue layer', async () => {
@@ -59,6 +59,37 @@ test('latest asynchronous font request wins; cue crossfade does not restart back
     assert.equal(h.nodes.find(n => n.className === 'video-stage-line').textContent, '');
     assert.equal(h.nodes.find(n => n.className === 'video-stage-scrim').style.opacity, .3);
     assert.equal(video.plays, 1); h.renderer.destroy(); assert.equal(h.host.children.length, 0);
+});
+test('blank fades the current lyric for the configured duration and subsequent lyrics still render', async () => {
+    const h = stageHarness();
+    const apply = async payload => { const request = h.renderer.update(payload); h.fonts.shift()(); return request; };
+    await apply(state(1, 'Current lyric'));
+    const line = h.nodes.find(node => node.className === 'video-stage-line');
+    assert.equal(line.textContent, 'Current lyric');
+    await apply(state(2, '', { settings: { ...settings, fadeMs: 650 } }));
+
+    const outgoing = h.nodes.find(node => node.className === 'video-stage-lyric' && node.animations.some(animation => animation.options.duration === 650));
+    assert.equal(line.textContent, '', 'blank removes the lyric from the live layer immediately');
+    assert.ok(outgoing, 'the prior lyric remains in an outgoing layer while it fades');
+    const fade = outgoing.animations.find(animation => animation.options.duration === 650);
+    assert.equal(fade.options.duration, 650);
+    assert.deepEqual(Array.from(fade.frames, frame => frame.opacity), [1, 0]);
+
+    await apply(state(3, 'Next lyric'));
+    assert.equal(line.textContent, 'Next lyric', 'the next lyric can render after blank');
+    assert.equal(fade.cancelled, true, 'a later cue cancels the stale outgoing fade');
+});
+test('blank stays immediate when fade duration is zero or reduced motion is enabled', async () => {
+    for (const { h, fadeMs } of [
+        { h: stageHarness(), fadeMs: 0 },
+        { h: stageHarness({ reducedMotion: true }), fadeMs: 500 },
+    ]) {
+        const apply = async payload => { const request = h.renderer.update(payload); h.fonts.shift()(); return request; };
+        await apply(state(1, 'Current lyric'));
+        await apply(state(2, '', { settings: { ...settings, fadeMs } }));
+        assert.equal(h.nodes.find(node => node.className === 'video-stage-line').textContent, '');
+        assert.equal(h.nodes.filter(node => node.className === 'video-stage-lyric').length, 1, 'no outgoing layer is created for an immediate blank');
+    }
 });
 test('popup verifies source and origin, ignores stale revisions and acknowledges only latest applied cue', async () => {
     const listeners = {}, messages = [], pending = [], updates = [];
@@ -167,14 +198,18 @@ test('prompter arrow keys request manual line changes and ignore modified or unr
     const keydown = listeners['document:keydown'];
     const down = { key: 'ArrowDown', preventDefault() { this.prevented = true; } };
     const up = { key: 'ArrowUp', preventDefault() { this.prevented = true; } };
+    const repeatedDown = { key: 'ArrowDown', repeat: true, preventDefault() { this.prevented = true; } };
+    const repeatedUp = { key: 'ArrowUp', repeat: true, preventDefault() { this.prevented = true; } };
     const modified = { key: 'ArrowDown', ctrlKey: true, preventDefault() { this.prevented = true; } };
     const other = { key: 'Enter', preventDefault() { this.prevented = true; } };
-    keydown(down); keydown(up); keydown(modified); keydown(other);
+    keydown(down); keydown(repeatedDown); keydown(repeatedDown); keydown(up); keydown(repeatedUp); keydown(repeatedUp); keydown(modified); keydown(other);
 
     assert.deepEqual(sent.map(message => message.type), ['ready', 'advance', 'advance']);
     assert.deepEqual(sent.slice(1).map(message => message.delta), [1, -1]);
     assert.equal(down.prevented, true);
     assert.equal(up.prevented, true);
+    assert.equal(repeatedDown.prevented, undefined);
+    assert.equal(repeatedUp.prevented, undefined);
     assert.equal(modified.prevented, undefined);
     assert.equal(other.prevented, undefined);
 });

@@ -227,23 +227,25 @@
     get('hex').addEventListener('input', () => { const valid = /^#[\da-f]{6}$/i.test(get('hex').value); get('hex').setAttribute('aria-invalid', String(!valid)); if (valid) model.updateSettings({ color: get('hex').value }); });
     get('hex').addEventListener('change', () => { get('hex').value = model.getState().settings.color; get('hex').setAttribute('aria-invalid', 'false'); });
     ['open', 'background'].forEach(action => get(action).addEventListener('click', () => panel.dispatchEvent(new CustomEvent(`video-lyrics-${action}`, { bubbles: true }))));
+    get('blank').addEventListener('click', () => model.blankOutput());
     document.addEventListener('keydown', event => {
         if (!panel.classList.contains('is-active') || event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || document.querySelector('dialog[open]') || event.target.closest('input,textarea,select,[contenteditable="true"],[role="dialog"]')) return;
         if (!['ArrowUp', 'ArrowDown'].includes(event.key)) return;
+        if (event.repeat) return;
         event.preventDefault(); model.advance(event.key === 'ArrowDown' ? 1 : -1);
 
     });
     const fontRegistry = window.eclyricsVideoFonts;
     const fontDialog = document.createElement('dialog'); fontDialog.className = 'video-font-dialog';
     fontDialog.setAttribute('aria-labelledby', 'video-font-heading');
-    fontDialog.innerHTML = '<header class="video-lyrics-section-head"><h3 id="video-font-heading">Choose a font</h3><button type="button" class="video-lyrics-icon" aria-label="Close fonts">×</button></header><div class="video-font-toolbar"><input type="search" placeholder="Search fonts…" aria-label="Search fonts"><select aria-label="Font category"><option>All</option><option>Sans Serif</option><option>Serif</option><option>Cursive</option></select></div><div class="video-font-list"></div><button type="button" class="video-lyrics-button video-font-import">+ Add your own font</button><p class="video-lyrics-muted" role="status">TTF, OTF, WOFF or WOFF2 · Session only · Up to 10 MB</p>';
+    fontDialog.innerHTML = '<header class="video-lyrics-section-head"><h3 id="video-font-heading">Choose a font</h3><button type="button" class="video-lyrics-icon" aria-label="Close fonts">×</button></header><div class="video-font-toolbar"><input type="search" placeholder="Search fonts…" aria-label="Search fonts"><select aria-label="Font category"><option value="All">All</option><option value="Sans Serif">Sans Serif</option><option value="Serif">Serif</option><option value="Cursive">Cursive</option></select></div><div class="video-font-list"></div><button type="button" class="video-lyrics-button video-font-import">+ Add your own font</button><p class="video-lyrics-muted" role="status">TTF, OTF, WOFF or WOFF2 · Session only · Up to 10 MB</p>';
     panel.append(fontDialog);
     const fontSearch = fontDialog.querySelector('input'), fontCategory = fontDialog.querySelector('select'), fontList = fontDialog.querySelector('.video-font-list');
     const fontFile = document.createElement('input'); fontFile.type = 'file'; fontFile.accept = '.ttf,.otf,.woff,.woff2'; fontFile.hidden = true; panel.append(fontFile);
     function syncFontPicker(settings) {
         const metadata = fontRegistry.metadata().find(font => font.family === settings.fontFamily);
         if (!metadata) return;
-        const trigger = get('font-trigger'); trigger.textContent = `${metadata.name} ⌄`; trigger.style.fontFamily = `"${metadata.family}"`;
+        const trigger = get('font-trigger'); trigger.querySelector('.video-lyrics-font-trigger-name').textContent = metadata.name; trigger.style.fontFamily = `"${metadata.family}"`;
         const weights = metadata.weights;
         if (get('weight').dataset.family !== metadata.family) {
             const names = {400:'Regular',500:'Medium',600:'Semibold',700:'Bold',800:'Extra bold',900:'Black'};
@@ -258,21 +260,23 @@
     }
     function renderFonts() {
         const selected = model.getState().settings.fontFamily;
-        const matches = fontRegistry.metadata().filter(font => (fontCategory.value === 'All' || font.category === fontCategory.value) && font.name.toLowerCase().includes(fontSearch.value.toLowerCase()));
+        const category = fontCategory.value;
+        const matches = fontRegistry.metadata().filter(font => (category === 'All' || font.category === category) && font.name.toLowerCase().includes(fontSearch.value.toLowerCase()));
         fontList.replaceChildren(...matches.map(font => {
             const row = button('', `Use ${font.name}`, () => selectFont(font), 'video-font-option');
             row.style.fontFamily = `"${font.family}"`; row.style.fontWeight = font.defaultWeight; row.setAttribute('aria-pressed', String(font.family === selected));
             const name = document.createElement('span'); name.textContent = font.name;
             const category = document.createElement('small'); category.textContent = font.imported ? 'Session font' : font.category; row.append(name, category);
+            const check = document.createElement('i'); check.className = 'video-font-option-check fa-solid fa-check'; check.setAttribute('aria-hidden', 'true'); row.append(check);
             void document.fonts.load(`${font.defaultWeight} 24px "${font.family}"`).catch(() => {});
             return row;
         }));
         if (!matches.length) fontList.textContent = 'No fonts match your search.';
     }
     fontSearch.oninput = renderFonts; fontCategory.onchange = renderFonts;
-    get('font-trigger').onclick = () => { fontSearch.value = ''; fontCategory.value = 'All'; renderFonts(); fontDialog.showModal(); fontSearch.focus({ preventScroll: true }); };
+    get('font-trigger').onclick = () => { fontSearch.value = ''; fontCategory.value = 'All'; renderFonts(); fontDialog.showModal(); get('font-trigger').setAttribute('aria-expanded', 'true'); fontSearch.focus({ preventScroll: true }); };
     fontDialog.querySelector('header button').onclick = () => fontDialog.close();
-    fontDialog.addEventListener('close', () => get('font-trigger').focus({ preventScroll: true }));
+    fontDialog.addEventListener('close', () => { get('font-trigger').setAttribute('aria-expanded', 'false'); get('font-trigger').focus({ preventScroll: true }); });
     fontDialog.addEventListener('click', event => { const rect = fontDialog.getBoundingClientRect(); if (event.target === fontDialog && (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom)) fontDialog.close(); });
     fontDialog.querySelector('.video-font-import').onclick = () => { fontFile.value = ''; fontFile.click(); };
     fontFile.onchange = async () => {

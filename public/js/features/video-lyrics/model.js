@@ -51,6 +51,7 @@
             remove(id) { const index = state.lineup.findIndex(entry => entry.id === id); if (index < 0) return; state.lineup.splice(index, 1); if (state.live?.entryId === id) state.live = null; if (state.preparedId === id) { state.preparedId = state.lineup[Math.min(index, state.lineup.length - 1)]?.id ?? null; state.preparedIndex = -1; } notify(); },
             move(id, delta) { const index = state.lineup.findIndex(entry => entry.id === id), target = index + delta; if (index < 0 || target < 0 || target >= state.lineup.length) return; const [entry] = state.lineup.splice(index, 1); state.lineup.splice(target, 0, entry); notify(); },
             advance(delta) { const entry = prepared(); if (!entry?.cues.length) return; cue(Math.max(0, Math.min(entry.cues.length - 1, state.preparedIndex + delta))); },
+            blankOutput() { if (!state.live) return; state.live = null; notify(); },
             setBackground(background) { state.background = background; notify(); },
         };
     }

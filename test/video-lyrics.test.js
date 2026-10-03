@@ -34,6 +34,41 @@ test('song title is the first audience cue, then manual navigation skips blank l
     m.cue(99); assert.equal(m.getState().live.index, 3);
     m.remove(m.getState().lineup[0].id); assert.equal(m.getState().live, null);
 });
+test('blank output clears the live lyric, notifies subscribers, and keeps prepared song and background', () => {
+    const m = model(), first = m.add(song), next = m.add({ ...song, title: 'Next song', lyrics: 'Next lyric' });
+    const background = { id: 'ambient' };
+    m.setBackground(background);
+    m.prepare(first);
+    m.cue(1);
+
+    const notifications = [];
+    const unsubscribe = m.subscribe(state => notifications.push({
+        live: state.live && { ...state.live },
+        preparedId: state.preparedId,
+        preparedIndex: state.preparedIndex,
+        background: state.background,
+    }));
+    m.blankOutput();
+
+    assert.equal(notifications.length, 1);
+    assert.equal(notifications[0].live, null);
+    assert.equal(notifications[0].preparedId, first);
+    assert.equal(notifications[0].preparedIndex, 1);
+    assert.equal(notifications[0].background, background);
+    assert.equal(m.getState().live, null);
+    assert.equal(m.getState().preparedId, first);
+    assert.equal(m.getState().preparedIndex, 1);
+    assert.equal(m.getState().background, background);
+
+    m.advance(1);
+    assert.equal(notifications.length, 2);
+    assert.equal(m.getState().live.text, 'Second');
+    assert.equal(m.getState().preparedId, first);
+    assert.equal(m.getState().background, background);
+    unsubscribe();
+    m.prepare(next);
+    assert.equal(notifications.length, 2);
+});
 test('appearance accepts permitted fonts and colors and clamps numeric settings', () => {
     const m = model(); m.updateSettings({ fontFamily: 'Inter', color: '#AaBBcc', fontWeight: '500', fontSize: 999, fadeMs: -1, alignment: 'right' });
     const s = m.getState().settings;

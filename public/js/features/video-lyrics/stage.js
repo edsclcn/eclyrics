@@ -49,15 +49,15 @@
             Object.assign(lyric.style, { fontFamily: `"${state.settings.fontFamily}"`, fontWeight: state.settings.fontWeight, fontSize: `${state.settings.fontSize}px`, textAlign: state.settings.alignment, color: state.settings.color });
             if (state.text === lastText) return true;
             animation?.cancel(); outgoingAnimation?.cancel(); outgoing?.remove();
-            outgoing = null;
+            animation = outgoingAnimation = outgoing = null;
             const previous = line.textContent;
             lastText = state.text;
             const duration = matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : state.settings.fadeMs;
-            if (previous && state.text && duration) {
+            if (previous && duration) {
                 outgoing = lyric.cloneNode(true); canvas.insertBefore(outgoing, lyric);
                 const fading = outgoing;
                 outgoingAnimation = fading.animate([{ opacity: 1 }, { opacity: 0 }], { duration, easing: 'ease-out' });
-                outgoingAnimation.onfinish = () => fading.remove();
+                outgoingAnimation.onfinish = () => { fading.remove(); if (outgoing === fading) outgoing = outgoingAnimation = null; };
             }
             line.textContent = state.text;
             if (state.text && duration) animation = lyric.animate([{ opacity: 0 }, { opacity: 1 }], { duration, easing: 'ease-out' });

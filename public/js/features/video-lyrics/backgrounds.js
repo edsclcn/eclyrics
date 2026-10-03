@@ -22,7 +22,7 @@
         const item = card(entry.name, 'Video background', entry);
         item.button.onclick = () => select(entry); return { ...item, entry };
     });
-    ['Background 2', 'Background 3', 'Background 4'].forEach(name => { card(name, 'Coming soon').button.disabled = true; });
+    ['Background 2', 'Background 3', 'Background 4', 'Background 5', 'Background 6', 'Background 7'].forEach(name => { card(name, 'Description').button.disabled = true; });
     const upload = card('Add your own video', 'Choose a file · Session only', { custom: true });
     upload.button.classList.add('video-background-card--upload');
     upload.button.setAttribute('aria-label', 'Add your own video for this session');

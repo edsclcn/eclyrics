@@ -819,7 +819,7 @@ test('Video Lyrics preview exposes the compact actions, restored dimming control
     const backgrounds = fs.readFileSync(path.join(repoRoot, 'public/js/features/video-lyrics/backgrounds.js'), 'utf8');
     assert.match(backgrounds, /card\('Add your own video', 'Choose a file · Session only'/, 'own-video picker is a background card');
     assert.match(backgrounds, /upload\.button\.addEventListener\('drop'/);
-    assert.doesNotMatch(backgrounds, /video-background-upload/);
+    assert.doesNotMatch(backgrounds, /classList\.add\('video-background-upload'\)/, 'the own-video card does not rely on the obsolete upload-card modifier');
     assert.match(css, /\.video-lyrics-lineup-slot\s*\{[^}]*height:62px/s, 'plus-only lineup slots stay compact');
     assert.match(css, /\.video-lyrics-lineup-entry\s*\{[^}]*grid-template-columns:1\.1rem minmax\(0,1fr\) auto/s, 'lineup controls remain inside a centered grid row');
     const panelStart = html.indexOf('<section id="panel-video"');
@@ -834,12 +834,47 @@ test('Video Lyrics preview exposes the compact actions, restored dimming control
     assert.ok(panelStart >= 0 && editorPosition > panelStart && editorPosition < panelEnd, 'the editor must be inside the panel fragment that app-bootstrap mounts');
     assert.doesNotMatch(css, /\.video-lyrics-inspector\s*\{[^}]*overflow-y\s*:\s*auto/i);
 
+    const previewActions = html.match(/<div class="video-lyrics-preview-actions">([\s\S]*?)<\/div>/)?.[1] || '';
+    assert.match(previewActions, /id="video-lyrics-open"[^>]*>[\s\S]*?OPEN PROMPTER/);
+    assert.match(previewActions, /id="video-lyrics-blank"/);
+    assert.match(previewActions, /id="video-lyrics-background"[^>]*video-lyrics-action--full/);
+    assert.ok(previewActions.indexOf('id="video-lyrics-open"') < previewActions.indexOf('id="video-lyrics-blank"'));
+    assert.ok(previewActions.indexOf('id="video-lyrics-blank"') < previewActions.indexOf('id="video-lyrics-background"'));
+    assert.match(css, /\.video-lyrics-preview-actions\s*\{[^}]*grid-template-columns:\s*repeat\(2,minmax\(0,1fr\)\)/s);
+    assert.match(css, /\.video-lyrics-action--full\s*\{[^}]*grid-column:\s*1\s*\/\s*-1/s, 'Background occupies the second action row');
+
     const window = {};
     loadBrowserScript('public/js/features/video-lyrics/fonts.js', { window, Blob });
     const families = window.eclyricsVideoFonts.metadata().map(font => font.family);
     assert.equal(families.length, 17, 'provide the requested built-in font catalogue');
     assert.deepEqual(Array.from(families), [...families].sort((a, b) => a.localeCompare(b)));
     assert.ok(window.eclyricsVideoFonts.metadata().every(font => ['Sans Serif', 'Serif', 'Cursive'].includes(font.category)));
+});
+
+test('Video Lyrics keyboard navigation ignores held-arrow repeats', () => {
+    const source = fs.readFileSync(path.join(repoRoot, 'public/js/features/video-lyrics/index.js'), 'utf8');
+    const handlerSource = source.match(/document\.addEventListener\('keydown', (event => \{[\s\S]*?\n    \})\);/)?.[1];
+    assert.ok(handlerSource, 'the Video Lyrics document key handler is present');
+
+    const advances = [];
+    const panel = { classList: { contains: () => true } };
+    const document = { querySelector: () => null };
+    const handler = vm.runInNewContext(`(${handlerSource})`, { panel, document, model: { advance: delta => advances.push(delta) } });
+    const key = (key, repeat = false) => handler({
+        key,
+        repeat,
+        target: { closest: () => null },
+        preventDefault() {},
+    });
+
+    key('ArrowUp');
+    key('ArrowUp', true);
+    key('ArrowUp', true);
+    key('ArrowDown');
+    key('ArrowDown', true);
+    key('ArrowDown', true);
+
+    assert.deepEqual(advances, [-1, 1], 'each initial press advances one cue; holding either key does not repeat');
 });
 
 test('Video Lyrics size and fade fields resync clamped values on commit and blur', () => {
@@ -855,7 +890,7 @@ test('Video Lyrics size and fade fields resync clamped values on commit and blur
         getBoundingClientRect() { return { top: 0, left: 0, right: 100, bottom: 100 }; },
         focus() {},
     });
-    const suffixes = ['prev', 'next', 'status', 'count', 'lineup', 'lineup-pages', 'song-title', 'song-meta', 'cue-empty', 'cues', 'live-label', 'font', 'font-trigger', 'weight', 'size', 'color', 'hex', 'alignment', 'fade', 'dimming', 'open', 'background', 'editor-form', 'editor-title', 'editor-body', 'editor-heading', 'editor-message', 'editor', 'editor-close', 'editor-cancel'];
+    const suffixes = ['prev', 'next', 'status', 'count', 'lineup', 'lineup-pages', 'song-title', 'song-meta', 'cue-empty', 'cues', 'live-label', 'font', 'font-trigger', 'weight', 'size', 'color', 'hex', 'alignment', 'fade', 'dimming', 'open', 'background', 'blank', 'editor-form', 'editor-title', 'editor-body', 'editor-heading', 'editor-message', 'editor', 'editor-close', 'editor-cancel'];
     suffixes.forEach(suffix => elements.set(`video-lyrics-${suffix}`, makeElement()));
     const panel = makeElement();
     panel.contains = () => false;
@@ -889,4 +924,31 @@ test('Video Lyrics size and fade fields resync clamped values on commit and blur
     assert.equal(fade.value, '-1', 'preserve the active field while typing');
     fade.listeners.blur();
     assert.equal(fade.value, 0, 'show the model-clamped fade after leaving the field');
+});
+
+test('Video Lyrics background picker places seven presets and upload card in one grid', () => {
+    const backgrounds = fs.readFileSync(path.join(repoRoot, 'public/js/features/video-lyrics/backgrounds.js'), 'utf8');
+    const css = fs.readFileSync(path.join(repoRoot, 'public/assets/css/video-lyrics.css'), 'utf8');
+
+    assert.match(backgrounds, /const catalogue = \[\{[^\]]*name: 'Background 1'/s,
+        'Background 1 is the only currently playable curated video');
+    assert.match(backgrounds, /\['Background 2', 'Background 3', 'Background 4', 'Background 5', 'Background 6', 'Background 7'\]/,
+        'the picker exposes all seven numbered preset slots');
+    assert.match(backgrounds, /card\(name, 'Description'\)\.button\.disabled = true/,
+        'unavailable presets use the neutral Description placeholder');
+    assert.match(backgrounds, /video-background-grid"><\/div>/,
+        'the dialog contains a single background grid');
+    assert.doesNotMatch(backgrounds, /video-background-upload-row/,
+        'there is no separate upload row');
+    const presetCards = backgrounds.indexOf("['Background 2', 'Background 3', 'Background 4', 'Background 5', 'Background 6', 'Background 7']");
+    const uploadCard = backgrounds.indexOf("card('Add your own video', 'Choose a file · Session only', { custom: true })");
+    assert.ok(presetCards >= 0 && uploadCard > presetCards,
+        'the own-video card is appended after all seven preset tiles in the same grid');
+
+    assert.match(css, /\.video-background-grid\s*\{[^}]*grid-template-columns:\s*repeat\(4,minmax\(0,1fr\)\)/s,
+        'desktop layout places four preset cards in the first row');
+    assert.match(css, /@media\(max-width:900px\)\s*\{\s*\.video-background-grid\s*\{\s*grid-template-columns:\s*repeat\(3,minmax\(0,1fr\)\)/,
+        'the narrower layout fits three presets per row');
+    assert.match(css, /\.video-background-dialog\s*\{[^}]*width:min\(1000px,calc\(100vw - 2rem\)\)[^}]*max-height:min\(92d?vh,820px\)/s,
+        'the expanded picker remains bounded by the viewport');
 });

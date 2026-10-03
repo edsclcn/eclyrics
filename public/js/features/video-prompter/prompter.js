@@ -57,7 +57,7 @@
         if (applied && state.revision === revision) send({ type: 'ack', revision: state.revision });
     });
     start.onclick = async () => { try { await stage.play(); start.hidden = true; } catch { send({ type: 'error', message: 'Video playback could not start. Choose another background.' }); } };
-    document.addEventListener('keydown', event => { if (event.ctrlKey || event.metaKey || event.altKey || !['ArrowUp', 'ArrowDown'].includes(event.key)) return; event.preventDefault(); send({ type: 'advance', delta: event.key === 'ArrowDown' ? 1 : -1 }); });
+    document.addEventListener('keydown', event => { if (event.ctrlKey || event.metaKey || event.altKey || !['ArrowUp', 'ArrowDown'].includes(event.key) || event.repeat) return; event.preventDefault(); send({ type: 'advance', delta: event.key === 'ArrowDown' ? 1 : -1 }); });
     window.addEventListener('pagehide', stage.destroy);
     send({ type: 'ready' });
 })();
