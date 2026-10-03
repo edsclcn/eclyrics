@@ -5428,12 +5428,29 @@ body.auth-gate-open {
     flex-shrink: 0;
 }
 
-.admin-search-input::-webkit-search-cancel-button {
-    width: 1.1rem;
-    height: 1.1rem;
-    margin-inline-end: 0.2rem;
-    cursor: pointer;
-    transform: scale(1.2);
+.admin-search-wrap .admin-search-input {
+    padding-right: 3rem;
+}
+
+.admin-search-wrap .admin-search-input::-webkit-search-cancel-button,
+.admin-search-wrap .admin-search-input::-ms-clear {
+    display: none;
+    -webkit-appearance: none;
+}
+
+.admin-search-wrap .admin-search-clear {
+    position: absolute;
+    right: 0.25rem;
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    width: 2.4rem;
+    min-height: 2.4rem;
+    padding: 0;
+}
+
+.admin-search-wrap .admin-search-clear[hidden] {
+    display: none;
 }
 
 .admin-search-filters {

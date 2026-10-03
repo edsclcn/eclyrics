@@ -14,18 +14,10 @@
         host.replaceChildren();
         const canvas = document.createElement('div'); canvas.className = 'video-stage-canvas';
         const lyric = document.createElement('div'); lyric.className = 'video-stage-lyric';
+        const line = document.createElement('span'); line.className = 'video-stage-line';
         const scrim = document.createElement('div'); scrim.className = 'video-stage-scrim';
-        canvas.append(scrim, lyric); host.append(canvas); host.classList.add('video-stage-host');
-        let maximumFontSize = 64;
-        function fitLine(element = lyric) {
-            element.style.fontSize = `${maximumFontSize}px`;
-            if (!element.textContent) return;
-            const range = document.createRange(); range.selectNodeContents(element);
-            const available = element.getBoundingClientRect().width;
-            const width = range.getBoundingClientRect().width;
-            if (available > 0 && width > available) element.style.fontSize = `${maximumFontSize * available / width * .99}px`;
-        }
-        const resize = new ResizeObserver(() => { const scale = Math.min(host.clientWidth / 1920, host.clientHeight / 1080); canvas.style.transform = `translate(-50%, -50%) scale(${scale})`; fitLine(); if (outgoing) fitLine(outgoing); }); resize.observe(host);
+        lyric.append(line); canvas.append(scrim, lyric); host.append(canvas); host.classList.add('video-stage-host');
+        const resize = new ResizeObserver(() => { const scale = Math.min(host.clientWidth / 1920, host.clientHeight / 1080); canvas.style.transform = `translate(-50%, -50%) scale(${scale})`; }); resize.observe(host);
         let currentVideo = null, currentUrl = null, pendingVideo = null, pendingUrl = null, backgroundKey = null, mediaGeneration = 0, cueGeneration = 0, animation = null, outgoing = null, outgoingAnimation = null, lastText = null;
         function releasePending() { if (pendingVideo) { pendingVideo.pause(); pendingVideo.removeAttribute('src'); pendingVideo.load(); pendingVideo.remove(); } if (pendingUrl) URL.revokeObjectURL(pendingUrl); pendingVideo = pendingUrl = null; }
         function background(descriptor) {
@@ -55,12 +47,10 @@
             try { await document.fonts.load(`${state.settings.fontWeight} ${state.settings.fontSize}px "${state.settings.fontFamily}"`); } catch { onError('The selected font could not load.'); }
             if (generation !== cueGeneration) return false;
             Object.assign(lyric.style, { fontFamily: `"${state.settings.fontFamily}"`, fontWeight: state.settings.fontWeight, fontSize: `${state.settings.fontSize}px`, textAlign: state.settings.alignment, color: state.settings.color });
-            maximumFontSize = state.settings.fontSize;
-            fitLine();
             if (state.text === lastText) return true;
             animation?.cancel(); outgoingAnimation?.cancel(); outgoing?.remove();
             outgoing = null;
-            const previous = lyric.textContent;
+            const previous = line.textContent;
             lastText = state.text;
             const duration = matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : state.settings.fadeMs;
             if (previous && state.text && duration) {
@@ -69,8 +59,7 @@
                 outgoingAnimation = fading.animate([{ opacity: 1 }, { opacity: 0 }], { duration, easing: 'ease-out' });
                 outgoingAnimation.onfinish = () => fading.remove();
             }
-            lyric.textContent = state.text;
-            fitLine();
+            line.textContent = state.text;
             if (state.text && duration) animation = lyric.animate([{ opacity: 0 }, { opacity: 1 }], { duration, easing: 'ease-out' });
             return true;
         }

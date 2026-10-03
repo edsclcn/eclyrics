@@ -110,6 +110,40 @@ test('hidden Admin navigation remains display-none despite sidebar flex styles',
     assert.match(css, /\.sidebar-nav\s+button\[hidden\]\s*\{\s*display:\s*none(?:\s*!important)?\s*;\s*\}/);
 });
 
+test('Admin search clear button appears for a query and clears and refocuses the input', () => {
+    const search = {
+        value: '', listeners: {}, focusCount: 0,
+        addEventListener(name, callback) { this.listeners[name] = callback; },
+        dispatchEvent(event) { this.listeners[event.type](event); },
+        focus() { this.focusCount++; },
+    };
+    const clear = {
+        hidden: true, listeners: {},
+        addEventListener(name, callback) { this.listeners[name] = callback; },
+        click() { this.listeners.click(); },
+    };
+    const document = {
+        readyState: 'complete',
+        getElementById(id) { return ({ 'admin-search': search, 'admin-search-clear': clear })[id] || null; },
+    };
+    const window = { setTimeout: () => 1, clearTimeout() {}, cancelAnimationFrame() {} };
+    const context = { window, document, Event: class Event { constructor(type, options) { this.type = type; this.bubbles = options.bubbles; } } };
+    context.globalThis = context;
+    vm.runInNewContext(
+        fs.readFileSync(path.join(repoRoot, 'public/js/features/admin/admin-panel.js'), 'utf8'),
+        context,
+        { filename: 'public/js/features/admin/admin-panel.js' },
+    );
+
+    search.value = '  hymn  ';
+    search.listeners.input();
+    assert.equal(clear.hidden, false);
+    clear.click();
+    assert.equal(search.value, '');
+    assert.equal(clear.hidden, true);
+    assert.equal(search.focusCount, 1);
+});
+
 test('signed-out and non-admin users do not see Admin', async () => {
     const auth = await setupAuth();
     assert.equal(auth.adminNav.hidden, true);

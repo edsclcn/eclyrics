@@ -24,7 +24,7 @@
     api.panel.addEventListener('video-lyrics-open', () => {
         if (popup && !popup.closed) { popup.focus(); sync(); return; }
         ready = false; sentFont = undefined; sentBackground = undefined; lastAcknowledged = -1;
-        popup = window.open('video-prompter.html?v=20261003-video-workspace-redesign', 'eclyricsVideoPrompter', 'popup,width=1280,height=720');
+        popup = window.open('video-prompter.html?v=20261003-video-two-line-cues', 'eclyricsVideoPrompter', 'popup,width=1280,height=720');
         api.status(popup ? 'Opening video prompter…' : 'Allow popups to open the video prompter.', !popup);
     });
     window.addEventListener('message', event => {

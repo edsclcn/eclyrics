@@ -17,28 +17,31 @@ function stageHarness() {
         addEventListener(name, fn) { this.listeners[name] = fn; }
         play() { this.plays++; return Promise.resolve(); }
         pause() {} load() {} removeAttribute() {}
-        cloneNode() { const n = new Node(); n.textContent = this.textContent; n.style = { ...this.style }; return n; }
+        cloneNode(deep = false) { const n = new Node(); n.textContent = this.textContent; n.style = { ...this.style }; n.className = this.className; if (deep) this.children.forEach(child => n.append(child.cloneNode(true))); return n; }
         getBoundingClientRect() { return { width: this.className === 'video-stage-lyric' ? 1600 : 1920 }; }
         animate(frames, options) { const animation = { frames, options, cancelled: false, cancel() { this.cancelled = true; } }; this.animations.push(animation); return animation; }
     }
     const window = {}, host = new Node();
     const document = {
         createElement: () => new Node(),
-        createRange: () => {
-            let element;
-            return { selectNodeContents(node) { element = node; }, getBoundingClientRect() { return { width: element.textContent.length * Number.parseFloat(element.style.fontSize || '64') * .6 }; } };
-        },
         fonts: { load: () => new Promise(resolve => fonts.push(resolve)) },
     };
     vm.runInNewContext(read('video-lyrics/stage.js'), { window, document, Blob, URL, location: { href: 'https://example.org/', origin: 'https://example.org' }, ResizeObserver: class { observe() {} disconnect() {} }, matchMedia: () => ({ matches: false }) });
     return { api: window.eclyricsVideoStage, renderer: window.eclyricsVideoStage.create(host), host, nodes, fonts };
 }
-test('stage validation rejects malformed settings, revisions and media; renders one lyric layer without scrim controls', async () => {
+test('stage validation rejects malformed settings, revisions and media; renders a fixed-size two-line cue layer', async () => {
     const { api } = stageHarness();
     assert.ok(api.validate(state(0, 'valid')));
     for (const invalid of [state(-1, 'bad'), state(1, 5), state(1, 'x', { settings: { ...settings, fontFamily: 'Unknown' } }), state(1, 'x', { background: { id: 'broken' } })]) assert.equal(api.validate(invalid), null);
-    const h = stageHarness(); const request = h.renderer.update(state(1, 'Bless His name', { background: { id: 'ambient', url: '/ambient.mp4' } })); h.fonts[0](); await request;
-    assert.equal(h.nodes.find(node => node.className === 'video-stage-lyric').textContent, 'Bless His name');
+    const cue = 'Bless His name '.repeat(40);
+    const h = stageHarness(); const request = h.renderer.update(state(1, cue, { background: { id: 'ambient', url: '/ambient.mp4' } })); h.fonts[0](); await request;
+    const lyric = h.nodes.find(node => node.className === 'video-stage-lyric');
+    const line = h.nodes.find(node => node.className === 'video-stage-line');
+    assert.equal(line.textContent, cue);
+    assert.equal(lyric.style.fontSize, '64px', 'long cues retain the selected font size');
+    const css = require('node:fs').readFileSync('public/assets/css/video-prompter.css', 'utf8');
+    assert.match(css, /\.video-stage-line\s*\{[^}]*-webkit-line-clamp:\s*2/);
+    assert.match(css, /\.video-stage-line\s*\{[^}]*max-height:\s*2\.4em/);
     assert.equal(h.host.children[0].children.filter(node => node.className === 'video-stage-lyric').length, 1);
     assert.equal(h.nodes.find(node => node.className === 'video-stage-scrim').style.opacity, .3);
 });
@@ -49,11 +52,11 @@ test('latest asynchronous font request wins; cue crossfade does not restart back
     const old = h.renderer.update(state(2, 'Stale', { background }));
     const latest = h.renderer.update(state(3, 'Latest', { background }));
     h.fonts[1](); assert.equal(await latest, true); h.fonts[0](); assert.equal(await old, false);
-    assert.equal(h.nodes.find(n => n.className === 'video-stage-lyric').textContent, 'Latest');
+    assert.equal(h.nodes.find(n => n.className === 'video-stage-line').textContent, 'Latest');
     assert.equal(h.nodes.filter(n => n.className === 'video-stage-video').length, 1); assert.equal(video.plays, 1);
-    assert.ok(h.host.children[0].children.some(n => n.textContent === 'First'));
+    assert.ok(h.nodes.some(n => n.className === 'video-stage-line' && n.textContent === 'First'), 'the previous cue is retained in the crossfade layer');
     const clear = h.renderer.update(state(4, '')); h.fonts[2](); await clear;
-    assert.equal(h.nodes.find(n => n.className === 'video-stage-lyric').textContent, '');
+    assert.equal(h.nodes.find(n => n.className === 'video-stage-line').textContent, '');
     assert.equal(h.nodes.find(n => n.className === 'video-stage-scrim').style.opacity, .3);
     assert.equal(video.plays, 1); h.renderer.destroy(); assert.equal(h.host.children.length, 0);
 });
