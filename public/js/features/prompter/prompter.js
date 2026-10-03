@@ -4,6 +4,7 @@ const DEFAULT_SCROLL_SPEED = 0.5;
 /** Logical stage size — fixed regardless of browser zoom or popup window resize. */
 const STAGE_VW = 1920;
 const STAGE_VH = 1080;
+const DEFAULT_PROMPTER_WIDTH_PX = 1444;
 /** Manual scroll: fixed 100px per keypress (including hold key-repeat); not scaled by scroll speed. */
 const KEYBOARD_ARROW_SCROLL_PX = 100;
 const WHEEL_SCROLL_PX = 50;
@@ -30,7 +31,7 @@ function readPrompterWidthPx() {
     if (!Number.isNaN(inline) && inline > 0) return inline;
     const stored = parseFloat(sessionStorage.getItem('prompterWidth'));
     if (!Number.isNaN(stored) && stored > 0) return stored;
-    return STAGE_VW * 0.7;
+    return DEFAULT_PROMPTER_WIDTH_PX;
 }
 
 function setPrompterFontSizePx(px) {
@@ -170,7 +171,7 @@ syncPreviewMetricsFromSession();
 let prompterWidth = sessionStorage.getItem('prompterWidth');
 if (prompterWidth) prompterContent.style.width = prompterWidth + 'px';
 else {
-    setPrompterWidthPx(STAGE_VW * 0.7);
+    setPrompterWidthPx(DEFAULT_PROMPTER_WIDTH_PX);
 }
 syncPreviewMetricsFromSession();
 
@@ -320,6 +321,20 @@ function getPrompterShortcutsApi() {
 let adjacentBlockPressMatcher = null;
 
 function handleLocalPrompterShortcut(event) {
+    if (event.code === 'Escape' && !event.repeat && document.fullscreenElement) {
+        event.preventDefault();
+        document.exitFullscreen()?.catch(() => {});
+        return;
+    }
+    if (event.code === 'KeyF' && !event.repeat && !event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        event.preventDefault();
+        const action = document.fullscreenElement
+            ? document.exitFullscreen()
+            : document.documentElement.requestFullscreen();
+        action?.catch(() => {});
+        return;
+    }
+
     const sc = getPrompterShortcutsApi();
     if (!sc) return;
     const ctx = { prompterOpen: true };

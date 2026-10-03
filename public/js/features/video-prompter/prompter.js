@@ -57,7 +57,24 @@
         if (applied && state.revision === revision) send({ type: 'ack', revision: state.revision });
     });
     start.onclick = async () => { try { await stage.play(); start.hidden = true; } catch { send({ type: 'error', message: 'Video playback could not start. Choose another background.' }); } };
-    document.addEventListener('keydown', event => { if (event.ctrlKey || event.metaKey || event.altKey || !['ArrowUp', 'ArrowDown'].includes(event.key) || event.repeat) return; event.preventDefault(); send({ type: 'advance', delta: event.key === 'ArrowDown' ? 1 : -1 }); });
+    document.addEventListener('keydown', event => {
+        if (event.code === 'Escape' && !event.repeat && document.fullscreenElement) {
+            event.preventDefault();
+            document.exitFullscreen()?.catch(() => {});
+            return;
+        }
+        if (event.code === 'KeyF' && !event.repeat && !event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey) {
+            event.preventDefault();
+            const action = document.fullscreenElement
+                ? document.exitFullscreen()
+                : document.documentElement.requestFullscreen();
+            action?.catch(() => {});
+            return;
+        }
+        if (event.ctrlKey || event.metaKey || event.altKey || !['ArrowUp', 'ArrowDown'].includes(event.key) || event.repeat) return;
+        event.preventDefault();
+        send({ type: 'advance', delta: event.key === 'ArrowDown' ? 1 : -1 });
+    });
     window.addEventListener('pagehide', stage.destroy);
     send({ type: 'ready' });
 })();

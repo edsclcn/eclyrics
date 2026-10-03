@@ -287,6 +287,20 @@
     });
 
     window.addEventListener('keydown', (event) => {
+        if (event.code === 'Escape' && !event.repeat && document.fullscreenElement) {
+            event.preventDefault();
+            document.exitFullscreen()?.catch(() => {});
+            return;
+        }
+        if (event.code === 'KeyF' && !event.repeat && !event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey) {
+            event.preventDefault();
+            const action = document.fullscreenElement
+                ? document.exitFullscreen()
+                : document.documentElement.requestFullscreen();
+            action?.catch(() => {});
+            return;
+        }
+
         if (event.altKey || event.ctrlKey || event.metaKey) { resetNavigationArrow(); return; }
         if (event.repeat && event.code !== 'ArrowUp' && event.code !== 'ArrowDown') { resetNavigationArrow(); return; }
         if (event.code !== 'ArrowLeft' && event.code !== 'ArrowRight') resetNavigationArrow();
