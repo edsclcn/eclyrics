@@ -16,15 +16,18 @@ audience output shows only the live line over a muted looping video.
    `public/modules/video-lyrics.html` into the shared workspace and loads the
    Video Lyrics scripts after the shared song library and editor block-source
    dialog.
-2. Choose **Search and add songs** in the lineup. The handler in
+2. Choose one of the three compact plus slots in the lineup. The handler in
    `public/js/features/video-lyrics/index.js` calls
    `window.eclyricsEditorBlockSource.openForSongSelection()` for the shared
    `#block-source-dialog` in `public/index.html`. The shared picker retains the
    Text Lyrics search, category filters, result cards, **Manually type**, and
    **Paste lyrics** options. Selecting one song adds it to the lineup and closes
-   the picker. Manual entry and paste open the Video Lyrics title/body editor;
-   pasted content uses the first line as title and remaining lines as lyrics.
-   Review the fields and save to add one temporary lineup entry.
+   the picker. Manual entry opens the Video Lyrics title/body editor. Paste
+   reads the clipboard and adds the resulting temporary lineup entry directly;
+   title and lyrics can be separated with a blank line. Drag the grip on a
+   lineup entry to reorder it; edit and remove controls sit at the right. The
+   same-background dialog lists the session-only own-video picker as its last
+   card, alongside the curated background choices.
 3. `public/js/features/video-lyrics/model.js` adds the song title as the first
    cue, then parses lyric lines into ordered cues. Blank lyric lines are
    omitted and advance the section marker used for visual grouping. The first
@@ -37,7 +40,8 @@ audience output shows only the live line over a muted looping video.
    forwards its Up/Down keys to the control window.
 5. Set appearance for the whole lineup: font family, weight, size, text color,
    alignment, fade duration, and background dimming. Defaults are Satoshi, bold,
-   64 px, white, centered, 300 ms, and 30% dimming. The font size is a maximum:
+   120 px, white, centered, 400 ms, and no dimming. Size changes in 5 px
+   increments and fade changes in 50 ms increments. The font size is a maximum:
    the stage reduces long text to fit one line. Dimming affects the video, not
    the lyric, and ranges from 0–90%. The custom font dialog shows alphabetical
    names in their actual faces, with search and a rectangular All/Sans

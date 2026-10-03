@@ -9,28 +9,101 @@
         element.textContent = text; element.setAttribute('aria-label', label); element.title = label; element.onclick = callback; return element;
     }
     let lineupPage = 0, pageSize = 4, previousPrepared = null, previousCues = null, previousCueKey = null;
+    function addSlot(label) {
+        const item = document.createElement('li'); item.className = 'video-lyrics-lineup-slot';
+        const add = button('', label, openSearch, 'video-lyrics-lineup-slot-button');
+        add.dataset.videoFocus = 'add-slot';
+        add.innerHTML = '<i class="fa-solid fa-plus" aria-hidden="true"></i>';
+        item.append(add); return item;
+    }
+    function addSongFromClipboard(raw) {
+        const content = String(raw || '').replace(/\r\n?/g, '\n').trim();
+        const lines = content.split('\n');
+        const separator = lines.findIndex((line, index) => index > 0 && !line.trim());
+        const titleLines = separator > 0 ? lines.slice(0, separator) : [lines.find(line => line.trim()) || ''];
+        const title = titleLines.join('\n').trim() || 'Pasted lyrics';
+        const lyrics = separator > 0 ? lines.slice(separator + 1).join('\n').trim() : lines.slice(lines.indexOf(titleLines[0]) + 1).join('\n').trim();
+        if (!content) { status('The clipboard is empty.', true); return; }
+        const addedId = model.add({ title, lyrics, category: [] });
+        status(`${title} added to lineup.`);
+        requestAnimationFrame(() => panel.querySelector(`[data-video-focus="prepare-${addedId}"]`)?.focus({ preventScroll: true }));
+    }
+    async function pasteLyricsToLineup(raw) {
+        if (raw !== undefined) { addSongFromClipboard(raw); return; }
+        try { addSongFromClipboard(await navigator.clipboard.readText()); }
+        catch { status('Clipboard access is unavailable. Paste the lyrics into the search field, or choose Manually type.', true); }
+    }
+    function moveSongToTarget(id, targetItem) {
+        const targetId = targetItem?.dataset.lineupId;
+        if (!id || !targetId || id === targetId) return;
+        const entries = model.getState().lineup;
+        const from = entries.findIndex(entry => String(entry.id) === id);
+        const to = entries.findIndex(entry => String(entry.id) === targetId);
+        if (from >= 0 && to >= 0) model.move(entries[from].id, to - from);
+    }
+    let pointerDrag = null;
+    document.addEventListener('pointermove', event => {
+        if (!pointerDrag || event.pointerId !== pointerDrag.pointerId) return;
+        if (!pointerDrag.moved && Math.hypot(event.clientX - pointerDrag.x, event.clientY - pointerDrag.y) < 6) return;
+        pointerDrag.moved = true;
+        panel.querySelector(`[data-lineup-id="${CSS.escape(pointerDrag.id)}"]`)?.classList.add('is-dragging');
+        const target = document.elementFromPoint(event.clientX, event.clientY)?.closest('.video-lyrics-lineup-entry');
+        panel.querySelectorAll('.video-lyrics-lineup-entry.is-drop-target').forEach(item => item.classList.remove('is-drop-target'));
+        if (target && target.dataset.lineupId !== pointerDrag.id) target.classList.add('is-drop-target');
+    });
+    document.addEventListener('pointerup', event => {
+        if (!pointerDrag || event.pointerId !== pointerDrag.pointerId) return;
+        if (pointerDrag.moved) {
+            const target = document.elementFromPoint(event.clientX, event.clientY)?.closest('.video-lyrics-lineup-entry');
+            moveSongToTarget(pointerDrag.id, target);
+        }
+        pointerDrag = null;
+        panel.querySelectorAll('.video-lyrics-lineup-entry.is-dragging,.video-lyrics-lineup-entry.is-drop-target').forEach(item => item.classList.remove('is-dragging', 'is-drop-target'));
+    });
+    document.addEventListener('pointercancel', () => {
+        pointerDrag = null;
+        panel.querySelectorAll('.video-lyrics-lineup-entry.is-dragging,.video-lyrics-lineup-entry.is-drop-target').forEach(item => item.classList.remove('is-dragging', 'is-drop-target'));
+    });
     function render(state) {
         const focusedControl = panel.contains(document.activeElement) ? document.activeElement.dataset.videoFocus : null;
         const prepared = state.lineup.find(entry => entry.id === state.preparedId);
         get('count').textContent = state.lineup.length;
-        get('lineup-empty').hidden = state.lineup.length > 0;
-        lineupPage = Math.min(lineupPage, Math.max(0, Math.ceil(state.lineup.length / pageSize) - 1));
-        get('lineup').replaceChildren(...state.lineup.slice(lineupPage * pageSize, (lineupPage + 1) * pageSize).map((entry, pageIndex) => {
-            const index = lineupPage * pageSize + pageIndex;
+        const displayCount = Math.max(3, state.lineup.length + 1);
+        const pages = Math.ceil(displayCount / pageSize);
+        lineupPage = Math.min(lineupPage, pages - 1);
+        panel.querySelector('.video-lyrics-workspace').classList.toggle('is-empty', state.lineup.length === 0);
+        const start = lineupPage * pageSize, end = Math.min(start + pageSize, displayCount);
+        const items = [];
+        for (let index = start; index < end; index++) {
+            const entry = state.lineup[index];
+            if (!entry) { items.push(addSlot(`Add lyrics to lineup slot ${index + 1}`)); continue; }
             const item = document.createElement('li'); item.className = 'video-lyrics-lineup-entry' + (entry.id === state.preparedId ? ' is-prepared' : '');
+            item.dataset.lineupId = entry.id;
             const tag = document.createElement('span'); tag.className = 'video-lyrics-lineup-tag'; tag.textContent = state.live?.entryId === entry.id ? 'ON OUTPUT' : String(index + 1).padStart(2, '0');
             const select = button(entry.title, `Prepare ${entry.title}`, () => model.prepare(entry.id), 'video-lyrics-lineup-select'); select.setAttribute('aria-current', String(entry.id === state.preparedId)); select.dataset.videoFocus = `prepare-${entry.id}`;
             const actions = document.createElement('div'); actions.className = 'video-lyrics-lineup-actions';
-            const up = button('↑', `Move ${entry.title} earlier`, () => model.move(entry.id, -1)); up.disabled = index === 0;
-            const down = button('↓', `Move ${entry.title} later`, () => model.move(entry.id, 1)); down.disabled = index === state.lineup.length - 1;
-            up.dataset.videoFocus = `up-${entry.id}`; down.dataset.videoFocus = `down-${entry.id}`;
+            const handle = button('', `Drag ${entry.title} to reorder`, () => {}, 'video-lyrics-drag-handle'); handle.innerHTML = '<i class="fa-solid fa-grip-vertical" aria-hidden="true"></i>';
+            handle.addEventListener('pointerdown', event => {
+                if (event.button !== 0) return;
+                pointerDrag = { id: String(entry.id), pointerId: event.pointerId, x: event.clientX, y: event.clientY, moved: false };
+                handle.setPointerCapture(event.pointerId);
+            });
+            handle.addEventListener('keydown', event => {
+                if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+                event.preventDefault(); event.stopPropagation();
+                const current = model.getState().lineup.findIndex(song => song.id === entry.id);
+                const delta = event.key === 'ArrowUp' ? -1 : 1;
+                if (current >= 0 && current + delta >= 0 && current + delta < model.getState().lineup.length) model.move(entry.id, delta);
+            });
+            const content = document.createElement('div'); content.className = 'video-lyrics-lineup-content'; content.append(tag, select);
             const edit = button('', `Edit ${entry.title}`, () => openLyricsEditor(entry.id)); edit.innerHTML = '<i class="fa-solid fa-pencil" aria-hidden="true"></i>'; edit.dataset.videoFocus = `edit-${entry.id}`;
-            actions.append(up, down, edit, button('×', `Remove ${entry.title}`, () => model.remove(entry.id))); item.append(tag, select, actions); return item;
-        }));
-        const pages = Math.ceil(state.lineup.length / pageSize);
+            const remove = button('', `Remove ${entry.title}`, () => model.remove(entry.id)); remove.innerHTML = '<i class="fa-solid fa-trash" aria-hidden="true"></i>';
+            actions.append(edit, remove); item.append(handle, content, actions); items.push(item);
+        }
+        get('lineup').replaceChildren(...items);
         get('lineup-pages').hidden = pages <= 1;
-        const earlier = button('↑', 'Previous lineup page', () => { lineupPage--; render(model.getState()); }); earlier.disabled = lineupPage === 0;
-        const later = button('↓', 'Next lineup page', () => { lineupPage++; render(model.getState()); }); later.disabled = lineupPage >= pages - 1;
+        const earlier = button('‹', 'Previous lineup page', () => { lineupPage--; render(model.getState()); }); earlier.disabled = lineupPage === 0;
+        const later = button('›', 'Next lineup page', () => { lineupPage++; render(model.getState()); }); later.disabled = lineupPage >= pages - 1;
         const pageLabel = document.createElement('span'); pageLabel.textContent = `${lineupPage + 1} / ${Math.max(1, pages)}`;
         get('lineup-pages').replaceChildren(earlier, pageLabel, later);
         get('song-title').textContent = prepared?.title || 'Ready when you are';
@@ -126,23 +199,23 @@
     get('editor').addEventListener('close', () => {
         editorGeneration++;
         const restored = editingId !== null ? panel.querySelector(`[data-video-focus="edit-${editingId}"]`) : null;
-        (restored || (editorReturnFocus?.isConnected ? editorReturnFocus : get('add')))?.focus({ preventScroll: true });
+        const added = editingId === null ? model.getState().lineup.at(-1) : null;
+        const addedRow = added && panel.querySelector(`[data-video-focus="prepare-${added.id}"]`);
+        (restored || addedRow || get('lineup').querySelector('.video-lyrics-lineup-slot-button') || (editorReturnFocus?.isConnected ? editorReturnFocus : null))?.focus({ preventScroll: true });
     });
     function openSearch() {
-        const addButton = get('add');
         window.eclyricsEditorBlockSource?.openForSongSelection({
             title: 'Add songs to your lineup',
             showManualOptions: true,
             onManualType: () => openLyricsEditor(),
-            onPasteLyrics: raw => openLyricsEditor(null, raw, true),
+            onPasteLyrics: raw => void pasteLyricsToLineup(raw),
             onSelectSong(song) {
                 model.add(song);
                 status(`${window.eclyricsSongLibrary?.getPopupSongTitle(song) || song.title} added to lineup.`);
             },
-            onClose() { requestAnimationFrame(() => { if (!get('editor').open) addButton.focus({ preventScroll: true }); }); },
+            onClose() { requestAnimationFrame(() => { if (get('editor').open) return; const added = model.getState().lineup.at(-1); (added && panel.querySelector(`[data-video-focus="prepare-${added.id}"]`) || get('lineup').querySelector('.video-lyrics-lineup-slot-button'))?.focus({ preventScroll: true }); }); },
         });
     }
-    get('add').onclick = openSearch;
     get('prev').onclick = () => model.advance(-1); get('next').onclick = () => model.advance(1);
     [['font', 'fontFamily'], ['weight', 'fontWeight'], ['size', 'fontSize'], ['color', 'color'], ['alignment', 'alignment'], ['fade', 'fadeMs'], ['dimming', 'dimming']].forEach(([id, key]) => get(id).addEventListener('input', () => { if (get(id).value !== '') model.updateSettings({ [key]: get(id).value }); }));
     [['size', 'fontSize'], ['fade', 'fadeMs'], ['dimming', 'dimming']].forEach(([id, key]) => {
@@ -212,7 +285,7 @@
         const lineup = get('lineup'), available = lineup.clientHeight;
         const gap = parseFloat(getComputedStyle(lineup).rowGap) || 0;
         const row = lineup.querySelector('.video-lyrics-lineup-entry');
-        const rowHeight = row ? parseFloat(getComputedStyle(row).height) : (innerWidth <= 700 ? 116 : 96);
+        const rowHeight = row ? parseFloat(getComputedStyle(row).height) : (innerWidth <= 700 ? 78 : 82);
         const size = Math.max(1, Math.floor((available + gap) / (rowHeight + gap)));
         if (size !== pageSize) { pageSize = size; render(model.getState()); }
     });

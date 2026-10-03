@@ -57,9 +57,11 @@ test('editing one duplicate lineup instance preserves the other and refreshes a 
     assert.equal(m.getState().lineup[1].lyrics, song.lyrics);
 });
 
-test('video-only dimming defaults to 0.3 and clamps both boundaries', () => {
+test('appearance defaults and video-only dimming clamps both boundaries', () => {
     const m = model(), settings = m.getState().settings;
-    assert.equal(settings.dimming, .3);
+    assert.equal(settings.fontSize, 120);
+    assert.equal(settings.fadeMs, 400);
+    assert.equal(settings.dimming, 0);
     m.updateSettings({ dimming: -1 }); assert.equal(settings.dimming, 0);
     m.updateSettings({ dimming: 2 }); assert.equal(settings.dimming, .9);
     m.updateSettings({ dimming: 'invalid' }); assert.equal(settings.dimming, .9);

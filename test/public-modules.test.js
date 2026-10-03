@@ -722,7 +722,7 @@ test('Video song selection uses the shared dialog once and leaves Text Lyrics in
     loadBrowserScript('public/js/features/video-lyrics/fonts.js', setup);
     loadBrowserScript('public/js/features/video-lyrics/index.js', setup);
 
-    document.getElementById('video-lyrics-add').click();
+    document.getElementById('video-lyrics-lineup').children[0].children[0].click();
     await new Promise(resolve => setImmediate(resolve));
     const dialog = document.getElementById('block-source-dialog');
     const result = document.getElementById('block-source-results').children[0].children[0];
@@ -793,6 +793,35 @@ test('Video Lyrics preview exposes the compact actions, restored dimming control
     assert.match(actions, /id="video-lyrics-background"/);
     assert.doesNotMatch(actions, /clear|blackout/i);
     assert.match(html, /id="video-lyrics-dimming"/);
+    const lineupRail = html.match(/<aside class="video-lyrics-lineup-rail"[\s\S]*?<\/aside>/)?.[0] || '';
+    assert.doesNotMatch(lineupRail, /id="video-lyrics-add"/);
+    assert.doesNotMatch(html, /video-lyrics-keyhint|Whole lineup/);
+    assert.match(html, /id="video-lyrics-size"[^>]*step="5"[^>]*value="120"/);
+    assert.match(html, /id="video-lyrics-fade"[^>]*step="50"[^>]*value="400"/);
+    assert.match(html, /id="video-lyrics-dimming"[^>]*value="0"/);
+    const controller = fs.readFileSync(path.join(repoRoot, 'public/js/features/video-lyrics/index.js'), 'utf8');
+    assert.match(controller, /Math\.max\(3, state\.lineup\.length \+ 1\)/, 'render three starting slots and keep an add slot available');
+    assert.match(controller, /video-lyrics-lineup-slot-button/);
+    assert.match(controller, /fa-grip-vertical/);
+    assert.match(controller, /pointerdown/);
+    assert.match(controller, /moveSongToTarget/);
+    assert.match(controller, /actions\.append\(edit, remove\)/, 'edit and delete controls stay grouped at the right of each row');
+    assert.match(controller, /item\.append\(handle, content, actions\)/, 'drag handle is centered in its own narrow gutter, beside song content');
+    assert.match(controller, /event\.key === 'ArrowUp' \? -1 : 1/);
+    assert.doesNotMatch(controller, /<span>Add lyrics<\/span>/, 'empty slots show only the plus icon');
+    assert.match(controller, /button\('', `Edit \$\{entry\.title\}`, \(\) => openLyricsEditor\(entry\.id\)\)/);
+    assert.match(controller, /button\('', `Remove \$\{entry\.title\}`, \(\) => model\.remove\(entry\.id\)\)/);
+    assert.doesNotMatch(controller, /Move \$\{entry\.title\} earlier|Move \$\{entry\.title\} later/);
+    assert.match(controller, /navigator\.clipboard\.readText\(\)/);
+    assert.match(controller, /function addSongFromClipboard\(raw\)/);
+    assert.match(controller, /const addedId = model\.add\(\{ title, lyrics, category: \[\] \}\)/, 'clipboard paste adds straight to the lineup');
+    assert.match(controller, /onPasteLyrics: raw => void pasteLyricsToLineup\(raw\)/);
+    const backgrounds = fs.readFileSync(path.join(repoRoot, 'public/js/features/video-lyrics/backgrounds.js'), 'utf8');
+    assert.match(backgrounds, /card\('Add your own video', 'Choose a file · Session only'/, 'own-video picker is a background card');
+    assert.match(backgrounds, /upload\.button\.addEventListener\('drop'/);
+    assert.doesNotMatch(backgrounds, /video-background-upload/);
+    assert.match(css, /\.video-lyrics-lineup-slot\s*\{[^}]*height:62px/s, 'plus-only lineup slots stay compact');
+    assert.match(css, /\.video-lyrics-lineup-entry\s*\{[^}]*grid-template-columns:1\.1rem minmax\(0,1fr\) auto/s, 'lineup controls remain inside a centered grid row');
     const panelStart = html.indexOf('<section id="panel-video"');
     const sectionTokens = [...html.slice(panelStart).matchAll(/<section\b[^>]*>|<\/section>/g)];
     let depth = 0, panelEnd = -1;
@@ -826,7 +855,7 @@ test('Video Lyrics size and fade fields resync clamped values on commit and blur
         getBoundingClientRect() { return { top: 0, left: 0, right: 100, bottom: 100 }; },
         focus() {},
     });
-    const suffixes = ['add', 'prev', 'next', 'status', 'count', 'lineup-empty', 'lineup', 'lineup-pages', 'song-title', 'song-meta', 'cue-empty', 'cues', 'live-label', 'font', 'font-trigger', 'weight', 'size', 'color', 'hex', 'alignment', 'fade', 'dimming', 'open', 'background', 'editor-form', 'editor-title', 'editor-body', 'editor-heading', 'editor-message', 'editor', 'editor-close', 'editor-cancel'];
+    const suffixes = ['prev', 'next', 'status', 'count', 'lineup', 'lineup-pages', 'song-title', 'song-meta', 'cue-empty', 'cues', 'live-label', 'font', 'font-trigger', 'weight', 'size', 'color', 'hex', 'alignment', 'fade', 'dimming', 'open', 'background', 'editor-form', 'editor-title', 'editor-body', 'editor-heading', 'editor-message', 'editor', 'editor-close', 'editor-cancel'];
     suffixes.forEach(suffix => elements.set(`video-lyrics-${suffix}`, makeElement()));
     const panel = makeElement();
     panel.contains = () => false;

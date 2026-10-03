@@ -11,7 +11,7 @@
     function create() {
         let nextId = 0;
         const state = { lineup: [], preparedId: null, preparedIndex: -1, live: null, background: null,
-            settings: { fontFamily: 'Satoshi', fontWeight: 700, fontSize: 64, color: '#ffffff', alignment: 'center', fadeMs: 300, dimming: .3 } };
+            settings: { fontFamily: 'Satoshi', fontWeight: 700, fontSize: 120, color: '#ffffff', alignment: 'center', fadeMs: 400, dimming: 0 } };
         const listeners = new Set();
         const prepared = () => state.lineup.find(entry => entry.id === state.preparedId);
         const notify = () => listeners.forEach(listener => listener(state));

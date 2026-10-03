@@ -23,13 +23,13 @@
         item.button.onclick = () => select(entry); return { ...item, entry };
     });
     ['Background 2', 'Background 3', 'Background 4'].forEach(name => { card(name, 'Coming soon').button.disabled = true; });
-    const upload = document.createElement('div'); upload.className = 'video-background-upload';
-    upload.innerHTML = '<strong>Add your own video</strong><span class="video-lyrics-muted">Drop a video here, or choose a file. Session only.</span><button type="button" class="video-lyrics-button">Choose video</button>';
-    grid.after(upload);
-    upload.querySelector('button').onclick = () => { picker.value = ''; picker.click(); };
-    upload.addEventListener('dragover', event => { event.preventDefault(); upload.classList.add('is-dragging'); });
-    upload.addEventListener('dragleave', () => upload.classList.remove('is-dragging'));
-    upload.addEventListener('drop', event => { event.preventDefault(); upload.classList.remove('is-dragging'); const file = event.dataTransfer.files?.[0]; if (file) void importVideo(file); });
+    const upload = card('Add your own video', 'Choose a file · Session only', { custom: true });
+    upload.button.classList.add('video-background-card--upload');
+    upload.button.setAttribute('aria-label', 'Add your own video for this session');
+    upload.button.onclick = () => { picker.value = ''; picker.click(); };
+    upload.button.addEventListener('dragover', event => { event.preventDefault(); upload.button.classList.add('is-dragging'); });
+    upload.button.addEventListener('dragleave', () => upload.button.classList.remove('is-dragging'));
+    upload.button.addEventListener('drop', event => { event.preventDefault(); upload.button.classList.remove('is-dragging'); const file = event.dataTransfer.files?.[0]; if (file) void importVideo(file); });
     async function refresh() {
         await Promise.all(cards.map(async item => {
             item.subtitle.textContent = await media.isSaved(item.entry) ? 'Ready on this browser' : 'Downloading when available';
