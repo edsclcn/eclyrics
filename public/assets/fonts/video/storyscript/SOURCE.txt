@@ -1,0 +1,3 @@
+Story Script
+Official Google Fonts repository (SIL OFL 1.1).
+https://raw.githubusercontent.com/google/fonts/main/ofl/storyscript/StoryScript-Regular.ttf

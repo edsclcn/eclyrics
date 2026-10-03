@@ -5368,7 +5368,7 @@ body.auth-gate-open {
 
 .admin-panel__layout {
     display: grid;
-    grid-template-columns: minmax(260px, 0.95fr) minmax(300px, 1.05fr);
+    grid-template-columns: minmax(260px, 2fr) minmax(300px, 3fr);
     gap: 0.85rem;
     flex: 1;
     min-height: 0;
@@ -5426,6 +5426,14 @@ body.auth-gate-open {
 
 .admin-search-wrap {
     flex-shrink: 0;
+}
+
+.admin-search-input::-webkit-search-cancel-button {
+    width: 1.1rem;
+    height: 1.1rem;
+    margin-inline-end: 0.2rem;
+    cursor: pointer;
+    transform: scale(1.2);
 }
 
 .admin-search-filters {

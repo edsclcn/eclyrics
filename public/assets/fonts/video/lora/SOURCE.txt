@@ -1,0 +1,3 @@
+https://raw.githubusercontent.com/google/fonts/main/ofl/lora/Lora%5Bwght%5D.ttf
+Source git blob: ee1914c3746140523de2940d267ec2215bd85d5b
+License: SIL Open Font License 1.1 (OFL.txt)

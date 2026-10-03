@@ -1,0 +1,3 @@
+Parisienne
+Official Google Fonts repository (SIL OFL 1.1).
+https://raw.githubusercontent.com/google/fonts/main/ofl/parisienne/Parisienne-Regular.ttf

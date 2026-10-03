@@ -1,0 +1,4 @@
+Garamond
+Official Google Fonts repository (SIL OFL 1.1).
+https://raw.githubusercontent.com/google/fonts/main/ofl/ebgaramond/EBGaramond[wght].ttf
+EB Garamond is presented as Garamond in Video Lyrics.

@@ -1,0 +1,29 @@
+/* Local output faces shared by preview and capture popup. Garamond uses SIL OFL EB Garamond. Times New Roman is a device font. */
+@font-face { font-family: 'Satoshi'; src: url('../fonts/Satoshi-Variable.woff2') format('woff2'); font-weight: 300 900; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Inter'; src: url('../fonts/video/inter/font.ttf') format('truetype'); font-weight: 100 900; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Lora'; src: url('../fonts/video/lora/font.ttf') format('truetype'); font-weight: 400 700; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Merriweather'; src: url('../fonts/video/merriweather/font.ttf') format('truetype'); font-weight: 300 900; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Garamond'; src: url('../fonts/video/ebgaramond/EBGaramond[wght].ttf') format('truetype'); font-weight: 400 700; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Rouge Script'; src: url('../fonts/video/rougescript/RougeScript-Regular.ttf') format('truetype'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Birthstone'; src: url('../fonts/video/birthstone/Birthstone-Regular.ttf') format('truetype'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Story Script'; src: url('../fonts/video/storyscript/StoryScript-Regular.ttf') format('truetype'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'DynaPuff'; src: url('../fonts/video/dynapuff/DynaPuff[wdth,wght].ttf') format('truetype'); font-weight: 400 700; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Atma'; src: url('../fonts/video/atma/Atma-Bold.ttf') format('truetype'); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Atma'; src: url('../fonts/video/atma/Atma-Medium.ttf') format('truetype'); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Atma'; src: url('../fonts/video/atma/Atma-Regular.ttf') format('truetype'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Atma'; src: url('../fonts/video/atma/Atma-SemiBold.ttf') format('truetype'); font-weight: 600; font-style: normal; font-display: swap; }
+@font-face { font-family: 'IBM Plex Serif'; src: url('../fonts/video/ibmplexserif/IBMPlexSerif-Bold.ttf') format('truetype'); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: 'IBM Plex Serif'; src: url('../fonts/video/ibmplexserif/IBMPlexSerif-Medium.ttf') format('truetype'); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: 'IBM Plex Serif'; src: url('../fonts/video/ibmplexserif/IBMPlexSerif-Regular.ttf') format('truetype'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'IBM Plex Serif'; src: url('../fonts/video/ibmplexserif/IBMPlexSerif-SemiBold.ttf') format('truetype'); font-weight: 600; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Zen Antique'; src: url('../fonts/video/zenantique/ZenAntique-Regular.ttf') format('truetype'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Poppins'; src: url('../fonts/video/poppins/Poppins-Black.ttf') format('truetype'); font-weight: 900; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Poppins'; src: url('../fonts/video/poppins/Poppins-Bold.ttf') format('truetype'); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Poppins'; src: url('../fonts/video/poppins/Poppins-ExtraBold.ttf') format('truetype'); font-weight: 800; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Poppins'; src: url('../fonts/video/poppins/Poppins-Medium.ttf') format('truetype'); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Poppins'; src: url('../fonts/video/poppins/Poppins-Regular.ttf') format('truetype'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Poppins'; src: url('../fonts/video/poppins/Poppins-SemiBold.ttf') format('truetype'); font-weight: 600; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Parisienne'; src: url('../fonts/video/parisienne/Parisienne-Regular.ttf') format('truetype'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Great Vibes'; src: url('../fonts/video/greatvibes/GreatVibes-Regular.ttf') format('truetype'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Lobster Two'; src: url('../fonts/video/lobstertwo/LobsterTwo-Bold.ttf') format('truetype'); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Lobster Two'; src: url('../fonts/video/lobstertwo/LobsterTwo-Regular.ttf') format('truetype'); font-weight: 400; font-style: normal; font-display: swap; }
