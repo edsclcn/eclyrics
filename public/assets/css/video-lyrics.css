@@ -95,7 +95,7 @@
 }
 .video-background-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:.75rem; margin:1rem 0 .75rem; }
 .video-background-card { padding:0 0 .8rem; overflow:hidden; border:1px solid var(--border); border-radius:var(--radius-md); background:var(--background-subtle); color:var(--foreground); font:inherit; text-align:left; cursor:pointer; }
-.video-background-card img,.video-background-placeholder { display:block; width:100%; aspect-ratio:16/9; object-fit:cover; }
+.video-background-card img,.video-background-preview,.video-background-placeholder { display:block; width:100%; aspect-ratio:16/9; object-fit:cover; }
 .video-background-placeholder { display:grid; place-items:center; background:color-mix(in srgb,var(--blue-mid) 10%,var(--background-subtle)); color:var(--blue-mid); font-size:2rem; }
 .video-background-card strong,.video-background-card > span:not(.video-background-placeholder) { display:block; margin:.6rem .75rem 0; font-size:.75rem; }
 .video-background-card > span:not(.video-background-placeholder) { color:var(--foreground-muted); font-size:.65rem; }

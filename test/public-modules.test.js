@@ -798,7 +798,7 @@ test('Video Lyrics preview exposes the compact actions, restored dimming control
     assert.doesNotMatch(html, /video-lyrics-keyhint|Whole lineup/);
     assert.match(html, /id="video-lyrics-size"[^>]*step="5"[^>]*value="120"/);
     assert.match(html, /id="video-lyrics-fade"[^>]*step="50"[^>]*value="400"/);
-    assert.match(html, /id="video-lyrics-dimming"[^>]*value="0"/);
+    assert.match(html, /id="video-lyrics-dimming"[^>]*value="0\.3"/);
     const controller = fs.readFileSync(path.join(repoRoot, 'public/js/features/video-lyrics/index.js'), 'utf8');
     assert.match(controller, /Math\.max\(3, state\.lineup\.length \+ 1\)/, 'render three starting slots and keep an add slot available');
     assert.match(controller, /video-lyrics-lineup-slot-button/);
@@ -930,17 +930,31 @@ test('Video Lyrics background picker places seven presets and upload card in one
     const backgrounds = fs.readFileSync(path.join(repoRoot, 'public/js/features/video-lyrics/backgrounds.js'), 'utf8');
     const css = fs.readFileSync(path.join(repoRoot, 'public/assets/css/video-lyrics.css'), 'utf8');
 
-    assert.match(backgrounds, /const catalogue = \[\{[^\]]*name: 'Background 1'/s,
-        'Background 1 is the only currently playable curated video');
-    assert.match(backgrounds, /\['Background 2', 'Background 3', 'Background 4', 'Background 5', 'Background 6', 'Background 7'\]/,
-        'the picker exposes all seven numbered preset slots');
-    assert.match(backgrounds, /card\(name, 'Description'\)\.button\.disabled = true/,
-        'unavailable presets use the neutral Description placeholder');
+    const expectedEntries = [
+        ["id: 'white-stars'", "name: 'Background 1'", "description: 'White Stars'", "url: 'assets/videos/white-stars.mp4'"],
+        ["id: 'blue-weightless'", "name: 'Background 2'", "description: 'Blue Weightless'", "url: 'assets/videos/blue-weightless.mp4'"],
+        ["id: 'green-lense-glare'", "name: 'Background 3'", "description: 'Green Lens'", "url: 'assets/videos/green-lense-glare.mp4'"],
+        ["id: 'orange-hexagons'", "name: 'Background 4'", "description: 'Orange Hexagons'", "url: 'assets/videos/orange-hexagons.mp4'"],
+        ["id: 'pink-hearts'", "name: 'Background 5'", "description: 'Pink Hearts'", "url: 'assets/videos/pink-hearts.mp4'"],
+        ["id: 'purple-fiber'", "name: 'Background 6'", "description: 'Purple Fiber'", "url: 'assets/videos/purple-fiber.mp4'"],
+        ["id: 'purple-lense-glare'", "name: 'Background 7'", "description: 'Purple Lens Glare'", "url: 'assets/videos/purple-lense-glare.mp4'"],
+    ];
+    let previousIndex = -1;
+    for (const fields of expectedEntries) {
+        const entryIndex = backgrounds.indexOf(fields[0]);
+        assert.ok(entryIndex > previousIndex, `${fields[0]} appears in the expected catalogue order`);
+        for (const field of fields.slice(1)) assert.ok(backgrounds.indexOf(field, entryIndex) > entryIndex, `${field} is defined for ${fields[0]}`);
+        previousIndex = entryIndex;
+    }
+    assert.doesNotMatch(backgrounds, /ambient-worship|id: 'ambient'/,
+        'the former ambient-worship default has been removed');
+    assert.match(backgrounds, /card\(entry\.name, entry\.description, entry\)/,
+        'preset cards use concise catalogue descriptions');
     assert.match(backgrounds, /video-background-grid"><\/div>/,
         'the dialog contains a single background grid');
     assert.doesNotMatch(backgrounds, /video-background-upload-row/,
         'there is no separate upload row');
-    const presetCards = backgrounds.indexOf("['Background 2', 'Background 3', 'Background 4', 'Background 5', 'Background 6', 'Background 7']");
+    const presetCards = backgrounds.indexOf('const cards = catalogue.map(');
     const uploadCard = backgrounds.indexOf("card('Add your own video', 'Choose a file · Session only', { custom: true })");
     assert.ok(presetCards >= 0 && uploadCard > presetCards,
         'the own-video card is appended after all seven preset tiles in the same grid');

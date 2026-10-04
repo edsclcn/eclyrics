@@ -87,14 +87,18 @@ video-only dimming. Optional manual/paste callbacks reuse the shared picker; a
 Video Lyrics title/body editor saves to one in-memory lineup instance without
 writing to Firestore.
 
-The bundled background catalogue currently lives under `public/assets/videos/`
-with poster images under `public/assets/images/video-backgrounds/`. The media
-adapter fetches catalogue Blobs and saves them to per-browser IndexedDB under
-catalogue ID/version keys on the first Video Lyrics activation. Later
-activations check and reuse saved entries; a missing entry is fetched and
-cached. This browser storage is distinct from Firebase Hosting's CDN cache and
-is subject to browser eviction or clearing. A user-selected video is
-decode-checked and held only in page memory for that session. Video output
+The seven repository-hosted background presets live under
+`public/assets/videos/`; `white-stars.mp4` is **Background 1** and the default.
+The other concise, title-cased descriptions follow their filenames. Preview
+video sources are attached and played only while the background picker is open,
+then paused and detached when it closes. The media adapter fetches the selected
+preset and saves only that Blob to per-browser IndexedDB under its catalogue
+ID/version key; it does not download or cache the full catalogue on activation.
+Later selections reuse saved entries, while an uncached preset is fetched when
+selected. This browser storage is distinct from Firebase Hosting's CDN cache
+and is subject to browser eviction or clearing. A user-selected video is
+decode-checked and held only in page memory for that session; it is neither
+uploaded nor saved to IndexedDB. Video output
 fonts and local declarations are owned by `video-lyrics/fonts.js` and
 `public/assets/css/video-fonts.css`; font licenses/source notices are stored
 alongside the font files. The actual-face font picker searches alphabetical

@@ -1,4 +1,5 @@
 (function () {
+    const OUTRO_CUE = 'To God be the Glory';
     function parseCues(lyrics) {
         let section = 0;
         return String(lyrics || '').split(/\r?\n/).reduce((cues, line) => {
@@ -8,10 +9,20 @@
             return cues;
         }, []);
     }
+    function buildCues(title, lyrics) {
+        const lyricCues = parseCues(lyrics);
+        const lastText = lyricCues.at(-1)?.text.toLocaleLowerCase().replace(/[.!?]+$/, '');
+        if (lastText === OUTRO_CUE.toLocaleLowerCase()) {
+            lyricCues.at(-1).isOutro = true;
+        } else {
+            lyricCues.push({ text: OUTRO_CUE, section: lyricCues.at(-1)?.section ?? 0, isOutro: true });
+        }
+        return [{ text: title, section: -1, isTitle: true }, ...lyricCues];
+    }
     function create() {
         let nextId = 0;
         const state = { lineup: [], preparedId: null, preparedIndex: -1, live: null, background: null,
-            settings: { fontFamily: 'Satoshi', fontWeight: 700, fontSize: 120, color: '#ffffff', alignment: 'center', fadeMs: 400, dimming: 0 } };
+            settings: { fontFamily: 'Satoshi', fontWeight: 700, fontSize: 120, color: '#ffffff', alignment: 'center', fadeMs: 400, dimming: 0.3 } };
         const listeners = new Set();
         const prepared = () => state.lineup.find(entry => entry.id === state.preparedId);
         const notify = () => listeners.forEach(listener => listener(state));
@@ -33,16 +44,18 @@
             notify();
         }
         return { getState: () => state, subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); }, prepare, cue, updateSettings,
-            add(song) { const title = window.eclyricsSongLibrary?.getPopupSongTitle(song) || song.title || 'Untitled'; const entry = { id: ++nextId, songId: song.id, title, category: [...(song.category || [])], lyrics: String(song.lyrics || ''), cues: [{ text: title, section: -1, isTitle: true }, ...parseCues(song.lyrics)] }; state.lineup.push(entry); if (!state.preparedId) { state.preparedId = entry.id; state.preparedIndex = -1; } notify(); return entry.id; },
+            add(song) { const title = window.eclyricsSongLibrary?.getPopupSongTitle(song) || song.title || 'Untitled'; const entry = { id: ++nextId, songId: song.id, title, category: [...(song.category || [])], lyrics: String(song.lyrics || ''), cues: buildCues(title, song.lyrics) }; state.lineup.push(entry); if (!state.preparedId) { state.preparedId = entry.id; state.preparedIndex = -1; } notify(); return entry.id; },
             edit(id, { title, lyrics }) {
                 const entry = state.lineup.find(item => item.id === id);
                 if (!entry) return;
                 entry.title = String(title || '').trim() || 'Untitled';
                 entry.lyrics = String(lyrics || '');
-                entry.cues = [{ text: entry.title, section: -1, isTitle: true }, ...parseCues(entry.lyrics)];
-                if (state.preparedId === id) state.preparedIndex = Math.min(state.preparedIndex, entry.cues.length - 1);
+                const wasPreparedOutro = state.preparedId === id && entry.cues[state.preparedIndex]?.isOutro;
+                const wasLiveOutro = state.live?.entryId === id && entry.cues[state.live.index]?.isOutro;
+                entry.cues = buildCues(entry.title, entry.lyrics);
+                if (state.preparedId === id) state.preparedIndex = wasPreparedOutro ? entry.cues.length - 1 : Math.min(state.preparedIndex, entry.cues.length - 2);
                 if (state.live?.entryId === id) {
-                    state.live.index = Math.min(state.live.index, entry.cues.length - 1);
+                    state.live.index = wasLiveOutro ? entry.cues.length - 1 : Math.min(state.live.index, entry.cues.length - 2);
                     state.live.text = entry.cues[state.live.index].text;
                     if (state.preparedId === id) state.preparedIndex = state.live.index;
                 }

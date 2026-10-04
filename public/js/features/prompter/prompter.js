@@ -4,6 +4,7 @@ const DEFAULT_SCROLL_SPEED = 0.5;
 /** Logical stage size — fixed regardless of browser zoom or popup window resize. */
 const STAGE_VW = 1920;
 const STAGE_VH = 1080;
+const DEFAULT_PROMPTER_WIDTH_PX = 1444;
 /** Manual scroll: fixed 100px per keypress (including hold key-repeat); not scaled by scroll speed. */
 const KEYBOARD_ARROW_SCROLL_PX = 100;
 const WHEEL_SCROLL_PX = 50;
@@ -30,7 +31,7 @@ function readPrompterWidthPx() {
     if (!Number.isNaN(inline) && inline > 0) return inline;
     const stored = parseFloat(sessionStorage.getItem('prompterWidth'));
     if (!Number.isNaN(stored) && stored > 0) return stored;
-    return STAGE_VW * 0.7;
+    return DEFAULT_PROMPTER_WIDTH_PX;
 }
 
 function setPrompterFontSizePx(px) {
@@ -170,7 +171,7 @@ syncPreviewMetricsFromSession();
 let prompterWidth = sessionStorage.getItem('prompterWidth');
 if (prompterWidth) prompterContent.style.width = prompterWidth + 'px';
 else {
-    setPrompterWidthPx(STAGE_VW * 0.7);
+    setPrompterWidthPx(DEFAULT_PROMPTER_WIDTH_PX);
 }
 syncPreviewMetricsFromSession();
 
@@ -320,6 +321,17 @@ function getPrompterShortcutsApi() {
 let adjacentBlockPressMatcher = null;
 
 function handleLocalPrompterShortcut(event) {
+    if (event.code === 'Escape' && !event.repeat && getFullscreenElement()) {
+        event.preventDefault();
+        exitFullscreen();
+        return;
+    }
+    if ((event.code === 'KeyF' || event.code === 'F11') && !event.repeat && !event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        event.preventDefault();
+        toggleFullscreen();
+        return;
+    }
+
     const sc = getPrompterShortcutsApi();
     if (!sc) return;
     const ctx = { prompterOpen: true };
@@ -454,12 +466,25 @@ if (sessionStorage.getItem('prompterType') === 'LYRICS_PROMPTER') {
     prompterContainer.classList.add('blackwhite');
 }
 
-//Full Screen — initial open only; keyboard shortcuts live in the main workspace.
+//Full Screen
+function getFullscreenElement() {
+    return document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.mozFullscreenElement;
+}
+
+function toggleFullscreen() {
+    if (getFullscreenElement()) exitFullscreen();
+    else requestFullscreen();
+}
+
 function requestFullscreen() {
     const body = document.documentElement;
-    if (body.requestFullscreen) body.requestFullscreen();
-    else if (body.webkitRequestFullscreen) body.webkitRequestFullscreen();
-    else if (body.mozRequestFullscreen) body.mozRequestFullscreen();
+    const action = body.requestFullscreen || body.webkitRequestFullscreen || body.mozRequestFullScreen || body.mozRequestFullscreen;
+    action?.call(body)?.catch(() => {});
+}
+
+function exitFullscreen() {
+    const action = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.mozCancelFullscreen;
+    action?.call(document)?.catch(() => {});
 }
 
 //Keyboard Shortcuts — remote only (see prompter-shortcuts.js in main app)
