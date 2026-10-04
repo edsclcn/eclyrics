@@ -33,7 +33,7 @@
         'js/features/video-lyrics/stage.js?v=20261003-video-cue-fit-sync',
         'js/features/video-lyrics/output.js?v=20261003-video-cue-fit-sync',
         'js/features/video-lyrics/local-media.js?v=20261003-video-lyrics-grid-upload',
-        'js/features/video-lyrics/backgrounds.js?v=20261004-purple-lens-caption',
+        'js/features/video-lyrics/backgrounds.js?v=20261004-video-background-loading',
         'js/features/editor/textformatting.js',
     ];
 
