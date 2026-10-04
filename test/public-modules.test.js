@@ -931,7 +931,7 @@ test('Video Lyrics background picker places seven presets and upload card in one
     const css = fs.readFileSync(path.join(repoRoot, 'public/assets/css/video-lyrics.css'), 'utf8');
 
     const expectedEntries = [
-        ["id: 'white-stars'", "name: 'Background 1'", "description: 'White Stars'", "url: 'assets/videos/white-stars.mp4'"],
+        ["id: 'white-stars'", "name: 'Background 1'", "description: 'White Stars'", "url: 'assets/videos/white-stars.mp4?v=2'"],
         ["id: 'blue-weightless'", "name: 'Background 2'", "description: 'Blue Weightless'", "url: 'assets/videos/blue-weightless.mp4'"],
         ["id: 'green-lense-glare'", "name: 'Background 3'", "description: 'Green Lens'", "url: 'assets/videos/green-lense-glare.mp4'"],
         ["id: 'orange-hexagons'", "name: 'Background 4'", "description: 'Orange Hexagons'", "url: 'assets/videos/orange-hexagons.mp4'"],

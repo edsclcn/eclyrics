@@ -95,8 +95,15 @@
 }
 .video-background-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:.75rem; margin:1rem 0 .75rem; }
 .video-background-card { padding:0 0 .8rem; overflow:hidden; border:1px solid var(--border); border-radius:var(--radius-md); background:var(--background-subtle); color:var(--foreground); font:inherit; text-align:left; cursor:pointer; }
-.video-background-card img,.video-background-preview,.video-background-placeholder { display:block; width:100%; aspect-ratio:16/9; object-fit:cover; }
+.video-background-visual { position:relative; display:block; width:100%; aspect-ratio:16/9; overflow:hidden; background:color-mix(in srgb,var(--blue-mid) 8%,var(--background-subtle)); }
+.video-background-visual img,.video-background-preview,.video-background-placeholder { display:block; width:100%; height:100%; object-fit:cover; }
 .video-background-placeholder { display:grid; place-items:center; background:color-mix(in srgb,var(--blue-mid) 10%,var(--background-subtle)); color:var(--blue-mid); font-size:2rem; }
+.video-background-loading { position:absolute; inset:0; display:none; flex-direction:column; align-items:center; justify-content:center; gap:.45rem; background:color-mix(in srgb,var(--card) 68%,transparent); color:var(--foreground-muted); font-size:.65rem; }
+.video-background-loading::before { width:1rem; height:1rem; border:2px solid color-mix(in srgb,var(--foreground-muted) 28%,transparent); border-top-color:var(--blue-mid); border-radius:50%; content:""; animation:video-background-spin .8s linear infinite; }
+.video-background-visual[data-preview-state=loading] .video-background-loading,.video-background-card[data-selection-busy=true] .video-background-loading,.video-background-card[data-import-busy=true] .video-background-loading,.video-background-visual[data-preview-state=unavailable] .video-background-loading { display:flex; }
+.video-background-visual[data-preview-state=unavailable] .video-background-loading::before { display:none; }
+@keyframes video-background-spin { to { transform:rotate(360deg); } }
+@media(prefers-reduced-motion:reduce) { .video-background-loading::before { animation:none; border-top-color:color-mix(in srgb,var(--blue-mid) 65%,var(--foreground-muted)); } }
 .video-background-card strong,.video-background-card > span:not(.video-background-placeholder) { display:block; margin:.6rem .75rem 0; font-size:.75rem; }
 .video-background-card > span:not(.video-background-placeholder) { color:var(--foreground-muted); font-size:.65rem; }
 .video-background-card[aria-pressed=true] { border-color:var(--blue-mid); box-shadow:0 0 0 1px var(--blue-mid); }
