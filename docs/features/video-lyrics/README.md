@@ -40,8 +40,8 @@ audience output shows only the live line over a muted looping video.
    forwards its Up/Down keys to the control window.
 5. Set appearance for the whole lineup: font family, weight, size, text color,
    alignment, fade duration, and background dimming. Defaults are Satoshi, bold,
-   120 px, white, centered, 400 ms, and no dimming. Size changes in 5 px
-   increments and fade changes in 50 ms increments. The font size is a maximum:
+   120 px, white, centered, 400 ms, and 30% background dimming. Size changes in
+   5 px increments and fade changes in 50 ms increments. The font size is a maximum:
    the stage reduces long text to fit one line. Dimming affects the video, not
    the lyric, and ranges from 0–90%. The custom font dialog shows alphabetical
    names in their actual faces, with search and a rectangular All/Sans
@@ -54,15 +54,19 @@ audience output shows only the live line over a muted looping video.
    `public/assets/fonts/video/`. **Add your own font** accepts a decoded TTF,
    OTF, WOFF, or WOFF2 file up to 10 MB for this session only. Imported fonts
    have a generated family name and Regular weight.
-6. On the first activation of Video Lyrics, the catalogue is cached in
-   IndexedDB and the sample is selected automatically. Entries use catalogue
-   ID/version keys. Later activations check these entries and reuse saved
-   Blobs; a missing or unsaved entry is fetched and cached again. The
-   background chooser is a centered dialog with **Background 1** (the bundled
-   sample), disabled **Background 2**, **Background 3**, and **Background 4**
-   placeholders, then **Add your own video** last. A personal file can be selected or dropped into the final import area. It is
-   decode-checked and used for the current page session only; it is not
-   uploaded.
+6. The background chooser offers seven repository-hosted video presets:
+   **Background 1 — White Stars** (`white-stars.mp4`, selected by default),
+   **Blue Weightless**, **Green Lens**, **Orange Hexagons**,
+   **Pink Hearts**, **Purple Fiber**, and **Purple Lens Glare**. The concise
+   descriptions use the video filenames in title case. Preview videos are
+   attached and played only while the chooser is open, then paused and
+   detached when it closes. On activation, only the selected built-in video is
+   fetched if needed and saved to this browser's IndexedDB under its catalogue
+   ID/version key; the full catalogue is not downloaded or saved up front.
+   Later selections reuse saved Blobs, while uncached selections are fetched
+   when chosen. A personal file can be selected or dropped into **Add your own
+   video**. It is decode-checked and used for the current page session only; it
+   is not uploaded or saved to IndexedDB.
 7. **Open prompter** opens or focuses `public/video-prompter.html`. The control
    panel and popup exchange state over the dedicated
    `eclyrics-video-v1` `postMessage` channel. Both ends check the same origin;

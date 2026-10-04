@@ -3,7 +3,7 @@
         { file: 'sign-in.html', mountId: 'auth-gate-mount', rootId: 'auth-gate' },
         { file: 'text-lyrics.html', panelId: 'panel-text' },
         { file: 'image-lyrics.html', panelId: 'panel-image' },
-        { file: 'video-lyrics.html', panelId: 'panel-video', cacheVersion: '20261003-background-picker-seven' },
+        { file: 'video-lyrics.html', panelId: 'panel-video', cacheVersion: '20261004-background-dim-30' },
         { file: 'admin.html', panelId: 'panel-admin', overlayId: 'admin-delete-dialog' },
     ];
 
@@ -28,12 +28,12 @@
         'js/features/editor/port.js',
         'js/features/image-lyrics/index.js',
         'js/features/video-lyrics/fonts.js?v=20261003-video-lyrics-grid-upload',
-        'js/features/video-lyrics/model.js?v=20261003-video-outro-cue',
+        'js/features/video-lyrics/model.js?v=20261004-background-dim-30',
         'js/features/video-lyrics/index.js?v=20261003-video-font-picker-blank',
         'js/features/video-lyrics/stage.js?v=20261003-video-cue-fit-sync',
         'js/features/video-lyrics/output.js?v=20261003-video-cue-fit-sync',
         'js/features/video-lyrics/local-media.js?v=20261003-video-lyrics-grid-upload',
-        'js/features/video-lyrics/backgrounds.js?v=20261003-background-picker-seven',
+        'js/features/video-lyrics/backgrounds.js?v=20261004-purple-lens-caption',
         'js/features/editor/textformatting.js',
     ];
 

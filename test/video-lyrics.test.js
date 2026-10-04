@@ -110,7 +110,7 @@ test('appearance defaults and video-only dimming clamps both boundaries', () => 
     const m = model(), settings = m.getState().settings;
     assert.equal(settings.fontSize, 120);
     assert.equal(settings.fadeMs, 400);
-    assert.equal(settings.dimming, 0);
+    assert.equal(settings.dimming, .3);
     m.updateSettings({ dimming: -1 }); assert.equal(settings.dimming, 0);
     m.updateSettings({ dimming: 2 }); assert.equal(settings.dimming, .9);
     m.updateSettings({ dimming: 'invalid' }); assert.equal(settings.dimming, .9);
