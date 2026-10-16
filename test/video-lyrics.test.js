@@ -115,3 +115,74 @@ test('appearance defaults and video-only dimming clamps both boundaries', () => 
     m.updateSettings({ dimming: 2 }); assert.equal(settings.dimming, .9);
     m.updateSettings({ dimming: 'invalid' }); assert.equal(settings.dimming, .9);
 });
+
+test('Text sync starts off and sends each active Text source line directly without a Video lineup', () => {
+    const m = model();
+    assert.equal(m.getState().sync.enabled, false);
+    assert.equal(m.getState().lineup.length, 0, 'Sync does not require a searched or prepared Video song');
+
+    m.setSyncEnabled(true);
+    m.updateTextPosition({ lineupKey: 'text-tab-a', blockIndex: 8, sourceLineIndex: 14, lineText: '  Café, déjà-vu!  ' });
+
+    assert.equal(m.getState().live.entryId, 'text-sync');
+    assert.equal(m.getState().live.index, 14);
+    assert.equal(m.getState().live.text, 'Café, déjà-vu!', 'video output uses the same active Text lyric, preserving its spelling and punctuation');
+    assert.equal(m.getState().lineup.length, 0);
+
+    m.updateTextPosition({ lineupKey: 'text-tab-a', blockIndex: 8, sourceLineIndex: 15, lineText: 'A line that is not in the Video song set' });
+    assert.equal(m.getState().live.text, 'A line that is not in the Video song set');
+    assert.equal(m.getState().live.index, 15);
+});
+
+test('a blank position at the adjustable Text marker keeps the last active Video lyric', () => {
+    const m = model();
+    m.setSyncEnabled(true);
+    m.updateTextPosition({ blockIndex: 0, sourceLineIndex: 2, lineText: 'Last active line' });
+    m.updateTextPosition({ blockIndex: 0, sourceLineIndex: null, lineText: '' });
+
+    assert.equal(m.getState().live.text, 'Last active line');
+    assert.match(m.getState().sync.status, /Waiting for a lyric at the text marker/);
+});
+
+test('sync off retains the cue and turning it on follows the latest text position', () => {
+    const m = model();
+    m.add({ title: 'Song', lyrics: 'First\nSecond\nThird' });
+    m.setSyncEnabled(true);
+    const position = lineText => ({ lineupKey: 'text-tab-a', blockIndex: 0, sourceLineIndex: 0, lineText });
+    m.updateTextPosition(position('Second'));
+    assert.equal(m.getState().live.text, 'Second');
+
+    m.setSyncEnabled(false);
+    assert.equal(m.getState().live.text, 'Second');
+    m.updateTextPosition(position('Third'));
+    assert.equal(m.getState().live.text, 'Second', 'positions received while off are stored without changing output');
+
+    m.setSyncEnabled(true);
+    assert.equal(m.getState().live.text, 'Third', 'resuming applies the most recently received position');
+});
+
+test('manual video cue and advance pause sync; re-enabling follows the latest text position', () => {
+    const m = model();
+    const songId = m.add({ title: 'Song', lyrics: 'First\nSecond\nThird' });
+    m.prepare(songId);
+    m.setSyncEnabled(true);
+    const position = (sourceLineIndex, lineText) => ({ lineupKey: 'text-tab-a', blockIndex: 0, sourceLineIndex, lineText });
+    m.updateTextPosition(position(0, 'First'));
+    m.updateTextPosition(position(1, 'Second'));
+    assert.equal(m.getState().live.text, 'Second');
+
+    m.cue(4);
+    assert.equal(m.getState().sync.enabled, false);
+    assert.equal(m.getState().sync.paused, true);
+    assert.equal(m.getState().live.text, 'To God be the Glory');
+    m.updateTextPosition(position(2, 'Third'));
+    assert.equal(m.getState().live.text, 'To God be the Glory');
+    m.setSyncEnabled(true);
+    assert.equal(m.getState().live.text, 'Third');
+
+    m.advance(-1);
+    assert.equal(m.getState().sync.enabled, false);
+    assert.equal(m.getState().live.text, 'Third', 'manual Video navigation returns to its own prepared lineup');
+    m.updateTextPosition(position(0, 'First'));
+    assert.equal(m.getState().live.text, 'Third');
+});

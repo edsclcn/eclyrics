@@ -225,11 +225,11 @@ test('a faster cue waits for an in-flight custom font and keeps its earlier back
     assert.equal(updates.at(-1).background.id, 'ambient');
 });
 test('output reconnect sends full background and preview fitted size to reopened popup', async () => {
-    const listeners = {}, panelListeners = {}, sent = [], popups = [], changes = [];
+    const listeners = {}, panelListeners = {}, sent = [], popups = [], changes = [], preview = [];
     const descriptor = { family: 'ECVideoFont_1234567890abcdef1234567890abcdef', name: 'Imported', category: 'Serif', blob: new Blob(['font']) };
     const value = { live: { text: 'Current' }, blackout: false, settings: { ...settings, fontFamily: descriptor.family }, background: { id: 'ambient' } };
     const api = { getState: () => value, status() {}, subscribe: fn => changes.push(fn), advance: delta => sent.push({ delta }), panel: { addEventListener: (type, fn) => { panelListeners[type] = fn; } } };
-    const window = { eclyricsVideoLyrics: api, eclyricsVideoFonts: { descriptor: family => family === descriptor.family ? descriptor : null }, eclyricsVideoStage: { CHANNEL: 'video', create: () => ({ update: async () => true, destroy() {} }) }, addEventListener: (type, fn) => { listeners[type] = fn; }, open: () => { const popup = { closed: false, postMessage: message => sent.push(message), focus() {} }; popups.push(popup); return popup; } };
+    const window = { eclyricsVideoLyrics: api, eclyricsVideoFonts: { descriptor: family => family === descriptor.family ? descriptor : null }, eclyricsVideoStage: { CHANNEL: 'video', create: () => ({ update: async payload => { preview.push(payload); return true; }, destroy() {} }) }, addEventListener: (type, fn) => { listeners[type] = fn; }, open: () => { const popup = { closed: false, postMessage: message => sent.push(message), focus() {} }; popups.push(popup); return popup; } };
     const location = { origin: 'https://example.org' };
     vm.runInNewContext(read('video-lyrics/output.js'), { window, location, document: { getElementById() {}, querySelector: () => ({ style: { fontSize: '113.2px' } }) }, setInterval: () => 1, clearInterval() {} });
     panelListeners['video-lyrics-open']();
@@ -239,8 +239,113 @@ test('output reconnect sends full background and preview fitted size to reopened
     assert.equal(sent[0].payload.background, value.background); assert.equal(sent[0].payload.font.blob, descriptor.blob); assert.equal(sent[0].payload.effectiveFontSize, 113.2);
     changes[0](); await new Promise(resolve => setImmediate(resolve));
     assert.equal(Object.hasOwn(sent[1].payload, 'background'), false); assert.equal(Object.hasOwn(sent[1].payload, 'font'), false);
+    value.live = { text: 'Synced lyric cue' };
+    changes[0](); await new Promise(resolve => setImmediate(resolve));
+    assert.equal(sent[2].payload.text, 'Synced lyric cue', 'the output receives the live cue selected by sync');
+    assert.equal(preview.at(-1).text, 'Synced lyric cue', 'the Video Lyrics preview receives the same live cue');
+    value.background = { id: 'session-custom', version: '1', name: 'worship-background.mp4', blob: new Blob(['video']) };
+    changes[0](); await new Promise(resolve => setImmediate(resolve));
+    assert.equal(preview.at(-1).background, value.background, 'selecting a background refreshes the local Video preview');
+    assert.equal(sent.at(-1).payload.background, value.background, 'selecting a background updates the open prompter');
+    assert.equal(sent.at(-1).payload.background.name, 'worship-background.mp4', 'the custom background descriptor remains intact in the output update');
     popups[0].closed = true; panelListeners['video-lyrics-open'](); ready(popups[1]); await new Promise(resolve => setImmediate(resolve));
-    assert.equal(sent[2].payload.background, value.background); assert.equal(sent[2].payload.font.blob, descriptor.blob); assert.equal(sent[2].payload.effectiveFontSize, 113.2);
+    assert.equal(sent.at(-1).payload.background, value.background); assert.equal(sent.at(-1).payload.font.blob, descriptor.blob); assert.equal(sent.at(-1).payload.effectiveFontSize, 113.2);
+});
+
+test('video prompter playback errors show in background status, font errors stay separate, and playback start clears it', async () => {
+    const listeners = {}, panelListeners = {}, popups = [], statuses = [];
+    const visibleStatus = { textContent: '', hidden: true, dataset: {} };
+    const api = {
+        getState: () => ({ live: null, settings: { ...settings }, background: { id: 'ambient' } }),
+        status: (message, error = false) => statuses.push({ message, error }),
+        backgroundStatus(message, error = false) {
+            visibleStatus.textContent = message;
+            visibleStatus.dataset.error = String(error);
+            visibleStatus.hidden = !message;
+        },
+        subscribe() {},
+        panel: { addEventListener: (type, callback) => { panelListeners[type] = callback; } },
+    };
+    const window = {
+        eclyricsVideoLyrics: api,
+        eclyricsVideoStage: { CHANNEL: 'video', create: () => ({ update: async () => true, destroy() {} }) },
+        addEventListener: (type, callback) => { listeners[type] = callback; },
+        open: () => {
+            const popup = { closed: false, focus() {}, postMessage() {} };
+            popups.push(popup);
+            return popup;
+        },
+    };
+    const location = { origin: 'https://example.org' };
+    vm.runInNewContext(read('video-lyrics/output.js'), {
+        window, location,
+        document: { getElementById() {}, querySelector: () => null },
+        setInterval: () => 1,
+        clearInterval() {},
+    });
+
+    panelListeners['video-lyrics-open']();
+    const popup = popups[0];
+    const deliver = message => listeners.message({
+        origin: location.origin,
+        source: popup,
+        data: { channel: 'video', ...message },
+    });
+    deliver({ type: 'ready' });
+    await new Promise(resolve => setImmediate(resolve));
+
+    deliver({ type: 'error', message: 'The custom font could not load.' });
+    assert.deepEqual(statuses.at(-1), { message: 'The custom font could not load.', error: true });
+    assert.equal(visibleStatus.hidden, true, 'font-only errors do not appear in the video background status');
+    assert.equal(visibleStatus.textContent, '');
+
+    for (const message of [
+        'This video could not play. Choose another background.',
+        'Video playback could not start. Choose another background.',
+    ]) {
+        deliver({ type: 'error', message });
+        assert.equal(visibleStatus.textContent, message);
+        assert.equal(visibleStatus.dataset.error, 'true');
+        assert.equal(visibleStatus.hidden, false, 'background playback errors are visibly announced');
+    }
+
+    deliver({ type: 'error', message: 'The selected font could not load.' });
+    assert.equal(visibleStatus.textContent, 'Video playback could not start. Choose another background.', 'font-only errors do not replace the background error');
+    assert.equal(visibleStatus.hidden, false);
+
+    deliver({ type: 'playback-started' });
+    assert.equal(visibleStatus.textContent, '');
+    assert.equal(visibleStatus.dataset.error, 'false');
+    assert.equal(visibleStatus.hidden, true, 'successful playback clears the visible background status');
+});
+
+test('video prompter Start button reports playback-started after playback succeeds', async () => {
+    const listeners = {}, messages = [];
+    const opener = { closed: false, postMessage: message => messages.push(message) };
+    const start = { hidden: false };
+    const window = {
+        opener,
+        addEventListener: (type, callback) => { listeners[type] = callback; },
+        eclyricsVideoStage: {
+            CHANNEL: 'video',
+            create: () => ({ update: async () => true, destroy() {}, play: async () => {} }),
+            validate: payload => payload,
+        },
+    };
+    const document = {
+        getElementById: id => id === 'video-prompter-start' ? start : {},
+        addEventListener() {},
+    };
+    vm.runInNewContext(read('video-prompter/prompter.js'), {
+        window, document, location: { origin: 'https://example.org' },
+    });
+
+    await start.onclick();
+
+    assert.equal(start.hidden, true, 'successful playback hides the Start button');
+    assert.deepEqual(messages.map(message => message.type), ['ready', 'playback-started']);
+    assert.equal(messages.at(-1).channel, 'video');
+    assert.equal(messages.at(-1).type, 'playback-started');
 });
 
 test('prompter arrow keys request manual line changes and ignore modified or unrelated keys', () => {

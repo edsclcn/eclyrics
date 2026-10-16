@@ -3846,6 +3846,146 @@ a:hover {
     min-width: 0;
 }
 
+.lyrics-sync-control {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    min-height: 2.5rem;
+    padding: 2px 8px;
+}
+
+.lyrics-sync-switch {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--foreground-muted);
+    font-size: .68rem;
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.lyrics-sync-control .lyrics-sync-switch input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    opacity: 0;
+    outline: none;
+}
+
+.lyrics-sync-switch-track {
+    position: relative;
+    display: inline-block;
+    flex: 0 0 2rem;
+    width: 2rem;
+    height: 1.1rem;
+    border: 1px solid var(--border-strong);
+    border-radius: 999px;
+    background: var(--background-subtle);
+    transition: background-color 140ms ease-out, border-color 140ms ease-out;
+}
+
+.lyrics-sync-switch-track::after {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: .78rem;
+    height: .78rem;
+    border-radius: 50%;
+    background: var(--foreground-muted);
+    content: "";
+    transition: transform 140ms ease-out, background-color 140ms ease-out;
+}
+
+.lyrics-sync-switch input:checked + .lyrics-sync-switch-track {
+    border-color: var(--blue-mid);
+    background: color-mix(in srgb, var(--blue-mid) 22%, var(--card));
+}
+
+.lyrics-sync-switch input:checked + .lyrics-sync-switch-track::after {
+    background: var(--blue-mid);
+    transform: translateX(.88rem);
+}
+
+.lyrics-sync-switch input:focus-visible + .lyrics-sync-switch-track {
+    outline: 2px solid var(--blue-mid);
+    outline-offset: 2px;
+}
+
+.lyrics-sync-status {
+    color: var(--foreground-muted);
+    font-size: .6rem;
+    white-space: nowrap;
+}
+
+.workspace-preview.is-video-sync-preview > .preview-frame {
+    flex: 1 1 0;
+    min-height: 0;
+}
+
+.lyrics-sync-video-preview {
+    display: flex;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.lyrics-sync-video-preview[hidden] {
+    display: none !important;
+}
+
+.lyrics-sync-reading-marker {
+    position: absolute;
+    z-index: 5;
+    top: 50%;
+    right: 0;
+    left: 0;
+    height: 16px;
+    border: 0;
+    background: transparent;
+    cursor: row-resize;
+    touch-action: none;
+    transform: translateY(-50%);
+}
+
+.lyrics-sync-reading-marker::before {
+    position: absolute;
+    top: 50%;
+    right: 0;
+    left: 0;
+    height: 2px;
+    background: color-mix(in srgb, var(--blue-mid) 58%, transparent);
+    box-shadow: 0 0 2px rgba(0, 0, 0, .35);
+    content: "";
+    transform: translateY(-50%);
+}
+
+.lyrics-sync-reading-marker:focus-visible {
+    outline: 2px solid var(--blue-mid);
+    outline-offset: -2px;
+}
+
+.lyrics-sync-reading-marker[hidden] {
+    display: none !important;
+}
+
+@media (max-width: 1200px) {
+    .workspace-preview.is-video-sync-preview {
+        min-height: min(68vh, 640px);
+    }
+
+    .workspace-preview.is-video-sync-preview .preview-viewfinder-slot {
+        min-height: 0;
+    }
+}
+
 #image-lyrics-dock .preview-toolbar-group--stage {
     height: calc(2.5rem + 6px);
 }
@@ -5709,4 +5849,121 @@ body.auth-gate-open {
 
 #admin-delete-dialog-confirm:not(:disabled):hover {
     background: color-mix(in srgb, var(--danger) 18%, transparent);
+}
+
+/* Sync workspace: editor, text preview, and video preview share equal columns. */
+.workspace.is-video-sync-workspace {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-rows: minmax(0, 1fr);
+    gap: clamp(0.65rem, 1vw, 1rem);
+    min-height: 0;
+    overflow: hidden;
+}
+
+.workspace.is-video-sync-workspace > .workspace-editor,
+.workspace.is-video-sync-workspace > .workspace-preview,
+.workspace.is-video-sync-workspace > .lyrics-sync-video-preview {
+    width: auto;
+    min-width: 0;
+    min-height: 0;
+    max-width: none;
+}
+
+.workspace.is-video-sync-workspace > .workspace-editor {
+    display: flex;
+    flex-direction: column;
+    flex: initial;
+    overflow: hidden;
+}
+
+.workspace.is-video-sync-workspace > .workspace-preview {
+    display: flex;
+    flex: initial;
+    flex-direction: column;
+    align-self: stretch;
+}
+
+.workspace.is-video-sync-workspace > .workspace-preview > .preview-frame {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow: auto;
+    padding: clamp(0.55rem, 0.8vw, 0.8rem);
+}
+
+.workspace.is-video-sync-workspace > .lyrics-sync-video-preview {
+    display: flex;
+    flex: initial;
+    align-self: stretch;
+}
+
+.workspace.is-video-sync-workspace > .workspace-preview .preview-viewfinder-slot,
+.workspace.is-video-sync-workspace > .lyrics-sync-video-preview .video-lyrics-preview-stage-slot {
+    flex: 0 0 auto;
+    width: 100%;
+    height: auto;
+    min-height: 0;
+    max-height: none;
+    margin: 0;
+    aspect-ratio: 16 / 9;
+}
+
+.workspace.is-video-sync-workspace > .workspace-preview .preview-viewfinder-slot .preview-viewfinder-16x9,
+.workspace.is-video-sync-workspace > .lyrics-sync-video-preview .video-lyrics-preview-stage {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 16 / 9;
+}
+
+@media (max-width: 1500px) {
+    .workspace.is-video-sync-workspace {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-rows: minmax(280px, 0.8fr) minmax(420px, 1.2fr);
+        overflow: auto;
+    }
+
+    .workspace.is-video-sync-workspace > .workspace-editor {
+        grid-column: 1 / -1;
+        grid-row: 1;
+    }
+
+    .workspace.is-video-sync-workspace > .workspace-preview,
+    .workspace.is-video-sync-workspace > .lyrics-sync-video-preview {
+        grid-row: 2;
+    }
+}
+
+@media (max-width: 960px) {
+    .workspace.is-video-sync-workspace {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: auto;
+        grid-auto-rows: auto;
+        flex: none;
+        overflow: visible;
+    }
+
+    .workspace.is-video-sync-workspace > .workspace-editor,
+    .workspace.is-video-sync-workspace > .workspace-preview,
+    .workspace.is-video-sync-workspace > .lyrics-sync-video-preview {
+        grid-column: 1;
+        grid-row: auto;
+    }
+
+    .workspace.is-video-sync-workspace > .workspace-editor {
+        min-height: min(60vh, 620px);
+        overflow: visible;
+    }
+
+    .workspace.is-video-sync-workspace > .workspace-preview {
+        min-height: 0;
+    }
+
+    .workspace.is-video-sync-workspace > .workspace-preview > .preview-frame {
+        flex: 0 0 auto;
+        min-height: 0;
+    }
+
+    .workspace.is-video-sync-workspace > .lyrics-sync-video-preview {
+        display: block;
+    }
 }

@@ -60,9 +60,11 @@ audience output shows only the live line over a muted looping video.
    **Pink Hearts**, **Purple Fiber**, and **Purple Lens Glare**. The concise
    descriptions use the video filenames in title case. Preview videos are
    attached and played only while the chooser is open, then paused and
-   detached when it closes. On activation, only the selected built-in video is
-   fetched if needed and saved to this browser's IndexedDB under its catalogue
-   ID/version key; the full catalogue is not downloaded or saved up front.
+   detached when it closes. A selected built-in video is fetched if needed and
+   saved to this browser's IndexedDB under its catalogue ID/version key; the
+   full catalogue is not downloaded or saved up front.
+   The default background loads when Video Lyrics is activated or Sync/output
+   needs video, so Text-only synced use gets it without opening this workspace.
    Later selections reuse saved Blobs, while uncached selections are fetched
    when chosen. A personal file can be selected or dropped into **Add your own
    video**. It is decode-checked and used for the current page session only; it
@@ -82,6 +84,51 @@ audience output shows only the live line over a muted looping video.
    (0–2000 ms); reduced-motion preference sets the transition to zero. Video
    playback continues as cues change.
 
+## Optional Text Lyrics sync
+
+Sync is off by default, so Text Lyrics and Video Lyrics keep their existing
+separate workspaces and previews until an operator enables it. The
+**Sync to text** switch here mirrors the **Sync video** switch in Text Lyrics.
+Sync follows the source lyric line shown at the reading marker in the Text
+prompter and sends that line directly to the Video Lyrics stage. It does not
+search the Video Lyrics library or require a prepared Video Lyrics lineup.
+Text Lyrics remains the main editing workspace. When it is active and Sync is
+on, its existing right-hand preview column shows the Text and Video previews
+stacked vertically. Video Lyrics search, lineup, and cue controls remain in the
+Video Lyrics workspace for manual prompting. Its appearance and background
+settings also apply to text-driven output.
+
+The subtle horizontal reading marker appears over the Text prompter preview
+while Sync is on. It defaults to the vertical midpoint, can be dragged, and can
+be adjusted from the keyboard when focused. Its position sets the reading point
+used to select the source lyric line. The marker position is remembered in
+browser storage. Text prompter messages include the line text and source-line
+index; Video Lyrics accepts them only from the Text prompter lineup bound to
+this editor.
+
+In Text Lyrics Sync, the existing Video preview card moves into the Text
+workspace and hides **Open Prompter**. It keeps **Blank**, the same single font
+picker trigger, and **Background**; detailed appearance controls remain here.
+The shared font chooser and background dialog are available from either
+workspace. The embedded card shows the selected curated or custom background
+name and background loading/error status. Background and appearance changes
+update the preview and audience popup. **Blank** clears the live lyric but
+keeps the selected background. Audience popup playback errors appear in the
+embedded status and clear after **Start** succeeds.
+
+The Sync switch alone opens no windows if the Text prompter is not already
+open; its status asks the user to send Text Lyrics. If Text output is already
+open, enabling Sync opens or focuses only the Video Lyrics window. Pressing
+**Send to prompter** opens or updates the Text prompter and, when Sync is on,
+also opens or focuses the Video Lyrics window. If the browser blocks that Video
+popup, the visible Sync status says to allow popups.
+
+Turning Sync off stops text-driven updates without closing output windows or
+clearing the current Video Lyrics line. Manually selecting or advancing a
+Video Lyrics cue pauses Sync and turns off both mirrored switches. When no
+lyric line crosses the reading marker, Sync waits for a line and leaves the
+current video output unchanged.
+
 ## Successful Output
 
 - The control window shows the ordered lineup, the selected song's cue rows,
@@ -97,6 +144,9 @@ audience output shows only the live line over a muted looping video.
   line breaks, with blank lines omitted and retained as section breaks.
 - Appearance updates apply across every song in the current lineup and are
   mirrored in the preview and popup.
+- With Sync enabled in the Text Lyrics workspace, its Text and Video previews
+  appear stacked in the existing right-hand preview column; the Text editor
+  remains the main workspace. The output windows remain separate.
 - A lineup entry's pencil opens its temporary title/body editor. Saving changes
   only that instance, even when the same library song appears twice. It never
   writes to the song library or admin. Editing a live instance refreshes its
@@ -111,9 +161,17 @@ audience output shows only the live line over a muted looping video.
 
 - If the browser blocks the popup, the control panel reports that popups must
   be allowed. Reopening focuses an existing popup rather than creating another.
+- If the Text prompter is not open, enabling Sync alone opens no output window;
+  the Sync status asks the operator to send Text Lyrics first.
+- If the browser blocks the Video Lyrics popup during Sync or a Text send, the
+  visible Sync status says to allow popups. Video Lyrics also reports popup
+  opening and connection state in its workspace.
+- If no lyric line crosses the reading marker, Sync waits for a line and keeps
+  the current Video Lyrics output unchanged.
 - If the popup cannot autoplay its video, it reports the issue and exposes a
-  **Start video background** button for a user gesture. A decode or playback
-  error is reported to the control panel.
+  **Start video background** button for a user gesture. Background playback
+  errors appear in the embedded preview status and clear after a successful
+  **Start**; decode or playback errors are also reported to the control panel.
 - If a catalogue video cannot download, the chooser reports that an internet
   connection is needed. An empty download or unsupported media is rejected;
   personal files are checked for non-empty content and playable video before
@@ -158,21 +216,31 @@ audience output shows only the live line over a muted looping video.
 - `public/modules/video-lyrics.html` — Video Lyrics panel, lineup, cues,
   preview, output controls, and appearance settings
 - `public/js/features/video-lyrics/index.js` — picker integration, rendering,
-  active-panel keyboard handling, and settings controls
+  active-panel keyboard handling, settings controls, mirrored Sync switches,
+  position filtering, reading marker, and stacked preview layout
 - `public/js/features/video-lyrics/model.js` — in-memory lineup, line parsing,
-  cue state, and settings validation
+  manual cue state, direct text-driven output, Sync pause behavior, and settings
+  validation
 - `public/js/features/editor/block-source.js` — shared Add Lyrics dialog API
   and close-after-selection behavior
+- `public/js/features/editor/index.js` — Text prompter send/update behavior and
+  opening the Video Lyrics popup after a send when Sync is on
+- `public/js/features/editor/textformatting.js` and
+  `public/js/features/prompter/prompter.js` — source-line markers and semantic
+  reading position at the Text prompter midpoint
+- `public/index.html`, `public/assets/css/index.css`, and
+  `public/assets/css/video-lyrics.css` — Text workspace preview column and
+  vertical Text/Video preview layout
 - `public/js/features/video-lyrics/output.js` — preview and popup lifecycle,
-  state synchronization, and message validation
+  state synchronization, message validation, and playback feedback
 - `public/js/features/video-prompter/prompter.js` — audience popup receiver,
   playback recovery, and keyboard forwarding
 - `public/js/features/video-lyrics/stage.js` — 16:9 rendering, video playback,
   text transitions, and payload validation
 - `public/js/features/video-lyrics/local-media.js` — IndexedDB Blob cache,
   catalogue loading, and personal media decode probe
-- `public/js/features/video-lyrics/backgrounds.js` — chooser, catalogue,
-  automatic catalogue caching, and session-only personal video
+- `public/js/features/video-lyrics/backgrounds.js` — chooser, lazy default,
+  catalogue caching, and session-only personal video
 - `public/js/features/video-lyrics/fonts.js` and
   `public/assets/css/video-fonts.css` — allowed font families and local font
   declarations

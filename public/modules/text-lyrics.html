@@ -55,6 +55,10 @@
                                             aria-valuenow="0" hidden>
                                             <div class="preview-scroll-progress__fill" id="preview-scroll-progress-fill"></div>
                                         </div>
+                                        <div class="lyrics-sync-reading-marker" id="lyrics-sync-reading-marker"
+                                            role="slider" tabindex="0" aria-label="Video lyric change point"
+                                            aria-orientation="vertical" aria-valuemin="10" aria-valuemax="90"
+                                            aria-valuenow="50" aria-valuetext="50 percent from the top" hidden></div>
                                     </div>
                                 </div>
                                 <div class="preview-prompter-dock" id="preview-prompter-dock" aria-label="Live prompter controls">
@@ -74,6 +78,15 @@
                                             <i class="fa-solid fa-display" aria-hidden="true"></i>
                                             <span class="preview-send-btn-label">Send to prompter</span>
                                         </button>
+                                        <div class="preview-toolbar-group lyrics-sync-control" role="group" aria-label="Video lyric sync">
+                                            <label class="lyrics-sync-switch" for="lyrics-sync-toggle-text">
+                                                <input type="checkbox" role="switch" id="lyrics-sync-toggle-text"
+                                                    data-lyrics-sync-toggle aria-describedby="lyrics-sync-status-text">
+                                                <span class="lyrics-sync-switch-track" aria-hidden="true"></span>
+                                                <span class="lyrics-sync-switch-label">Sync video</span>
+                                            </label>
+                                            <span class="lyrics-sync-status" id="lyrics-sync-status-text" role="status" aria-live="polite">Off by default</span>
+                                        </div>
                                         <div class="preview-toolbar-group" role="group" aria-label="Playback">
                                             <button type="button" class="preview-icon-btn" id="preview-btn-play"
                                                 title="Play / Pause (Space)" aria-pressed="false" disabled>
@@ -153,6 +166,8 @@
                                 </div>
                             </div>
                         </aside>
+                        <div class="lyrics-sync-video-preview" id="lyrics-sync-video-preview" hidden
+                            aria-label="Video Lyrics preview"></div>
 
                         <div class="lineup-dialog" id="lineup-dialog" hidden role="dialog" aria-modal="true"
                             aria-labelledby="lineup-dialog-title">

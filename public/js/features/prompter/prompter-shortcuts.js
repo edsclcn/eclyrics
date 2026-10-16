@@ -123,7 +123,7 @@
         if (isTypingInEditableField(target)) return true;
         if (!target || typeof target.closest !== 'function') return false;
         if (target.closest('.textarea-cell textarea, .block-tab-editor')) return true;
-        if (target.closest('.preview-prompter-dock button, .preview-prompter-dock input, .preview-prompter-dock select')) {
+        if (target.closest('.preview-prompter-dock button, .preview-prompter-dock input, .preview-prompter-dock select, .lyrics-sync-reading-marker')) {
             return true;
         }
         return false;

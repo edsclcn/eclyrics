@@ -119,7 +119,7 @@ test('prompt formatter italicizes the matching adaptation marker', () => {
         filename: 'public/js/features/editor/textformatting.js',
     });
 
-    assert.equal(window.testFormatText('(Adaptation)'), '<em>(Adaptation)</em>');
+    assert.equal(window.testFormatText('(Adaptation)'), '<span data-prompter-source-line="0"><em>(Adaptation)</em></span>');
 });
 
 test('song search fallback matches title, adaptation source, and lyrics with limits', () => {
@@ -690,20 +690,35 @@ test('Video song selection uses the shared dialog once and leaves Text Lyrics in
         removeAttribute(name) { delete this.attributes[name]; }
         focus() { this.focused = true; }
         click() { this.onclick?.(); this.listeners.click?.forEach(callback => callback()); }
+        getBoundingClientRect() { return { top: 0, height: 20 }; }
+        scrollTo() {}
     }
     const elements = new Map();
     const manualOptions = new Element();
+    const syncToggles = [new Element(), new Element()];
+    const channelMessages = [];
+    let positionListener;
+    class FakeBroadcastChannel {
+        constructor(name) { assert.equal(name, 'eclyrics-prompter'); }
+        addEventListener(type, listener) { if (type === 'message') positionListener = listener; }
+        postMessage(message) { channelMessages.push(message); }
+        close() {}
+    }
     const document = {
         activeElement: new Element(),
+        body: new Element(),
         getElementById(id) { if (!elements.has(id)) elements.set(id, new Element()); return elements.get(id); },
         createElement() { return new Element(); },
         createTextNode(text) { return { textContent: text }; },
         querySelector(selector) { return selector === '.block-source-alt' ? manualOptions : null; },
+        querySelectorAll(selector) { return selector === '[data-lyrics-sync-toggle]' ? syncToggles : []; },
         addEventListener() {},
     };
     const song = { id: 'song-1', title: 'Song One', lyrics: 'First line\nSecond line', category: ['Original'] };
     const textInsertions = [];
+    let boundLineupKey = 'text-tab-a';
     const window = {
+        eclyricsEditorPrompter: { getBoundLineupKey: () => boundLineupKey },
         eclyricsSongLibrary: {
             getState: () => ({ loaded: true, count: 1 }),
             onChange() {}, start() {}, matchAllSongs: () => [song],
@@ -714,13 +729,15 @@ test('Video song selection uses the shared dialog once and leaves Text Lyrics in
             sortSongsForCategoryFilters: matches => matches,
         },
         eclyricsSongModel: { categoryToSlug: value => value.toLowerCase() },
+        addEventListener() {},
     };
-    const setup = { window, document, CustomEvent: class {}, requestAnimationFrame: callback => callback(), setTimeout, clearTimeout, ResizeObserver: class { observe() {} disconnect() {} }, innerWidth: 1024 };
+    const setup = { window, document, BroadcastChannel: FakeBroadcastChannel, CustomEvent: class {}, requestAnimationFrame: callback => callback(), setTimeout, clearTimeout, ResizeObserver: class { observe() {} disconnect() {} }, innerWidth: 1024 };
     loadBrowserScript('public/js/features/editor/block-source.js', setup);
     window.eclyricsEditorBlockSource.init({ applyLyricsToBlock: (...args) => textInsertions.push(args) });
     loadBrowserScript('public/js/features/video-lyrics/model.js', setup);
     loadBrowserScript('public/js/features/video-lyrics/fonts.js', setup);
     loadBrowserScript('public/js/features/video-lyrics/index.js', setup);
+    window.eclyricsVideoLyrics.openOutputWindow = () => ({ ok: true });
 
     document.getElementById('video-lyrics-lineup').children[0].children[0].click();
     await new Promise(resolve => setImmediate(resolve));
@@ -744,6 +761,34 @@ test('Video song selection uses the shared dialog once and leaves Text Lyrics in
     assert.equal(textInsertions[0][0], textarea);
     assert.equal(textInsertions[0][1], song.lyrics);
     assert.equal(window.eclyricsEditorBlockSource.isOpen(), false);
+
+    const position = (lineupKey, lineText = 'First line') => ({ data: { type: 'eclyrics-prompter-position', lineupKey, blockIndex: 0, sourceLineIndex: 0, lineText } });
+    const videoPopupCalls = [];
+    window.eclyricsVideoLyrics.openOutputWindow = () => { videoPopupCalls.push('video'); return { ok: true }; };
+    positionListener(position('text-tab-a'));
+    assert.equal(window.eclyricsVideoLyrics.getState().live?.text, undefined, 'positions are cached without changing the live cue while Sync is off');
+
+    boundLineupKey = null;
+    syncToggles[0].checked = true;
+    syncToggles[0].listeners.change[0]();
+    assert.deepEqual(videoPopupCalls, [], 'toggling Sync with no Text window open does not open a popup');
+    assert.equal(channelMessages.length, 0, 'a closed Text window receives no position request');
+    assert.equal(syncToggles[0].checked, true);
+    assert.equal(syncToggles[1].checked, true, 'the Text and Video switches mirror model state');
+    syncToggles[0].checked = false;
+    syncToggles[0].listeners.change[0]();
+
+    boundLineupKey = 'text-tab-a';
+    syncToggles[0].checked = true;
+    syncToggles[0].listeners.change[0]();
+    assert.deepEqual(videoPopupCalls, ['video'], 'an existing Text window causes only the Video window to open');
+    assert.deepEqual(channelMessages.map(message => message.type), ['eclyrics-prompter-marker', 'eclyrics-prompter-position-request']);
+    assert.equal(window.eclyricsVideoLyrics.getState().live.text, 'First line');
+
+    positionListener(position('another-text-tab', 'Wrong Text window'));
+    assert.equal(window.eclyricsVideoLyrics.getState().live.text, 'First line', 'a different Text popup cannot take over the active sync session');
+    positionListener(position('text-tab-a', 'A lyric with no Video lineup match'));
+    assert.equal(window.eclyricsVideoLyrics.getState().live.text, 'A lyric with no Video lineup match', 'Video follows the active Text source line directly');
 });
 
 test('shared picker manual and clipboard callbacks close the picker before opening the instance editor', () => {
@@ -785,13 +830,18 @@ test('shared picker manual and clipboard callbacks close the picker before openi
     assert.equal(bridge.isOpen(), false);
 });
 
-test('Video Lyrics preview exposes the compact actions, restored dimming control and font registry', () => {
+test('Video Lyrics preview keeps its output controls, selected background label, dimming control and font registry', () => {
     const html = fs.readFileSync(path.join(repoRoot, 'public/modules/video-lyrics.html'), 'utf8');
     const css = fs.readFileSync(path.join(repoRoot, 'public/assets/css/video-lyrics.css'), 'utf8');
-    const actions = html.match(/<div class="video-lyrics-preview-actions">([\s\S]*?)<\/div>/)?.[1] || '';
+    const actionStart = html.indexOf('<div class="video-lyrics-preview-actions">');
+    const actions = html.slice(actionStart, html.indexOf('<section class="video-lyrics-appearance">', actionStart));
     assert.match(actions, /id="video-lyrics-open"[^>]*class="[^"]*video-lyrics-action--primary/);
+    assert.match(actions, /id="video-lyrics-blank"/);
+    assert.match(actions, /id="video-lyrics-font-trigger"/);
     assert.match(actions, /id="video-lyrics-background"/);
     assert.doesNotMatch(actions, /clear|blackout/i);
+    assert.match(html, /id="video-lyrics-background-name"[^>]*>No background selected/);
+    assert.match(html, /id="video-lyrics-background-status"[^>]*role="status"[^>]*aria-live="polite"/);
     assert.match(html, /id="video-lyrics-dimming"/);
     const lineupRail = html.match(/<aside class="video-lyrics-lineup-rail"[\s\S]*?<\/aside>/)?.[0] || '';
     assert.doesNotMatch(lineupRail, /id="video-lyrics-add"/);
@@ -834,14 +884,16 @@ test('Video Lyrics preview exposes the compact actions, restored dimming control
     assert.ok(panelStart >= 0 && editorPosition > panelStart && editorPosition < panelEnd, 'the editor must be inside the panel fragment that app-bootstrap mounts');
     assert.doesNotMatch(css, /\.video-lyrics-inspector\s*\{[^}]*overflow-y\s*:\s*auto/i);
 
-    const previewActions = html.match(/<div class="video-lyrics-preview-actions">([\s\S]*?)<\/div>/)?.[1] || '';
+    const previewActionStart = html.indexOf('<div class="video-lyrics-preview-actions">');
+    const previewActions = html.slice(previewActionStart, html.indexOf('<section class="video-lyrics-appearance">', previewActionStart));
     assert.match(previewActions, /id="video-lyrics-open"[^>]*>[\s\S]*?OPEN PROMPTER/);
     assert.match(previewActions, /id="video-lyrics-blank"/);
-    assert.match(previewActions, /id="video-lyrics-background"[^>]*video-lyrics-action--full/);
+    assert.match(previewActions, /id="video-lyrics-font-trigger"/);
+    assert.match(previewActions, /id="video-lyrics-background"/);
     assert.ok(previewActions.indexOf('id="video-lyrics-open"') < previewActions.indexOf('id="video-lyrics-blank"'));
-    assert.ok(previewActions.indexOf('id="video-lyrics-blank"') < previewActions.indexOf('id="video-lyrics-background"'));
+    assert.ok(previewActions.indexOf('id="video-lyrics-blank"') < previewActions.indexOf('id="video-lyrics-font-trigger"'));
+    assert.ok(previewActions.indexOf('id="video-lyrics-font-trigger"') < previewActions.indexOf('id="video-lyrics-background"'));
     assert.match(css, /\.video-lyrics-preview-actions\s*\{[^}]*grid-template-columns:\s*repeat\(2,minmax\(0,1fr\)\)/s);
-    assert.match(css, /\.video-lyrics-action--full\s*\{[^}]*grid-column:\s*1\s*\/\s*-1/s, 'Background occupies the second action row');
 
     const window = {};
     loadBrowserScript('public/js/features/video-lyrics/fonts.js', { window, Blob });
@@ -877,7 +929,7 @@ test('Video Lyrics keyboard navigation ignores held-arrow repeats', () => {
     assert.deepEqual(advances, [-1, 1], 'each initial press advances one cue; holding either key does not repeat');
 });
 
-test('Video Lyrics size and fade fields resync clamped values on commit and blur', () => {
+test('Video Lyrics controls remain wired after preview reparenting and selected background labels update', () => {
     const elements = new Map();
     const makeElement = () => ({
         value: '', textContent: '', hidden: false, dataset: {}, listeners: {}, children: [],
@@ -890,7 +942,7 @@ test('Video Lyrics size and fade fields resync clamped values on commit and blur
         getBoundingClientRect() { return { top: 0, left: 0, right: 100, bottom: 100 }; },
         focus() {},
     });
-    const suffixes = ['prev', 'next', 'status', 'count', 'lineup', 'lineup-pages', 'song-title', 'song-meta', 'cue-empty', 'cues', 'live-label', 'font', 'font-trigger', 'weight', 'size', 'color', 'hex', 'alignment', 'fade', 'dimming', 'open', 'background', 'blank', 'editor-form', 'editor-title', 'editor-body', 'editor-heading', 'editor-message', 'editor', 'editor-close', 'editor-cancel'];
+    const suffixes = ['prev', 'next', 'status', 'count', 'lineup', 'lineup-pages', 'song-title', 'song-meta', 'cue-empty', 'cues', 'live-label', 'background-name', 'background-status', 'font', 'font-trigger', 'weight', 'size', 'color', 'hex', 'alignment', 'fade', 'dimming', 'open', 'background', 'blank', 'editor-form', 'editor-title', 'editor-body', 'editor-heading', 'editor-message', 'editor', 'editor-close', 'editor-cancel'];
     suffixes.forEach(suffix => elements.set(`video-lyrics-${suffix}`, makeElement()));
     const panel = makeElement();
     panel.contains = () => false;
@@ -898,12 +950,15 @@ test('Video Lyrics size and fade fields resync clamped values on commit and blur
     elements.set('panel-video', panel);
     const document = {
         activeElement: null,
+        body: makeElement(),
         getElementById: id => elements.get(id) || null,
         createElement: makeElement,
         addEventListener() {},
         querySelector: () => null,
+        querySelectorAll: () => [],
     };
-    const window = {};
+    const openedWith = [];
+    const window = { addEventListener() {}, eclyricsVideoBackgrounds: { openDialog: trigger => openedWith.push(trigger) } };
     loadBrowserScript('public/js/features/video-lyrics/model.js', { window });
     loadBrowserScript('public/js/features/video-lyrics/fonts.js', { window, Blob });
     loadBrowserScript('public/js/features/video-lyrics/index.js', {
@@ -924,6 +979,17 @@ test('Video Lyrics size and fade fields resync clamped values on commit and blur
     assert.equal(fade.value, '-1', 'preserve the active field while typing');
     fade.listeners.blur();
     assert.equal(fade.value, 0, 'show the model-clamped fade after leaving the field');
+
+    const backgroundButton = elements.get('video-lyrics-background');
+    backgroundButton.listeners.click({ currentTarget: backgroundButton });
+    assert.deepEqual(openedWith, [backgroundButton], 'the reparented Background control opens the shared picker with itself as the focus-return target');
+
+    window.eclyricsVideoLyrics.setBackground({ id: 'session-video', version: '1', name: 'worship-background.mp4', blob: new Blob(['video']) });
+    assert.equal(elements.get('video-lyrics-background-name').textContent, 'worship-background.mp4', 'the selected custom background name stays visible');
+    assert.equal(elements.get('video-lyrics-background-name').title, 'worship-background.mp4');
+    window.eclyricsVideoLyrics.backgroundStatus('worship-background.mp4 selected for this session. Nothing was uploaded.');
+    assert.equal(elements.get('video-lyrics-background-status').textContent, 'worship-background.mp4 selected for this session. Nothing was uploaded.');
+    assert.equal(elements.get('video-lyrics-background-status').hidden, false);
 });
 
 test('Video Lyrics background picker places seven presets and upload card in one grid', () => {

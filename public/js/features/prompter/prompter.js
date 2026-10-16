@@ -5,6 +5,25 @@ const DEFAULT_SCROLL_SPEED = 0.5;
 const STAGE_VW = 1920;
 const STAGE_VH = 1080;
 const DEFAULT_PROMPTER_WIDTH_PX = 1444;
+const PROMPTER_READING_MARKER_STORAGE_KEY = 'eclyrics-prompter-reading-marker-ratio';
+const PROMPTER_READING_MARKER_MIN = 0.1;
+const PROMPTER_READING_MARKER_MAX = 0.9;
+const PROMPTER_POSITION_SCAN_INTERVAL_MS = 90;
+function clampPrompterReadingMarkerRatio(value) {
+    return Math.max(PROMPTER_READING_MARKER_MIN, Math.min(PROMPTER_READING_MARKER_MAX, Number(value)));
+}
+function readPrompterReadingMarkerRatio() {
+    try {
+        const stored = localStorage.getItem(PROMPTER_READING_MARKER_STORAGE_KEY);
+        if (stored !== null && stored.trim() !== '' && Number.isFinite(Number(stored))) {
+            return clampPrompterReadingMarkerRatio(stored);
+        }
+    } catch (e) {
+        /* Keep the default when storage is unavailable. */
+    }
+    return 0.5;
+}
+let prompterReadingMarkerRatio = readPrompterReadingMarkerRatio();
 /** Manual scroll: fixed 100px per keypress (including hold key-repeat); not scaled by scroll speed. */
 const KEYBOARD_ARROW_SCROLL_PX = 100;
 const WHEEL_SCROLL_PX = 50;
@@ -83,6 +102,8 @@ try {
 
 /** Cached visual metrics — refreshed on layout/block/theme changes, not every scroll frame. */
 let cachedPrompterBroadcast = null;
+let lastSemanticPosition = null;
+let lastSemanticPositionScanAt = 0;
 
 function refreshCachedPrompterBroadcast() {
     if (!prompterContent) return null;
@@ -108,8 +129,65 @@ function getPrompterThemeId() {
     return sessionStorage.getItem('prompterType') === 'LYRICS_PROMPTER' ? 'lyrics' : 'bw';
 }
 
+function getActiveSourceLine() {
+    if (!prompterContainer || !prompterContent) return null;
+
+    const stageRect = prompterContainer.getBoundingClientRect();
+    const readingMarkerY = stageRect.top + stageRect.height * prompterReadingMarkerRatio;
+    const sourceLines = prompterContent.querySelectorAll('[data-prompter-source-line]');
+
+    for (const sourceLine of sourceLines) {
+        const lineText = sourceLine.textContent.replace(/\s+/g, ' ').trim();
+        if (!lineText) continue;
+
+        const sourceLineIndex = Number(sourceLine.dataset.prompterSourceLine);
+        if (!Number.isInteger(sourceLineIndex)) continue;
+
+        for (const rect of sourceLine.getClientRects()) {
+            if (rect.width <= 0 || rect.height <= 0) continue;
+            if (rect.top <= readingMarkerY && readingMarkerY < rect.bottom) {
+                return { lineText, sourceLineIndex };
+            }
+        }
+    }
+
+    return null;
+}
+
+function broadcastSemanticPosition(force = false) {
+    if (!prompterBroadcastChannel || !prompterContent) return;
+
+    const now = performance.now();
+    if (!force && now - lastSemanticPositionScanAt < PROMPTER_POSITION_SCAN_INTERVAL_MS) return;
+    lastSemanticPositionScanAt = now;
+
+    const activeLine = getActiveSourceLine();
+    const position = {
+        type: 'eclyrics-prompter-position',
+        lineupKey: lineupKey || null,
+        blockIndex: currentIndex,
+        sourceLineIndex: activeLine?.sourceLineIndex ?? null,
+        lineText: activeLine?.lineText || '',
+    };
+
+    if (
+        !force &&
+        lastSemanticPosition &&
+        lastSemanticPosition.lineupKey === position.lineupKey &&
+        lastSemanticPosition.blockIndex === position.blockIndex &&
+        lastSemanticPosition.sourceLineIndex === position.sourceLineIndex &&
+        lastSemanticPosition.lineText === position.lineText
+    ) {
+        return;
+    }
+
+    lastSemanticPosition = position;
+    prompterBroadcastChannel.postMessage(position);
+}
+
 function broadcastPrompterState(options = {}) {
     if (!prompterBroadcastChannel || !prompterContent) return;
+    broadcastSemanticPosition(options.scrollOnly !== true);
     const scrollOnly = options.scrollOnly === true;
     if (!scrollOnly || !cachedPrompterBroadcast) {
         refreshCachedPrompterBroadcast();
@@ -205,7 +283,8 @@ function getScrollBounds() {
     const viewH = STAGE_VH;
     const contentH = prompterContent ? prompterContent.offsetHeight : 0;
     const minTop = -(Math.max(contentH, viewH));
-    return { min: minTop, max: 0 };
+    const maxTop = Math.max(0, viewH * prompterReadingMarkerRatio);
+    return { min: minTop, max: maxTop };
 }
 
 function clampScrollPosition() {
@@ -243,7 +322,19 @@ function pauseScroll() {
 
 setText(currentIndex);
 
-function setText(index) {
+if (prompterBroadcastChannel) {
+    prompterBroadcastChannel.addEventListener('message', event => {
+        if (event.data?.type === 'eclyrics-prompter-position-request') broadcastSemanticPosition(true);
+        if (event.data?.type === 'eclyrics-prompter-marker' && Number.isFinite(event.data.ratio)) {
+            prompterReadingMarkerRatio = clampPrompterReadingMarkerRatio(event.data.ratio);
+            try { localStorage.setItem(PROMPTER_READING_MARKER_STORAGE_KEY, String(prompterReadingMarkerRatio)); }
+            catch (e) { /* Keep the updated position for this window. */ }
+            broadcastSemanticPosition(true);
+        }
+    });
+}
+
+function setText(index, { broadcast = true } = {}) {
     const i = parseInt(index, 10);
     if (Number.isNaN(i)) return;
     currentIndex = i;
@@ -251,7 +342,34 @@ function setText(index) {
     scrollPosition = 0;
     prompterContent.style.top = "0px";
     prompterContent.innerHTML = data && data[currentIndex] != null ? data[currentIndex] : '\nNo content. Close the window.';
+    if (broadcast) broadcastPrompterState();
+}
+
+function hasSourceLine(blockIndex, sourceLineIndex) {
+    if (!Array.isArray(data) || !Number.isInteger(blockIndex) || blockIndex < 0 || blockIndex >= data.length) return false;
+    if (sourceLineIndex === null) return true;
+    if (!Number.isInteger(sourceLineIndex) || sourceLineIndex < 0) return false;
+    const block = document.createElement('div');
+    block.innerHTML = String(data[blockIndex] ?? '');
+    const line = block.querySelector(`[data-prompter-source-line="${sourceLineIndex}"]`);
+    return Boolean(line?.textContent.trim());
+}
+
+function navigateToSourceLine(blockIndex, sourceLineIndex) {
+    if (!hasSourceLine(blockIndex, sourceLineIndex)) return false;
+
+    setText(blockIndex, { broadcast: false });
+    if (sourceLineIndex !== null) {
+        const line = prompterContent.querySelector(`[data-prompter-source-line="${sourceLineIndex}"]`);
+        const lineRect = line?.getBoundingClientRect();
+        const stageRect = prompterContainer.getBoundingClientRect();
+        if (!lineRect || !stageRect.height) return false;
+        const markerY = stageRect.top + stageRect.height * prompterReadingMarkerRatio;
+        scrollPosition += markerY - lineRect.top;
+        applyScrollPosition();
+    }
     broadcastPrompterState();
+    return true;
 }
 
 function applyRemoteScrollSpeed(next) {
@@ -398,6 +516,15 @@ window.addEventListener('message', (event) => {
             case 'nextBlock':
                 if (data && currentIndex < data.length - 1) {
                     setText(currentIndex + 1);
+                }
+                break;
+            case 'goToSourceLine':
+                if (
+                    msg.lineupKey === lineupKey &&
+                    Number.isInteger(msg.blockIndex) &&
+                    hasSourceLine(msg.blockIndex, msg.sourceLineIndex)
+                ) {
+                    navigateToSourceLine(msg.blockIndex, msg.sourceLineIndex);
                 }
                 break;
             case 'setSpeed':

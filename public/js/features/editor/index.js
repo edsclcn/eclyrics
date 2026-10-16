@@ -733,6 +733,53 @@ function getLineupKeyForTab(tabId) {
     return `${SESSION_ID}-${tabId}`;
 }
 
+function buildTextLineupProjection(tabId) {
+    const blocks = [];
+    for (let textId = 1; ; textId++) {
+        const textarea = document.getElementById(`textarea-${tabId}-${textId}`);
+        if (!textarea) break;
+        const source = window.eclyricsSmartQuotes?.normalizeSmartQuotes?.(textarea.value) || textarea.value;
+        const lines = source.split(/\r?\n/).map((rawText, sourceLineIndex) => ({
+            sourceLineIndex,
+            text: rawText.replace(/§[rgbyvfznius]/g, '').replace(/\s+/g, ' ').trim(),
+        })).filter((line) => line.text);
+        blocks.push({
+            blockIndex: textId - 1,
+            title: lines[0]?.text || `Block ${textId}`,
+            lines,
+        });
+    }
+    return { lineupKey: getLineupKeyForTab(tabId), blocks };
+}
+
+function publishTextLineupProjection(tabId) {
+    if (prompterBoundTabId !== tabId || !isPrompterWindowOpen()) return;
+    document.dispatchEvent(new CustomEvent('eclyrics-text-lineup-updated', {
+        detail: buildTextLineupProjection(tabId),
+    }));
+}
+
+window.eclyricsEditorPrompter = {
+    getBoundLineupKey() {
+        if (prompterBoundTabId == null || !isPrompterWindowOpen()) return null;
+        return getLineupKeyForTab(prompterBoundTabId);
+    },
+    getBoundLineup() {
+        if (prompterBoundTabId == null || !isPrompterWindowOpen()) return null;
+        return buildTextLineupProjection(prompterBoundTabId);
+    },
+    navigateToSourceLine({ lineupKey, blockIndex, sourceLineIndex }) {
+        const currentLineupKey = this.getBoundLineupKey();
+        if (typeof lineupKey !== 'string' || lineupKey !== currentLineupKey) return false;
+        if (!Number.isInteger(blockIndex) || blockIndex < 0) return false;
+        const projection = buildTextLineupProjection(prompterBoundTabId);
+        const block = projection.blocks.find((entry) => entry.blockIndex === blockIndex);
+        if (!block) return false;
+        if (sourceLineIndex !== null && (!Number.isInteger(sourceLineIndex) || !block.lines.some((line) => line.sourceLineIndex === sourceLineIndex))) return false;
+        return postPrompterControl({ action: 'goToSourceLine', lineupKey, blockIndex, sourceLineIndex });
+    },
+};
+
 function schedulePrompterLineupSync(tabId) {
     const key = String(tabId);
     if (prompterLineupSyncTimers[key]) clearTimeout(prompterLineupSyncTimers[key]);
@@ -748,6 +795,7 @@ function pushLineupToOpenPrompter(tabId) {
     const lineupKey = getLineupKeyForTab(tabId);
     const data = buildLineupForTab(tabId);
     localStorage.setItem(lineupKey, JSON.stringify(data));
+    publishTextLineupProjection(tabId);
     postPrompterControl({ action: 'updateLineup', lineupKey, data });
 }
 
@@ -1936,6 +1984,7 @@ function removeBlockCell(cell, tabId) {
     cell.remove();
     reflowBlockRows(tabId);
     rearrangeTextAreas(tabId);
+    if (prompterBoundTabId === tabId) schedulePrompterLineupSync(tabId);
     syncLiveBlockBadges();
     maintainEmptySlotForTab(tabId);
     const stillSelected = textNum[tabId.toString()]?.[2];
@@ -2070,6 +2119,7 @@ function addSingleBlock(container, tabId) {
     refreshAllBlockLabelsInTab(tabId);
     syncBlockRemoveButtons(tabId);
     maintainEmptySlotForTab(tabId);
+    if (prompterBoundTabId === tabId) schedulePrompterLineupSync(tabId);
 }
 
 function showTabContent(tabId) {
@@ -2212,6 +2262,15 @@ window.getActiveTabLabel = function getActiveTabLabel() {
     return getTabLabel(document.querySelector('#tabs-list .tab.active'));
 };
 
+function openVideoPrompterWhenSyncIsEnabled() {
+    if (!isPrompterWindowOpen() || !window.eclyricsVideoLyrics?.getState?.().sync?.enabled) return;
+    const result = window.eclyricsVideoLyrics.openOutputWindow?.();
+    if (result?.ok === false) {
+        window.eclyricsVideoLyrics.showSyncFeedback?.('Sync is on. Allow pop-ups to open the video prompter.');
+    }
+    return result;
+}
+
 function sendPrompt(tabId, textId, options = {}) {
     const openIfClosed = options.openIfClosed !== false;
     const focusWindow = options.focusWindow !== false;
@@ -2242,6 +2301,7 @@ function sendPrompt(tabId, textId, options = {}) {
     updatePreview();
 
     prompterBoundTabId = tabId;
+    publishTextLineupProjection(tabId);
 
     const payload = {
         type: 'eclyrics-prompter-load',
@@ -2259,6 +2319,7 @@ function sendPrompt(tabId, textId, options = {}) {
             textNum[tabId.toString()][1] = prompterPopupWindow;
             updatePreviewPrompterDock();
             postPrompterControl({ action: 'requestSync' });
+            if (openIfClosed) openVideoPrompterWhenSyncIsEnabled();
             return;
         } catch (e) {
             prompterPopupWindow = null;
@@ -2283,7 +2344,9 @@ function sendPrompt(tabId, textId, options = {}) {
     const url = `prompter.html?title=${encodeURIComponent(lineupKey)}&current=${textId - 1}`;
     prompterPopupWindow = window.open(url, PROMPTER_WINDOW_NAME, popupFeatures);
     textNum[tabId.toString()][1] = prompterPopupWindow;
+    if (prompterPopupWindow) publishTextLineupProjection(tabId);
     if (prompterPopupWindow) prompterPopupWindow.focus();
+    openVideoPrompterWhenSyncIsEnabled();
     updatePreview();
     updatePreviewPrompterDock();
     setTimeout(() => {

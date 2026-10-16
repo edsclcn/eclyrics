@@ -15,10 +15,10 @@
     const dialog = document.createElement('dialog'); dialog.className = 'video-lyrics-dialog video-background-dialog';
     dialog.setAttribute('aria-labelledby', 'video-background-title');
     dialog.innerHTML = '<header class="video-lyrics-section-head"><h3 id="video-background-title">Choose a background</h3><button type="button" class="video-lyrics-icon" aria-label="Close backgrounds">×</button></header><p class="video-lyrics-muted">Choose a video for the whole lineup.</p><div class="video-background-grid"></div><p class="video-lyrics-muted" role="status" aria-live="polite"></p>';
-    panel.append(dialog);
+    document.body.append(dialog);
     const grid = dialog.querySelector('.video-background-grid'), message = dialog.querySelector('[role=status]');
-    const picker = document.createElement('input'); picker.type = 'file'; picker.accept = 'video/*'; picker.hidden = true; panel.append(picker);
-    function status(text, error = false) { message.textContent = text; controller.status(text, error); }
+    const picker = document.createElement('input'); picker.type = 'file'; picker.accept = 'video/*'; picker.hidden = true; document.body.append(picker);
+    function status(text, error = false) { message.textContent = text; controller.status(text, error); controller.backgroundStatus?.(text, error); }
     const previewVideos = [];
     const previewState = new WeakMap();
     let activeSelectionButton = null, previewGeneration = 0;
@@ -146,11 +146,12 @@
             indicator.textContent = 'Loading preview…';
             setCardBusy(button, 'previewBusy', false);
         });
-        returnFocus?.focus({ preventScroll: true });
+        if (returnFocus?.isConnected) returnFocus.focus({ preventScroll: true });
     });
     dialog.addEventListener('click', event => { if (event.target !== dialog) return; const rect = dialog.getBoundingClientRect(); if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) dialog.close(); });
-    panel.addEventListener('video-lyrics-background', () => {
-        returnFocus = document.activeElement;
+    function openDialog(trigger = document.activeElement) {
+        if (dialog.open) return;
+        returnFocus = trigger;
         refresh();
         dialog.showModal();
         const currentPreviewGeneration = ++previewGeneration;
@@ -177,14 +178,23 @@
             const playback = video.play();
             if (playback) playback.catch(() => {});
         });
-    });
-    window.eclyricsVideoBackgrounds = { catalogue, media, select };
+    }
+    panel.addEventListener('video-lyrics-background', event => openDialog(event.detail?.returnFocus || document.activeElement));
+    document.addEventListener('video-lyrics-background', event => openDialog(event.detail?.returnFocus || document.activeElement));
+    let defaultSelection = null;
+    function ensureDefault() {
+        if (controller.getState().background) return Promise.resolve();
+        if (defaultSelection) return defaultSelection;
+        defaultSelection = select(catalogue[0], { close: false }).finally(() => { defaultSelection = null; });
+        return defaultSelection;
+    }
+    window.eclyricsVideoBackgrounds = { catalogue, media, select, ensureDefault, openDialog };
     const activation = new MutationObserver(initialize);
     function initialize() {
         if (!panel.classList.contains('is-active')) { wasActive = false; return; }
         if (wasActive) return;
         wasActive = true;
-        if (!controller.getState().background) select(catalogue[0], { close: false });
+        void ensureDefault();
     }
     activation.observe(panel, { attributes: true, attributeFilter: ['class'] });
     initialize();

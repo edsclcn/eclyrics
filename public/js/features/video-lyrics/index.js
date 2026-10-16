@@ -3,7 +3,190 @@
     if (!panel) return;
     const get = suffix => document.getElementById(`video-lyrics-${suffix}`);
     const model = window.eclyricsVideoModel.create();
+    const syncToggles = [...document.querySelectorAll('[data-lyrics-sync-toggle]')];
+    const videoPreviewCard = panel.querySelector('.video-lyrics-preview-card');
+    const videoPreviewHost = document.getElementById('lyrics-sync-video-preview');
+    const textWorkspace = document.getElementById('workspace');
+    const textPreview = document.getElementById('workspace-preview-panel');
+    const readingMarker = document.getElementById('lyrics-sync-reading-marker');
+    const originalVideoPreviewPosition = {
+        parent: videoPreviewCard?.parentNode || null,
+        nextSibling: videoPreviewCard?.nextSibling || null,
+    };
+    const READING_MARKER_STORAGE_KEY = 'eclyrics-prompter-reading-marker-ratio';
+    const READING_MARKER_MIN = 0.1;
+    const READING_MARKER_MAX = 0.9;
+    const clampMarkerRatio = value => Math.max(READING_MARKER_MIN, Math.min(READING_MARKER_MAX, Number(value)));
+    let readingMarkerRatio = 0.5;
+    try {
+        const storedValue = localStorage.getItem(READING_MARKER_STORAGE_KEY);
+        const storedRatio = Number(storedValue);
+        if (storedValue !== null && storedValue.trim() !== '' && Number.isFinite(storedRatio)) readingMarkerRatio = clampMarkerRatio(storedRatio);
+    } catch { /* Keep the session default when storage is unavailable. */ }
+    let videoPreviewMoved = false;
+    function restoreSyncPreviewElement(position) {
+        if (!videoPreviewCard || !position.parent) return;
+        const nextSibling = position.nextSibling?.parentNode === position.parent ? position.nextSibling : null;
+        position.parent.insertBefore(videoPreviewCard, nextSibling);
+    }
+    function updateSyncPreviewLayout(enabled = model.getState().sync.enabled) {
+        const showBothPreviews = enabled && document.getElementById('panel-text')?.classList.contains('is-active');
+        if (showBothPreviews && !videoPreviewMoved && videoPreviewCard && videoPreviewHost) {
+            videoPreviewHost.append(videoPreviewCard);
+            videoPreviewMoved = true;
+        } else if (!showBothPreviews && videoPreviewMoved) {
+            restoreSyncPreviewElement(originalVideoPreviewPosition);
+            videoPreviewMoved = false;
+        }
+        if (videoPreviewHost) videoPreviewHost.hidden = !showBothPreviews;
+        textWorkspace?.classList.toggle('is-video-sync-workspace', Boolean(showBothPreviews));
+        textPreview?.classList.toggle('is-video-sync-preview', Boolean(showBothPreviews));
+        videoPreviewCard?.classList.toggle('is-sync-embedded-preview', Boolean(showBothPreviews));
+        const videoPreviewHeading = videoPreviewCard?.querySelector('.video-lyrics-section-head h3');
+        if (videoPreviewHeading) videoPreviewHeading.textContent = showBothPreviews ? 'Video Lyrics preview' : 'Prompter preview';
+        if (readingMarker) readingMarker.hidden = !showBothPreviews;
+    }
+    function ensureVideoBackground() {
+        void window.eclyricsVideoBackgrounds?.ensureDefault?.();
+    }
+    function setReadingMarkerRatio(value, broadcast = true) {
+        readingMarkerRatio = clampMarkerRatio(value);
+        if (readingMarker) {
+            const percent = Math.round(readingMarkerRatio * 100);
+            readingMarker.style.top = `${percent}%`;
+            readingMarker.setAttribute('aria-valuenow', String(percent));
+            readingMarker.setAttribute('aria-valuetext', `${percent} percent from the top`);
+        }
+        try { localStorage.setItem(READING_MARKER_STORAGE_KEY, String(readingMarkerRatio)); }
+        catch { /* Marker remains adjustable for this page session. */ }
+        if (broadcast) prompterPositionChannel?.postMessage({ type: 'eclyrics-prompter-marker', ratio: readingMarkerRatio });
+    }
+    setReadingMarkerRatio(readingMarkerRatio, false);
+    if (readingMarker) {
+        let draggingMarker = false;
+        const moveMarkerToPointer = event => {
+            const rect = document.getElementById('preview-viewfinder-stage')?.getBoundingClientRect();
+            if (!rect?.height) return;
+            setReadingMarkerRatio((event.clientY - rect.top) / rect.height);
+        };
+        readingMarker.addEventListener('pointerdown', event => {
+            if (event.button !== 0) return;
+            event.preventDefault();
+            event.stopPropagation();
+            draggingMarker = true;
+            readingMarker.setPointerCapture(event.pointerId);
+            moveMarkerToPointer(event);
+        });
+        readingMarker.addEventListener('pointermove', event => {
+            if (!draggingMarker) return;
+            event.preventDefault();
+            moveMarkerToPointer(event);
+        });
+        readingMarker.addEventListener('pointerup', () => { draggingMarker = false; });
+        readingMarker.addEventListener('pointercancel', () => { draggingMarker = false; });
+        readingMarker.addEventListener('keydown', event => {
+            const steps = { ArrowUp: -0.01, ArrowDown: 0.01, PageUp: -0.05, PageDown: 0.05 };
+            if (event.key in steps) {
+                event.preventDefault();
+                setReadingMarkerRatio(readingMarkerRatio + steps[event.key]);
+            } else if (event.key === 'Home') {
+                event.preventDefault();
+                setReadingMarkerRatio(READING_MARKER_MIN);
+            } else if (event.key === 'End') {
+                event.preventDefault();
+                setReadingMarkerRatio(READING_MARKER_MAX);
+            }
+        });
+    }
+    let syncFeedback = '', syncFeedbackTimer = 0;
+    function showSyncFeedback(message) {
+        syncFeedback = message;
+        clearTimeout(syncFeedbackTimer);
+        syncFeedbackTimer = setTimeout(() => {
+            syncFeedback = '';
+            document.querySelectorAll('.lyrics-sync-status').forEach(element => { element.textContent = model.getState().sync.status; });
+        }, 5000);
+        document.querySelectorAll('.lyrics-sync-status').forEach(element => { element.textContent = syncFeedback; });
+    }
+    function navigateToTextPosition(position) {
+        if (!model.getState().sync.enabled) return false;
+        const bridge = window.eclyricsEditorPrompter;
+        const lineupKey = getExpectedPrompterLineupKey();
+        if (!lineupKey || lineupKey !== model.getState().sync.lineupKey) {
+            model.setTextLineup(bridge?.getBoundLineup?.() || null);
+            return false;
+        }
+        const accepted = bridge?.navigateToSourceLine?.({ lineupKey, ...position });
+        if (!accepted) showSyncFeedback('Send Text Lyrics again to control its current prompter.');
+        return Boolean(accepted);
+    }
+    function advanceVideoLyrics(delta) {
+        if (!model.getState().sync.enabled) return model.advance(delta);
+        const position = model.getNextTextPosition(delta);
+        return position ? navigateToTextPosition(position) : false;
+    }
+    function navigateToTextBlock(block) {
+        if (!block) return false;
+        return navigateToTextPosition({
+            blockIndex: block.blockIndex,
+            sourceLineIndex: block.lines[0]?.sourceLineIndex ?? null,
+        });
+    }
+    let prompterPositionChannel = null;
+    const getExpectedPrompterLineupKey = () => window.eclyricsEditorPrompter?.getBoundLineupKey?.() || null;
+    try {
+        prompterPositionChannel = new BroadcastChannel('eclyrics-prompter');
+        prompterPositionChannel.addEventListener('message', event => {
+            const expectedLineupKey = getExpectedPrompterLineupKey();
+            if (event.data?.type === 'eclyrics-prompter-position' && expectedLineupKey && event.data.lineupKey === expectedLineupKey) {
+                model.updateTextPosition(event.data);
+            }
+        });
+    } catch {
+        prompterPositionChannel = null;
+    }
+    document.addEventListener('eclyrics-text-lineup-updated', event => {
+        const expectedLineupKey = getExpectedPrompterLineupKey();
+        if (!expectedLineupKey || event.detail?.lineupKey !== expectedLineupKey) return;
+        model.setTextLineup(event.detail);
+    });
+    window.addEventListener('focus', () => {
+        if (!model.getState().sync.enabled) return;
+        const boundLineup = window.eclyricsEditorPrompter?.getBoundLineup?.() || null;
+        if (!boundLineup || boundLineup.lineupKey !== model.getState().sync.lineupKey) model.setTextLineup(boundLineup);
+    });
+    syncToggles.forEach(toggle => toggle.addEventListener('change', () => {
+        if (!toggle.checked) {
+            clearTimeout(syncFeedbackTimer);
+            syncFeedbackTimer = 0;
+            syncFeedback = '';
+        }
+        const expectedLineupKey = getExpectedPrompterLineupKey();
+        const boundLineup = window.eclyricsEditorPrompter?.getBoundLineup?.() || null;
+        model.setTextLineup(boundLineup);
+        model.setSyncEnabled(toggle.checked);
+        if (toggle.checked) ensureVideoBackground();
+        if (toggle.checked && expectedLineupKey) {
+            setReadingMarkerRatio(readingMarkerRatio);
+            prompterPositionChannel?.postMessage({ type: 'eclyrics-prompter-position-request' });
+            const videoOutput = window.eclyricsVideoLyrics?.openOutputWindow?.();
+            if (!videoOutput?.ok) showSyncFeedback('Sync is on. Allow pop-ups to open the video prompter.');
+        }
+    }));
+    document.addEventListener('click', event => {
+        if (event.target.closest?.('.sidebar-nav button[data-panel]')) updateSyncPreviewLayout();
+    });
+    window.addEventListener('popstate', () => updateSyncPreviewLayout());
+    document.addEventListener('eclyrics-auth-changed', () => updateSyncPreviewLayout());
+    window.addEventListener('pagehide', () => updateSyncPreviewLayout(false), { once: true });
+    window.addEventListener('pageshow', () => updateSyncPreviewLayout());
     function status(message, error = false) { get('status').textContent = message; get('status').classList.toggle('is-error', error); }
+    function backgroundStatus(message, error = false) {
+        const element = get('background-status');
+        element.textContent = message;
+        element.dataset.error = String(error);
+        element.hidden = !message;
+    }
     function button(text, label, callback, className = 'video-lyrics-icon') {
         const element = document.createElement('button'); element.type = 'button'; element.className = className;
         element.textContent = text; element.setAttribute('aria-label', label); element.title = label; element.onclick = callback; return element;
@@ -66,39 +249,61 @@
     });
     function render(state) {
         const focusedControl = panel.contains(document.activeElement) ? document.activeElement.dataset.videoFocus : null;
-        const prepared = state.lineup.find(entry => entry.id === state.preparedId);
-        get('count').textContent = state.lineup.length;
-        const displayCount = Math.max(3, state.lineup.length + 1);
-        const pages = Math.ceil(displayCount / pageSize);
-        lineupPage = Math.min(lineupPage, pages - 1);
-        panel.querySelector('.video-lyrics-workspace').classList.toggle('is-empty', state.lineup.length === 0);
+        const syncing = state.sync.enabled;
+        const expectedLineupKey = getExpectedPrompterLineupKey();
+        const hasBoundTextPrompter = Boolean(expectedLineupKey && expectedLineupKey === state.sync.lineupKey);
+        const textProjection = syncing && hasBoundTextPrompter ? state.sync.projection : [];
+        const displayLineup = syncing ? textProjection : state.lineup;
+        const activeTextPosition = syncing && hasBoundTextPrompter ? state.sync.latestPosition : null;
+        const prepared = syncing
+            ? textProjection.find(entry => entry.blockIndex === activeTextPosition?.blockIndex)
+            : state.lineup.find(entry => entry.id === state.preparedId);
+        const displayCues = prepared ? (syncing ? prepared.lines : prepared.cues) : [];
+        const activeCueIndex = syncing
+            ? displayCues.findIndex(cue => cue.sourceLineIndex === activeTextPosition?.sourceLineIndex)
+            : state.preparedIndex;
+        syncToggles.forEach(toggle => { toggle.checked = state.sync.enabled; });
+        document.querySelectorAll('.lyrics-sync-status').forEach(element => { element.textContent = syncFeedback || state.sync.status; });
+        updateSyncPreviewLayout(state.sync.enabled);
+        get('count').textContent = displayLineup.length;
+        const displayCount = syncing ? displayLineup.length : Math.max(3, displayLineup.length + 1);
+        const pages = Math.max(1, Math.ceil(displayCount / pageSize));
+        lineupPage = Math.max(0, Math.min(lineupPage, pages - 1));
+        panel.querySelector('.video-lyrics-workspace').classList.toggle('is-empty', displayLineup.length === 0);
         const start = lineupPage * pageSize, end = Math.min(start + pageSize, displayCount);
         const items = [];
         for (let index = start; index < end; index++) {
-            const entry = state.lineup[index];
-            if (!entry) { items.push(addSlot(`Add lyrics to lineup slot ${index + 1}`)); continue; }
-            const item = document.createElement('li'); item.className = 'video-lyrics-lineup-entry' + (entry.id === state.preparedId ? ' is-prepared' : '');
+            const entry = displayLineup[index];
+            if (!entry) { if (!syncing) items.push(addSlot(`Add lyrics to lineup slot ${index + 1}`)); continue; }
+            const activeBlock = syncing ? entry.blockIndex === activeTextPosition?.blockIndex : entry.id === state.preparedId;
+            const item = document.createElement('li'); item.className = 'video-lyrics-lineup-entry' + (activeBlock ? ' is-prepared' : '');
+            item.classList.toggle('is-text-sync-entry', syncing);
             item.dataset.lineupId = entry.id;
-            const tag = document.createElement('span'); tag.className = 'video-lyrics-lineup-tag'; tag.textContent = state.live?.entryId === entry.id ? 'ON OUTPUT' : String(index + 1).padStart(2, '0');
-            const select = button(entry.title, `Prepare ${entry.title}`, () => model.prepare(entry.id), 'video-lyrics-lineup-select'); select.setAttribute('aria-current', String(entry.id === state.preparedId)); select.dataset.videoFocus = `prepare-${entry.id}`;
+            const tag = document.createElement('span'); tag.className = 'video-lyrics-lineup-tag'; tag.textContent = activeBlock && state.live?.entryId === 'text-sync' ? 'ON OUTPUT' : String((syncing ? entry.blockIndex : index) + 1).padStart(2, '0');
+            const select = button(entry.title, syncing ? `Go to ${entry.title}` : `Prepare ${entry.title}`, () => syncing ? navigateToTextBlock(entry) : model.prepare(entry.id), 'video-lyrics-lineup-select'); select.setAttribute('aria-current', String(activeBlock)); select.dataset.videoFocus = `prepare-${entry.id}`;
             const actions = document.createElement('div'); actions.className = 'video-lyrics-lineup-actions';
-            const handle = button('', `Drag ${entry.title} to reorder`, () => {}, 'video-lyrics-drag-handle'); handle.innerHTML = '<i class="fa-solid fa-grip-vertical" aria-hidden="true"></i>';
-            handle.addEventListener('pointerdown', event => {
-                if (event.button !== 0) return;
-                pointerDrag = { id: String(entry.id), pointerId: event.pointerId, x: event.clientX, y: event.clientY, moved: false };
-                handle.setPointerCapture(event.pointerId);
-            });
-            handle.addEventListener('keydown', event => {
-                if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
-                event.preventDefault(); event.stopPropagation();
-                const current = model.getState().lineup.findIndex(song => song.id === entry.id);
-                const delta = event.key === 'ArrowUp' ? -1 : 1;
-                if (current >= 0 && current + delta >= 0 && current + delta < model.getState().lineup.length) model.move(entry.id, delta);
-            });
+            if (!syncing) {
+                const handle = button('', `Drag ${entry.title} to reorder`, () => {}, 'video-lyrics-drag-handle'); handle.innerHTML = '<i class="fa-solid fa-grip-vertical" aria-hidden="true"></i>';
+                handle.addEventListener('pointerdown', event => {
+                    if (event.button !== 0) return;
+                    pointerDrag = { id: String(entry.id), pointerId: event.pointerId, x: event.clientX, y: event.clientY, moved: false };
+                    handle.setPointerCapture(event.pointerId);
+                });
+                handle.addEventListener('keydown', event => {
+                    if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+                    event.preventDefault(); event.stopPropagation();
+                    const current = model.getState().lineup.findIndex(song => song.id === entry.id);
+                    const delta = event.key === 'ArrowUp' ? -1 : 1;
+                    if (current >= 0 && current + delta >= 0 && current + delta < model.getState().lineup.length) model.move(entry.id, delta);
+                });
+                const edit = button('', `Edit ${entry.title}`, () => openLyricsEditor(entry.id)); edit.innerHTML = '<i class="fa-solid fa-pencil" aria-hidden="true"></i>'; edit.dataset.videoFocus = `edit-${entry.id}`;
+                const remove = button('', `Remove ${entry.title}`, () => model.remove(entry.id)); remove.innerHTML = '<i class="fa-solid fa-trash" aria-hidden="true"></i>';
+                actions.append(edit, remove); item.append(handle);
+            }
             const content = document.createElement('div'); content.className = 'video-lyrics-lineup-content'; content.append(tag, select);
-            const edit = button('', `Edit ${entry.title}`, () => openLyricsEditor(entry.id)); edit.innerHTML = '<i class="fa-solid fa-pencil" aria-hidden="true"></i>'; edit.dataset.videoFocus = `edit-${entry.id}`;
-            const remove = button('', `Remove ${entry.title}`, () => model.remove(entry.id)); remove.innerHTML = '<i class="fa-solid fa-trash" aria-hidden="true"></i>';
-            actions.append(edit, remove); item.append(handle, content, actions); items.push(item);
+            item.append(content);
+            if (!syncing) item.append(actions);
+            items.push(item);
         }
         get('lineup').replaceChildren(...items);
         get('lineup-pages').hidden = pages <= 1;
@@ -106,41 +311,69 @@
         const later = button('›', 'Next lineup page', () => { lineupPage++; render(model.getState()); }); later.disabled = lineupPage >= pages - 1;
         const pageLabel = document.createElement('span'); pageLabel.textContent = `${lineupPage + 1} / ${Math.max(1, pages)}`;
         get('lineup-pages').replaceChildren(earlier, pageLabel, later);
-        get('song-title').textContent = prepared?.title || 'Ready when you are';
-        get('song-meta').textContent = prepared ? `${prepared.cues.length} cues · Click a line or use ↑ / ↓ to cue` : 'Search the library to build a lineup.';
-        get('cue-empty').hidden = !!prepared?.cues.length;
-        get('cues').hidden = !prepared?.cues.length;
-        const cuesChanged = previousPrepared !== prepared?.id || previousCues !== prepared?.cues;
-        if (cuesChanged) get('cues').replaceChildren(...(prepared?.cues || []).map((cue, index) => {
-            const isLive = state.live?.entryId === prepared.id && state.live.index === index;
-            const cueButton = button('', `${cue.isTitle ? 'Cue song title' : `Cue line ${index}`}: ${cue.text}`, () => model.cue(index), 'video-lyrics-cue');
-            cueButton.classList.toggle('is-live', isLive); cueButton.classList.toggle('is-prepared', !isLive && index === state.preparedIndex);
-            cueButton.classList.toggle('is-title', !!cue.isTitle);
-            cueButton.classList.toggle('is-section', index > 0 && prepared.cues[index - 1].section !== cue.section);
-            cueButton.setAttribute('aria-current', String(isLive)); cueButton.dataset.videoFocus = `cue-${prepared.id}-${index}`;
-            const number = document.createElement('span'); number.className = 'video-lyrics-cue-number'; number.textContent = String(index + 1).padStart(2, '0');
+        get('song-title').textContent = syncing ? (prepared?.title || 'Waiting for Text Lyrics') : (prepared?.title || 'Ready when you are');
+        get('song-meta').textContent = syncing
+            ? (prepared ? `${prepared.lines.length} source lines · Click a line or use ↑ / ↓ to navigate Text Lyrics` : 'Send Text Lyrics to populate the synced lineup.')
+            : (prepared ? `${prepared.cues.length} cues · Click a line or use ↑ / ↓ to cue` : 'Search the library to build a lineup.');
+        const emptyHeading = get('cue-empty').querySelector('h3');
+        const emptyMessage = get('cue-empty').querySelector('p');
+        if (syncing) {
+            emptyHeading.textContent = hasBoundTextPrompter ? 'Waiting for a text lyric.' : 'Waiting for Text Lyrics.';
+            emptyMessage.textContent = hasBoundTextPrompter ? 'The current text marker is not on a lyric line.' : 'Send Text Lyrics to bind a prompter and build this lineup.';
+        } else {
+            emptyHeading.textContent = 'Select a song.';
+            emptyMessage.textContent = 'Add a song, then click a lyric or use the arrow keys to prompt it.';
+        }
+        get('cue-empty').hidden = displayCues.length > 0;
+        get('cues').hidden = displayCues.length === 0;
+        const cuesChanged = previousPrepared !== prepared?.id || previousCues !== displayCues;
+        if (cuesChanged) get('cues').replaceChildren(...displayCues.map((cue, index) => {
+            const isLive = syncing
+                ? activeTextPosition?.blockIndex === prepared.blockIndex && activeTextPosition?.sourceLineIndex === cue.sourceLineIndex
+                : state.live?.entryId === prepared.id && state.live.index === index;
+            const sourceLineNumber = cue.sourceLineIndex + 1;
+            const label = syncing ? `Go to Text Lyrics line ${sourceLineNumber}: ${cue.text}` : `${cue.isTitle ? 'Cue song title' : `Cue line ${index + 1}`}: ${cue.text}`;
+            const cueButton = button('', label, () => syncing
+                ? navigateToTextPosition({ blockIndex: prepared.blockIndex, sourceLineIndex: cue.sourceLineIndex })
+                : model.cue(index), 'video-lyrics-cue');
+            cueButton.classList.toggle('is-live', isLive); cueButton.classList.toggle('is-prepared', !syncing && !isLive && index === state.preparedIndex);
+            cueButton.classList.toggle('is-title', !syncing && !!cue.isTitle);
+            cueButton.classList.toggle('is-section', !syncing && index > 0 && prepared.cues[index - 1].section !== cue.section);
+            cueButton.setAttribute('aria-current', String(isLive)); cueButton.dataset.videoFocus = `cue-${prepared.id}-${syncing ? cue.sourceLineIndex : index}`;
+            const number = document.createElement('span'); number.className = 'video-lyrics-cue-number'; number.textContent = String(syncing ? sourceLineNumber : index + 1).padStart(2, '0');
             const text = document.createElement('span'); text.textContent = cue.text; cueButton.append(number, text); return cueButton;
         }));
-        previousPrepared = prepared?.id; previousCues = prepared?.cues;
+        previousPrepared = prepared?.id; previousCues = displayCues;
         Array.from(get('cues').children).forEach((element, index) => {
-            const live = state.live?.entryId === prepared?.id && state.live.index === index;
-            element.classList.toggle('is-live', live); element.classList.toggle('is-prepared', !live && index === state.preparedIndex);
+            const cue = displayCues[index];
+            const live = syncing
+                ? activeTextPosition?.blockIndex === prepared?.blockIndex && activeTextPosition?.sourceLineIndex === cue?.sourceLineIndex
+                : state.live?.entryId === prepared?.id && state.live.index === index;
+            element.classList.toggle('is-live', live); element.classList.toggle('is-prepared', !syncing && !live && index === state.preparedIndex);
             element.setAttribute('aria-current', String(live));
         });
-        const cueKey = `${prepared?.id}:${state.preparedIndex}`;
+        const cueKey = `${prepared?.id}:${activeCueIndex}`;
         if (cueKey !== previousCueKey || cuesChanged) {
             previousCueKey = cueKey;
-            const active = get('cues').children[state.preparedIndex];
+            const active = get('cues').children[activeCueIndex];
             if (active) {
                 const container = get('cues'), rect = active.getBoundingClientRect(), viewport = container.getBoundingClientRect();
                 const top = container.scrollTop + rect.top - viewport.top - (container.clientHeight - rect.height) / 2;
                 container.scrollTo({ top: Math.max(0, Math.min(container.scrollHeight - container.clientHeight, top)), behavior: 'instant' });
             } else if (cuesChanged) get('cues').scrollTop = 0;
         }
-        get('prev').disabled = !prepared?.cues.length || state.preparedIndex <= 0;
-        get('next').disabled = !prepared?.cues.length || state.preparedIndex >= prepared.cues.length - 1;
+        get('prev').disabled = syncing
+            ? !hasBoundTextPrompter || !model.getNextTextPosition(-1)
+            : !prepared?.cues.length || state.preparedIndex <= 0;
+        get('next').disabled = syncing
+            ? !hasBoundTextPrompter || !model.getNextTextPosition(1)
+            : !prepared?.cues.length || state.preparedIndex >= prepared.cues.length - 1;
         const liveEntry = state.lineup.find(entry => entry.id === state.live?.entryId);
-        get('live-label').textContent = state.live ? `ON OUTPUT · ${liveEntry?.title} · Cue ${state.live.index + 1}` : 'No lyric on output';
+        get('background-name').textContent = state.background?.name || 'No background selected';
+        get('background-name').title = state.background?.name || '';
+        get('live-label').textContent = !state.live ? 'No lyric on output'
+            : state.live.entryId === 'text-sync' ? `ON OUTPUT · TEXT LYRICS · Block ${(state.live.blockIndex ?? 0) + 1} · Line ${state.live.index + 1}`
+                : `ON OUTPUT · ${liveEntry?.title} · Cue ${state.live.index + 1}`;
         const settings = state.settings;
         [['font', 'fontFamily'], ['weight', 'fontWeight'], ['size', 'fontSize'], ['color', 'color'], ['hex', 'color'], ['alignment', 'alignment'], ['fade', 'fadeMs'], ['dimming', 'dimming']].forEach(([id, key]) => { if (document.activeElement !== get(id)) get(id).value = settings[key]; });
         syncFontPicker(settings);
@@ -216,7 +449,7 @@
             onClose() { requestAnimationFrame(() => { if (get('editor').open) return; const added = model.getState().lineup.at(-1); (added && panel.querySelector(`[data-video-focus="prepare-${added.id}"]`) || get('lineup').querySelector('.video-lyrics-lineup-slot-button'))?.focus({ preventScroll: true }); }); },
         });
     }
-    get('prev').onclick = () => model.advance(-1); get('next').onclick = () => model.advance(1);
+    get('prev').onclick = () => advanceVideoLyrics(-1); get('next').onclick = () => advanceVideoLyrics(1);
     [['font', 'fontFamily'], ['weight', 'fontWeight'], ['size', 'fontSize'], ['color', 'color'], ['alignment', 'alignment'], ['fade', 'fadeMs'], ['dimming', 'dimming']].forEach(([id, key]) => get(id).addEventListener('input', () => { if (get(id).value !== '') model.updateSettings({ [key]: get(id).value }); }));
     [['size', 'fontSize'], ['fade', 'fadeMs'], ['dimming', 'dimming']].forEach(([id, key]) => {
         const field = get(id);
@@ -226,26 +459,31 @@
     });
     get('hex').addEventListener('input', () => { const valid = /^#[\da-f]{6}$/i.test(get('hex').value); get('hex').setAttribute('aria-invalid', String(!valid)); if (valid) model.updateSettings({ color: get('hex').value }); });
     get('hex').addEventListener('change', () => { get('hex').value = model.getState().settings.color; get('hex').setAttribute('aria-invalid', 'false'); });
-    ['open', 'background'].forEach(action => get(action).addEventListener('click', () => panel.dispatchEvent(new CustomEvent(`video-lyrics-${action}`, { bubbles: true }))));
+    get('open').addEventListener('click', () => panel.dispatchEvent(new CustomEvent('video-lyrics-open', { bubbles: true })));
+    get('background').addEventListener('click', event => {
+        const backgrounds = window.eclyricsVideoBackgrounds;
+        if (backgrounds?.openDialog) backgrounds.openDialog(event.currentTarget);
+        else panel.dispatchEvent(new CustomEvent('video-lyrics-background', { bubbles: true }));
+    });
     get('blank').addEventListener('click', () => model.blankOutput());
     document.addEventListener('keydown', event => {
         if (!panel.classList.contains('is-active') || event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || document.querySelector('dialog[open]') || event.target.closest('input,textarea,select,[contenteditable="true"],[role="dialog"]')) return;
         if (!['ArrowUp', 'ArrowDown'].includes(event.key)) return;
         if (event.repeat) return;
-        event.preventDefault(); model.advance(event.key === 'ArrowDown' ? 1 : -1);
+        event.preventDefault(); advanceVideoLyrics(event.key === 'ArrowDown' ? 1 : -1);
 
     });
     const fontRegistry = window.eclyricsVideoFonts;
     const fontDialog = document.createElement('dialog'); fontDialog.className = 'video-font-dialog';
     fontDialog.setAttribute('aria-labelledby', 'video-font-heading');
     fontDialog.innerHTML = '<header class="video-lyrics-section-head"><h3 id="video-font-heading">Choose a font</h3><button type="button" class="video-lyrics-icon" aria-label="Close fonts">×</button></header><div class="video-font-toolbar"><input type="search" placeholder="Search fonts…" aria-label="Search fonts"><select aria-label="Font category"><option value="All">All</option><option value="Sans Serif">Sans Serif</option><option value="Serif">Serif</option><option value="Cursive">Cursive</option></select></div><div class="video-font-list"></div><button type="button" class="video-lyrics-button video-font-import">+ Add your own font</button><p class="video-lyrics-muted" role="status">TTF, OTF, WOFF or WOFF2 · Session only · Up to 10 MB</p>';
-    panel.append(fontDialog);
+    document.body.append(fontDialog);
     const fontSearch = fontDialog.querySelector('input'), fontCategory = fontDialog.querySelector('select'), fontList = fontDialog.querySelector('.video-font-list');
-    const fontFile = document.createElement('input'); fontFile.type = 'file'; fontFile.accept = '.ttf,.otf,.woff,.woff2'; fontFile.hidden = true; panel.append(fontFile);
+    const fontFile = document.createElement('input'); fontFile.type = 'file'; fontFile.accept = '.ttf,.otf,.woff,.woff2'; fontFile.hidden = true; document.body.append(fontFile);
     function syncFontPicker(settings) {
         const metadata = fontRegistry.metadata().find(font => font.family === settings.fontFamily);
         if (!metadata) return;
-        const trigger = get('font-trigger'); trigger.querySelector('.video-lyrics-font-trigger-name').textContent = metadata.name; trigger.style.fontFamily = `"${metadata.family}"`;
+        const trigger = get('font-trigger'); trigger.querySelector('.video-lyrics-font-trigger-name').textContent = metadata.name; trigger.style.fontFamily = `"${metadata.family}"`; trigger.setAttribute('aria-label', `Choose video lyrics font. Current font: ${metadata.name}`);
         const weights = metadata.weights;
         if (get('weight').dataset.family !== metadata.family) {
             const names = {400:'Regular',500:'Medium',600:'Semibold',700:'Bold',800:'Extra bold',900:'Black'};
@@ -295,5 +533,6 @@
     });
     lineupResize.observe(get('lineup'));
     model.subscribe(render); render(model.getState());
-    window.eclyricsVideoLyrics = { ...model, status, panel };
+    window.addEventListener('pagehide', () => prompterPositionChannel?.close(), { once: true });
+    window.eclyricsVideoLyrics = { ...model, advance: advanceVideoLyrics, status, backgroundStatus, panel, showSyncFeedback };
 })();

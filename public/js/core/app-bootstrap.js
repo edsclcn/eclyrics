@@ -1,9 +1,9 @@
 (async function bootstrapApp() {
     const fragmentDefinitions = [
         { file: 'sign-in.html', mountId: 'auth-gate-mount', rootId: 'auth-gate' },
-        { file: 'text-lyrics.html', panelId: 'panel-text' },
+        { file: 'text-lyrics.html', panelId: 'panel-text', cacheVersion: '20261017-sync-stacked-preview' },
         { file: 'image-lyrics.html', panelId: 'panel-image' },
-        { file: 'video-lyrics.html', panelId: 'panel-video', cacheVersion: '20261004-background-dim-30' },
+        { file: 'video-lyrics.html', panelId: 'panel-video', cacheVersion: '20261017-sync-preview-controls' },
         { file: 'admin.html', panelId: 'panel-admin', overlayId: 'admin-delete-dialog' },
     ];
 
@@ -20,21 +20,21 @@
         'js/library/song-search.js',
         'js/library/song-library.js',
         'js/features/admin/admin-panel.js',
-        'js/features/prompter/prompter-shortcuts.js',
+        'js/features/prompter/prompter-shortcuts.js?v=20261017-sync-marker',
         'js/features/prompter/prompter-sync-guard.js',
         'js/features/editor/block-source.js?v=20261003-video-lyrics-grid-upload',
-        'js/features/editor/index.js',
+        'js/features/editor/index.js?v=20261017-sync-stacked-preview',
         'js/features/editor/workspace-tour.js',
         'js/features/editor/port.js',
         'js/features/image-lyrics/index.js',
         'js/features/video-lyrics/fonts.js?v=20261003-video-lyrics-grid-upload',
-        'js/features/video-lyrics/model.js?v=20261004-background-dim-30',
-        'js/features/video-lyrics/index.js?v=20261003-video-font-picker-blank',
+        'js/features/video-lyrics/model.js?v=20261017-lyric-sync',
+        'js/features/video-lyrics/index.js?v=20261017-sync-preview-controls',
         'js/features/video-lyrics/stage.js?v=20261003-video-cue-fit-sync',
-        'js/features/video-lyrics/output.js?v=20261003-video-cue-fit-sync',
+        'js/features/video-lyrics/output.js?v=20261017-sync-preview-controls',
         'js/features/video-lyrics/local-media.js?v=20261003-video-lyrics-grid-upload',
-        'js/features/video-lyrics/backgrounds.js?v=20261004-video-background-loading',
-        'js/features/editor/textformatting.js',
+        'js/features/video-lyrics/backgrounds.js?v=20261017-sync-preview-controls',
+        'js/features/editor/textformatting.js?v=20261017-lyric-sync',
     ];
 
     const moduleUrl = (file, cacheVersion) => {

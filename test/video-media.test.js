@@ -114,11 +114,12 @@ test('White Stars MP4 places its playback index before video data for streaming 
     assert.notEqual(mediaDataIndex, -1, 'White Stars contains a media data box');
     assert.ok(moovIndex < mediaDataIndex, 'the movie index precedes media data so browsers can render a streaming preview');
 });
-test('Video activation persists only selected videos and background previews mount only while picker is open', async () => {
+test('Video activation loads only selected media and the background picker can be opened from Text Sync', async () => {
     const callbacks = [], saveCalls = new Map(), saved = new Set(), videos = []; let active = false, selected = [], loads = 0, nextLoad = null, nextProbe = null;
+    const statuses = [], backgroundStatuses = [];
     const panelListeners = new Map();
     const panel = { classList: { contains: name => name === 'is-active' && active }, addEventListener(name, callback) { panelListeners.set(name, callback); }, append() {} };
-    const controller = { panel, status() {}, getState: () => ({ background: selected.at(-1) || null }), setBackground: value => selected.push(value) };
+    const controller = { panel, status: (message, error = false) => statuses.push({ message, error }), backgroundStatus: (message, error = false) => backgroundStatuses.push({ message, error }), getState: () => ({ background: selected.at(-1) || null }), setBackground: value => selected.push(value) };
     const mediaApi = {
         async isSaved(item) { return saved.has(`${item.id}:${item.version}`); },
         async save(item) {
@@ -166,7 +167,7 @@ test('Video activation persists only selected videos and background previews mou
         node.dispatch = name => node.listeners.get(name)?.();
         elements.push(node); return node;
     }
-    const document = { activeElement: { focus() {} }, createElement: element };
+    const document = { activeElement: { focus() {} }, body: element('body'), createElement: element, addEventListener() {} };
     vm.runInNewContext(fs.readFileSync('public/js/features/video-lyrics/backgrounds.js', 'utf8'), {
         window, document,
         MutationObserver: class { constructor(callback) { callbacks.push(callback); } observe() {} disconnect() {} },
@@ -203,9 +204,10 @@ test('Video activation persists only selected videos and background previews mou
     await window.eclyricsVideoBackgrounds.select(catalogue[1]);
     await new Promise(resolve => setImmediate(resolve));
     assert.deepEqual([...saveCalls.keys()], ['white-stars:2', 'blue-weightless:1'], 'choosing another preset saves only that selected video');
+    assert.equal(backgroundStatuses.at(-1).message, 'Background 2 selected.', 'the selected background name is reflected in the preview status');
 
     const dialog = elements.find(item => item.tagName === 'DIALOG');
-    panelListeners.get('video-lyrics-background')();
+    panelListeners.get('video-lyrics-background')({ detail: {} });
     assert.equal(dialog.open, true, 'background picker opens in response to its panel event');
     assert.ok(videos.every(video => video.src === video.dataset.src), 'preview sources are assigned while the picker is open');
     const previewCards = dialog.querySelector('.video-background-grid').children.slice(0, catalogue.length);
@@ -255,7 +257,7 @@ test('Video activation persists only selected videos and background previews mou
     assert.ok(previewCards.every(button => button.children[0].dataset.previewState === 'idle'), 'closing the picker resets preview state');
     assert.ok(videos.every(video => !video.listeners.has('loadeddata') && !video.listeners.has('error')),
         'closing the picker removes the temporary preview handlers');
-    panelListeners.get('video-lyrics-background')();
+    panelListeners.get('video-lyrics-background')({ detail: {} });
     assert.equal(previewCards[4].children[0].dataset.previewState, 'loading');
     staleLoadedData();
     assert.equal(previewCards[4].children[0].dataset.previewState, 'loading', 'a stale event from the previous open cannot clear the current loading state');
@@ -265,6 +267,18 @@ test('Video activation persists only selected videos and background previews mou
     active = false; callbacks[0](); active = true; callbacks[0]();
     await new Promise(resolve => setImmediate(resolve));
     assert.deepEqual([...saveCalls.keys()], ['white-stars:2', 'blue-weightless:1', 'green-lense-glare:1'], 'revisiting the page does not persist unselected videos');
+
+    active = false; callbacks[0]();
+    selected = [];
+    const previousLoads = loads;
+    await window.eclyricsVideoBackgrounds.ensureDefault();
+    assert.equal(loads, previousLoads + 1, 'Text Sync can lazily load the default while the Video panel is inactive');
+    assert.equal(selected[0].id, 'white-stars');
+    const syncBackgroundButton = { isConnected: true, focusCalls: 0, focus() { this.focusCalls += 1; } };
+    window.eclyricsVideoBackgrounds.openDialog(syncBackgroundButton);
+    assert.equal(dialog.open, true, 'the reparented Background control opens the picker while Text Lyrics is active');
+    dialog.close();
+    assert.equal(syncBackgroundButton.focusCalls, 1, 'closing the picker returns focus to the Text Sync Background control');
 });
 test('failed and empty downloads reject and can be retried', async () => {
     let attempt = 0;
@@ -279,10 +293,10 @@ test('personal selection is session-only, validated, and never sent to cache or 
         elements.push(node); return node;
     }
     const panel = element(), window = {
-        eclyricsVideoLyrics: { panel, status: (message, error) => statuses.push({ message, error }), getState: () => ({ background: backgrounds.at(-1) }), setBackground: value => backgrounds.push(value) },
+        eclyricsVideoLyrics: { panel, status: (message, error) => statuses.push({ message, error }), backgroundStatus: (message, error) => statuses.push({ message, error }), getState: () => ({ background: backgrounds.at(-1) }), setBackground: value => backgrounds.push(value) },
         eclyricsVideoLocalMedia: { create: () => ({ load: async () => { loads++; }, save: async () => { saves++; }, isSaved: async () => false }), probe: async file => { probes++; if (deferredProbe) { const request = deferredProbe; deferredProbe = null; await request.promise; } if (file.name === 'invalid') throw new Error('Unsupported video'); } },
     };
-    vm.runInNewContext(fs.readFileSync('public/js/features/video-lyrics/backgrounds.js', 'utf8'), { window, document: { createElement: element }, MutationObserver: class { observe() {} disconnect() {} } });
+    vm.runInNewContext(fs.readFileSync('public/js/features/video-lyrics/backgrounds.js', 'utf8'), { window, document: { body: element('body'), createElement: element, addEventListener() {} }, MutationObserver: class { observe() {} disconnect() {} } });
     assert.equal(loads, 0, 'inactive Video panel must not download default media');
     const picker = elements.find(n => n.type === 'file');
     const uploadButton = elements.find(n => n.dataset.baseLabel === 'Add your own video for this session');
@@ -294,6 +308,7 @@ test('personal selection is session-only, validated, and never sent to cache or 
     finishProbe(); await new Promise(resolve => setImmediate(resolve));
     assert.equal(backgrounds.length, 1); assert.equal(backgrounds[0].blob, file); assert.equal(backgrounds[0].id, 'session-1');
     assert.equal(loads, 0); assert.equal(saves, 0); assert.equal(probes, 1);
+    assert.equal(statuses.at(-1).message, 'personal.mp4 selected for this session. Nothing was uploaded.', 'a custom video name and session-only status are exposed');
     assert.equal(uploadButton.attributes['aria-label'], 'Add your own video for this session', 'the upload card restores its session-only label after import');
     assert.equal(uploadButton.attributes['aria-busy'], 'false');
     picker.files = [{ name: 'empty', size: 0 }]; await picker.onchange(); await new Promise(resolve => setImmediate(resolve));

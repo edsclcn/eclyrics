@@ -1,7 +1,11 @@
 (function () {
     const api = window.eclyricsVideoLyrics, renderer = window.eclyricsVideoStage;
     if (!api || !renderer) return;
-    const stage = renderer.create(document.getElementById('video-lyrics-preview-stage'), message => api.status(message, true));
+    function isBackgroundPlaybackError(message) { return /background|video.*(?:playback|could not play|could not start)/i.test(message); }
+    const stage = renderer.create(document.getElementById('video-lyrics-preview-stage'), message => {
+        api.status(message, true);
+        if (isBackgroundPlaybackError(message)) api.backgroundStatus?.(message, true);
+    });
     let popup = null, ready = false, revision = 0, syncRevision = 0, sentBackground = undefined, lastAcknowledged = -1, sentFont = undefined;
     function payload(includeBackground) {
         const state = api.getState();
@@ -24,18 +28,27 @@
         sentBackground = preview.background;
     }
     api.subscribe(sync); sync();
-    api.panel.addEventListener('video-lyrics-open', () => {
-        if (popup && !popup.closed) { popup.focus(); sync(); return; }
+    function openOutputWindow() {
+        void window.eclyricsVideoBackgrounds?.ensureDefault?.();
+        if (popup && !popup.closed) { popup.focus(); sync(); return { ok: true }; }
         ready = false; sentFont = undefined; sentBackground = undefined; lastAcknowledged = -1;
         popup = window.open('video-prompter.html?v=20261003-video-cue-fit-sync', 'eclyricsVideoPrompter', 'popup,width=1280,height=720');
         api.status(popup ? 'Opening video prompter…' : 'Allow popups to open the video prompter.', !popup);
-    });
+        return popup ? { ok: true } : { ok: false, reason: 'popup-blocked' };
+    }
+    api.openOutputWindow = openOutputWindow;
+    api.panel.addEventListener('video-lyrics-open', openOutputWindow);
     window.addEventListener('message', event => {
         if (event.origin !== location.origin || event.source !== popup || event.data?.channel !== renderer.CHANNEL) return;
         const message = event.data;
         if (message.type === 'ready') { ready = true; sentFont = undefined; sentBackground = undefined; api.status('Video prompter connected.'); sync(); }
         else if (message.type === 'ack' && Number.isSafeInteger(message.revision) && message.revision > lastAcknowledged && message.revision <= revision) lastAcknowledged = message.revision;
-        else if (message.type === 'error' && typeof message.message === 'string') api.status(message.message.slice(0, 300), true);
+        else if (message.type === 'error' && typeof message.message === 'string') {
+            const error = message.message.slice(0, 300);
+            api.status(error, true);
+            if (isBackgroundPlaybackError(error)) api.backgroundStatus?.(error, true);
+        }
+        else if (message.type === 'playback-started') api.backgroundStatus?.('', false);
         else if (message.type === 'advance' && [1, -1].includes(message.delta)) api.advance(message.delta);
     });
     const closedCheck = setInterval(() => { if (popup?.closed) { popup = null; ready = false; api.status('Video prompter closed.'); } }, 1000);

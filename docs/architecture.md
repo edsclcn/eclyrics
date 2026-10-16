@@ -87,18 +87,54 @@ video-only dimming. Optional manual/paste callbacks reuse the shared picker; a
 Video Lyrics title/body editor saves to one in-memory lineup instance without
 writing to Firestore.
 
+Text and Video Lyrics synchronization is an optional, page-local mode and starts
+Off. `public/js/features/editor/textformatting.js` marks source lines;
+`public/js/features/prompter/prompter.js` reads the line crossing the
+configurable marker and publishes its text and source index over the
+`eclyrics-prompter` BroadcastChannel. `public/js/features/video-lyrics/index.js`
+accepts positions only from the Text prompter lineup bound to this editor.
+`public/js/features/video-lyrics/model.js` sends the received text directly to
+the Video Lyrics stage. Sync does not match against a Video Lyrics song, so
+Video Lyrics search and lineup preparation are not required for text-driven
+output.
+
+Text Lyrics remains the main workspace. With Sync on and Text Lyrics active, the
+Video preview is placed below the Text prompter preview in the existing
+right-hand preview column. The reading marker defaults to the midpoint and can
+be dragged or adjusted from the keyboard; its position is remembered in browser
+storage and controls which source lyric line drives the Video stage. Video
+appearance and background settings stay in the Video Lyrics workspace and
+apply to synced output. The embedded Video card reuses the Video preview card,
+hides **Open Prompter**, and keeps **Blank**, the shared font picker, and
+**Background**. The same font trigger and background chooser work from either
+workspace; detailed appearance controls remain in Video Lyrics. The card shows
+the selected curated or custom background name and background loading/error
+status. Background and appearance changes update the preview and audience
+popup. **Blank** clears the lyric while keeping its background. Audience popup
+playback errors appear in the embedded status and clear after **Start** succeeds.
+
+The Sync toggle alone opens no windows if the Text prompter is not already
+open. If it is open, enabling Sync opens or focuses only the Video Lyrics
+window. Sending Text Lyrics opens or updates the Text prompter and, when Sync is
+on, opens or focuses the Video Lyrics window too. A blocked Video popup is
+reported in the Sync status. Turning Sync off leaves existing output windows
+and the current video line live; manually cueing a Video Lyrics line pauses
+Sync and turns off both switches. Sync state resets to Off on page reload.
+
 The seven repository-hosted background presets live under
 `public/assets/videos/`; `white-stars.mp4` is **Background 1** and the default.
 The other concise, title-cased descriptions follow their filenames. Preview
 video sources are attached and played only while the background picker is open,
-then paused and detached when it closes. The media adapter fetches the selected
-preset and saves only that Blob to per-browser IndexedDB under its catalogue
-ID/version key; it does not download or cache the full catalogue on activation.
-Later selections reuse saved entries, while an uncached preset is fetched when
-selected. This browser storage is distinct from Firebase Hosting's CDN cache
-and is subject to browser eviction or clearing. A user-selected video is
-decode-checked and held only in page memory for that session; it is neither
-uploaded nor saved to IndexedDB. Video output
+then paused and detached when it closes. The default background loads lazily
+when Video Lyrics is activated or Sync/output needs video, so Text-only synced
+use does not require visiting the Video Lyrics workspace. The media adapter
+fetches the selected preset and saves only that Blob to per-browser IndexedDB
+under its catalogue ID/version key; it does not download or cache the full
+catalogue on activation. Later selections reuse saved entries, while an
+uncached preset is fetched when selected. This browser storage is distinct from
+Firebase Hosting's CDN cache and is subject to browser eviction or clearing. A
+user-selected video is decode-checked and held only in page memory for that
+session; it is neither uploaded nor saved to IndexedDB. Video output
 fonts and local declarations are owned by `video-lyrics/fonts.js` and
 `public/assets/css/video-fonts.css`; font licenses/source notices are stored
 alongside the font files. The actual-face font picker searches alphabetical
@@ -111,10 +147,11 @@ asset.
 The Video Lyrics workspace has three equally tall fixed shells. Only the
 middle cue container scrolls; its highlighted cue is centered with clamped
 container scrolling. Lineup pagination keeps entries reachable without another
-workspace scroll area. Native modal dialogs retain their own bounded content. The video CSS files, scripts,
-module fragment, and bootstrap entry use the
-`20261003-video-workspace-redesign` cache version in their URLs to refresh deployed
-assets together.
+workspace scroll area. Native modal dialogs retain their own bounded content.
+The stacked preview layout, workspace fragments, and related controllers use
+the `20261017-sync-stacked-preview` cache version. Prompter marker assets use
+`20261017-sync-marker`; the Video Lyrics model and source-line formatting use
+`20261017-lyric-sync`.
 
 ## Workspace URLs
 
