@@ -204,7 +204,8 @@ test('Video activation loads only selected media and the background picker can b
     await window.eclyricsVideoBackgrounds.select(catalogue[1]);
     await new Promise(resolve => setImmediate(resolve));
     assert.deepEqual([...saveCalls.keys()], ['white-stars:2', 'blue-weightless:1'], 'choosing another preset saves only that selected video');
-    assert.equal(backgroundStatuses.at(-1).message, 'Background 2 selected.', 'the selected background name is reflected in the preview status');
+    assert.equal(backgroundStatuses.at(-1).message, '', 'the selected background name is shown in its dedicated label, not repeated as status text');
+    assert.ok(backgroundStatuses.some(({ message }) => message === 'Loading Background 2…'), 'loading feedback remains visible while a background loads');
 
     const dialog = elements.find(item => item.tagName === 'DIALOG');
     panelListeners.get('video-lyrics-background')({ detail: {} });
@@ -241,6 +242,7 @@ test('Video activation loads only selected media and the background picker can b
     probing.resolve();
     await selection;
     assert.equal(previewCards[2].dataset.selectionBusy, 'false', 'successful selection clears its busy state');
+    assert.equal(backgroundStatuses.at(-1).message, '', 'a successfully selected background does not leave redundant status text');
 
     const failedLoad = deferred(); nextLoad = failedLoad;
     const failedSelection = window.eclyricsVideoBackgrounds.select(catalogue[3], { close: false });
@@ -248,6 +250,8 @@ test('Video activation loads only selected media and the background picker can b
     failedLoad.reject(new Error('download failed'));
     await failedSelection;
     assert.equal(previewCards[3].dataset.selectionBusy, 'false', 'failed selection clears its busy state');
+    assert.equal(backgroundStatuses.at(-1).message, 'download failed', 'background loading errors remain visible');
+    assert.equal(backgroundStatuses.at(-1).error, true);
 
     const staleLoadedData = videos[4].listeners.get('loadeddata');
     dialog.close();
@@ -308,7 +312,7 @@ test('personal selection is session-only, validated, and never sent to cache or 
     finishProbe(); await new Promise(resolve => setImmediate(resolve));
     assert.equal(backgrounds.length, 1); assert.equal(backgrounds[0].blob, file); assert.equal(backgrounds[0].id, 'session-1');
     assert.equal(loads, 0); assert.equal(saves, 0); assert.equal(probes, 1);
-    assert.equal(statuses.at(-1).message, 'personal.mp4 selected for this session. Nothing was uploaded.', 'a custom video name and session-only status are exposed');
+    assert.equal(statuses.at(-1).message, '', 'a successfully selected personal video name is kept in the dedicated label, not repeated as status text');
     assert.equal(uploadButton.attributes['aria-label'], 'Add your own video for this session', 'the upload card restores its session-only label after import');
     assert.equal(uploadButton.attributes['aria-busy'], 'false');
     picker.files = [{ name: 'empty', size: 0 }]; await picker.onchange(); await new Promise(resolve => setImmediate(resolve));

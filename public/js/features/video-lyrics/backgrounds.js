@@ -18,7 +18,19 @@
     document.body.append(dialog);
     const grid = dialog.querySelector('.video-background-grid'), message = dialog.querySelector('[role=status]');
     const picker = document.createElement('input'); picker.type = 'file'; picker.accept = 'video/*'; picker.hidden = true; document.body.append(picker);
-    function status(text, error = false) { message.textContent = text; controller.status(text, error); controller.backgroundStatus?.(text, error); }
+    function status(text, error = false) {
+        message.textContent = dialog.open ? text : '';
+        if (dialog.open) {
+            controller.status('', false);
+            controller.backgroundStatus?.('', false);
+            return;
+        }
+        const visibleText = error || text.startsWith('Loading ') || text.startsWith('Checking ')
+            ? text
+            : '';
+        controller.status('', false);
+        controller.backgroundStatus?.(visibleText, error);
+    }
     const previewVideos = [];
     const previewState = new WeakMap();
     let activeSelectionButton = null, previewGeneration = 0;
@@ -105,9 +117,7 @@
             if (selection !== generation) return;
             controller.setBackground({ id: entry.id, version: entry.version, name: entry.name, blob });
             status(`${entry.name} selected.`); if (close && dialog.open) dialog.close(); refresh();
-            void media.save(entry).catch(() => {
-                if (selection === generation) status(`${entry.name} is playing but could not be saved on this browser.`, true);
-            });
+            void media.save(entry).catch(() => {});
         } catch (error) { if (selection === generation) status(error instanceof TypeError ? 'This background is unavailable offline. Connect and try again, or choose a personal video.' : error.message, true); }
         finally { if (selection === generation) { setCardBusy(activeSelectionButton, 'selectionBusy', false); activeSelectionButton = null; } }
     }
@@ -153,6 +163,7 @@
         if (dialog.open) return;
         returnFocus = trigger;
         refresh();
+        status('');
         dialog.showModal();
         const currentPreviewGeneration = ++previewGeneration;
         previewVideos.forEach(video => {

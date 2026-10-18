@@ -259,6 +259,9 @@ let scrollingNow = false;
 let animationLoop;
 let scrollPosition = 0;
 let scrollSpeed = 0.5;
+let pendingLoadBroadcastTimer = null;
+let sourceLineSeekVersion = 0;
+let pendingSourceLineSeek = null;
 try {
     const savedSp = sessionStorage.getItem('eclyrics-prompter-scroll-speed');
     if (savedSp) {
@@ -320,6 +323,42 @@ function pauseScroll() {
     scrollingNow = false;
 }
 
+function cancelPendingLoadBroadcast() {
+    if (pendingLoadBroadcastTimer === null) return;
+    clearTimeout(pendingLoadBroadcastTimer);
+    pendingLoadBroadcastTimer = null;
+}
+
+function deferLoadedTextBroadcast() {
+    cancelPendingLoadBroadcast();
+    pendingLoadBroadcastTimer = setTimeout(() => {
+        pendingLoadBroadcastTimer = null;
+        broadcastPrompterState();
+    }, 50);
+}
+
+function hasSourceLineInBlock(blockMarkup, sourceLineIndex) {
+    const block = document.createElement('div');
+    block.innerHTML = String(blockMarkup);
+    return [...block.querySelectorAll('[data-prompter-source-line]')].some((line) =>
+        Number(line.dataset.prompterSourceLine) === sourceLineIndex && line.textContent.replace(/\s+/g, ' ').trim(),
+    );
+}
+
+function seekSourceLineToReadingMarker(sourceLineIndex) {
+    const sourceLine = [...prompterContent.querySelectorAll('[data-prompter-source-line]')].find((line) =>
+        Number(line.dataset.prompterSourceLine) === sourceLineIndex && line.textContent.replace(/\s+/g, ' ').trim(),
+    );
+    const sourceLineRect = sourceLine && [...sourceLine.getClientRects()].find((rect) => rect.width > 0 && rect.height > 0);
+    if (!sourceLineRect) return false;
+
+    const stageRect = prompterContainer.getBoundingClientRect();
+    const readingMarkerY = stageRect.top + stageRect.height * prompterReadingMarkerRatio;
+    scrollPosition += readingMarkerY - sourceLineRect.top;
+    applyScrollPosition();
+    return true;
+}
+
 setText(currentIndex);
 
 if (prompterBroadcastChannel) {
@@ -337,39 +376,15 @@ if (prompterBroadcastChannel) {
 function setText(index, { broadcast = true } = {}) {
     const i = parseInt(index, 10);
     if (Number.isNaN(i)) return;
+    sourceLineSeekVersion++;
+    pendingSourceLineSeek = null;
+    if (broadcast) cancelPendingLoadBroadcast();
     currentIndex = i;
     if (scrollingNow) pauseScroll();
     scrollPosition = 0;
     prompterContent.style.top = "0px";
     prompterContent.innerHTML = data && data[currentIndex] != null ? data[currentIndex] : '\nNo content. Close the window.';
     if (broadcast) broadcastPrompterState();
-}
-
-function hasSourceLine(blockIndex, sourceLineIndex) {
-    if (!Array.isArray(data) || !Number.isInteger(blockIndex) || blockIndex < 0 || blockIndex >= data.length) return false;
-    if (sourceLineIndex === null) return true;
-    if (!Number.isInteger(sourceLineIndex) || sourceLineIndex < 0) return false;
-    const block = document.createElement('div');
-    block.innerHTML = String(data[blockIndex] ?? '');
-    const line = block.querySelector(`[data-prompter-source-line="${sourceLineIndex}"]`);
-    return Boolean(line?.textContent.trim());
-}
-
-function navigateToSourceLine(blockIndex, sourceLineIndex) {
-    if (!hasSourceLine(blockIndex, sourceLineIndex)) return false;
-
-    setText(blockIndex, { broadcast: false });
-    if (sourceLineIndex !== null) {
-        const line = prompterContent.querySelector(`[data-prompter-source-line="${sourceLineIndex}"]`);
-        const lineRect = line?.getBoundingClientRect();
-        const stageRect = prompterContainer.getBoundingClientRect();
-        if (!lineRect || !stageRect.height) return false;
-        const markerY = stageRect.top + stageRect.height * prompterReadingMarkerRatio;
-        scrollPosition += markerY - lineRect.top;
-        applyScrollPosition();
-    }
-    broadcastPrompterState();
-    return true;
 }
 
 function applyRemoteScrollSpeed(next) {
@@ -518,15 +533,6 @@ window.addEventListener('message', (event) => {
                     setText(currentIndex + 1);
                 }
                 break;
-            case 'goToSourceLine':
-                if (
-                    msg.lineupKey === lineupKey &&
-                    Number.isInteger(msg.blockIndex) &&
-                    hasSourceLine(msg.blockIndex, msg.sourceLineIndex)
-                ) {
-                    navigateToSourceLine(msg.blockIndex, msg.sourceLineIndex);
-                }
-                break;
             case 'setSpeed':
                 applyRemoteScrollSpeed(msg.speed);
                 break;
@@ -536,9 +542,23 @@ window.addEventListener('message', (event) => {
             case 'scrollBy':
                 applyPrompterScrollBy(msg.delta);
                 break;
-            case 'updateLineup':
+            case 'updateLineup': {
                 if (!msg.lineupKey || msg.lineupKey !== lineupKey || !Array.isArray(msg.data)) break;
                 data = msg.data;
+                const pendingSeek = pendingSourceLineSeek;
+                const pendingSeekStillValid = Boolean(
+                    pendingSeek &&
+                    pendingSeek.lineupKey === msg.lineupKey &&
+                    pendingSeek.blockIndex === currentIndex &&
+                    pendingSeek.blockIndex < data.length &&
+                    data[pendingSeek.blockIndex] != null &&
+                    (pendingSeek.sourceLineIndex === null ||
+                        hasSourceLineInBlock(data[pendingSeek.blockIndex], pendingSeek.sourceLineIndex)),
+                );
+                if (pendingSeek && !pendingSeekStillValid) {
+                    pendingSourceLineSeek = null;
+                    sourceLineSeekVersion++;
+                }
                 try {
                     localStorage.setItem(lineupKey, JSON.stringify(data));
                 } catch (e) {
@@ -548,14 +568,62 @@ window.addEventListener('message', (event) => {
                     if (scrollingNow) pauseScroll();
                     prompterContent.innerHTML = data[currentIndex];
                     applyScrollPosition();
-                    broadcastPrompterState();
+                    if (pendingLoadBroadcastTimer === null && !pendingSeekStillValid) broadcastPrompterState();
                 }
                 break;
+            }
+            case 'goToSourceLine': {
+                if (
+                    typeof msg.lineupKey !== 'string' || msg.lineupKey !== lineupKey ||
+                    !Number.isInteger(msg.blockIndex) || msg.blockIndex < 0 ||
+                    !Array.isArray(data) || msg.blockIndex >= data.length || data[msg.blockIndex] == null ||
+                    (msg.sourceLineIndex !== null &&
+                        (!Number.isInteger(msg.sourceLineIndex) || msg.sourceLineIndex < 0))
+                ) break;
+
+                if (
+                    msg.sourceLineIndex !== null &&
+                    !hasSourceLineInBlock(data[msg.blockIndex], msg.sourceLineIndex)
+                ) break;
+
+                cancelPendingLoadBroadcast();
+                if (currentIndex !== msg.blockIndex) setText(msg.blockIndex, { broadcast: false });
+                pauseScroll();
+                const seekVersion = ++sourceLineSeekVersion;
+                const seekTarget = {
+                    lineupKey: msg.lineupKey,
+                    blockIndex: msg.blockIndex,
+                    sourceLineIndex: msg.sourceLineIndex,
+                };
+                pendingSourceLineSeek = seekTarget;
+                requestAnimationFrame(() => {
+                    if (
+                        pendingSourceLineSeek !== seekTarget ||
+                        seekVersion !== sourceLineSeekVersion ||
+                        lineupKey !== msg.lineupKey ||
+                        currentIndex !== msg.blockIndex ||
+                        !Array.isArray(data) || data[msg.blockIndex] == null
+                    ) return;
+                    if (
+                        msg.sourceLineIndex !== null &&
+                        (!hasSourceLineInBlock(data[msg.blockIndex], msg.sourceLineIndex) ||
+                            !seekSourceLineToReadingMarker(msg.sourceLineIndex))
+                    ) {
+                        pendingSourceLineSeek = null;
+                        sourceLineSeekVersion++;
+                        return;
+                    }
+                    applyScrollPosition();
+                    pendingSourceLineSeek = null;
+                    broadcastPrompterState();
+                });
+                break;
+            }
             case 'toggleTheme':
                 togglePrompterTheme();
                 break;
             case 'requestSync':
-                broadcastPrompterState();
+                if (pendingLoadBroadcastTimer === null) broadcastPrompterState();
                 break;
             default:
                 break;
@@ -572,7 +640,8 @@ window.addEventListener('message', (event) => {
     if (!raw) return;
     lineupKey = key;
     data = JSON.parse(raw);
-    setText(idx);
+    setText(idx, { broadcast: false });
+    deferLoadedTextBroadcast();
     document.title = key;
     try {
         const u = new URL(window.location.href);

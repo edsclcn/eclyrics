@@ -81,45 +81,97 @@ and changed background state over the origin-checked, revisioned
 `eclyrics-video-v1` `postMessage` channel. The popup uses the shared stage
 renderer from `video-lyrics/stage.js`; it contains only the audience output and
 forwards arrow-key cue requests to the opener. Each song's title is the first
-cue, followed by cues parsed from lyric lines. Appearance state is limited to
-font family, weight, maximum size, text color, alignment, fade duration, and
-video-only dimming. Optional manual/paste callbacks reuse the shared picker; a
+cue, followed by cues parsed from lyric lines. Video settings include font
+family, weight, maximum size, text color, vertical pixel anchor, fade duration,
+playback rate, and video-only dimming. Text remains horizontally centered. The
+vertical anchor ranges from 0–1080 px in 10 px steps, defaults to 540 px, and
+aligns the lyric box top, center, or bottom to the corresponding stage position.
+Fade ranges from 0–2000 ms in 100 ms steps (default 400 ms), with both a slider
+and editable value; playback rate ranges from 0.5×–2.0× in 0.1× steps
+(default 1.0×).
+Optional manual/paste callbacks reuse the shared picker; a
 Video Lyrics title/body editor saves to one in-memory lineup instance without
 writing to Firestore.
 
 Text and Video Lyrics synchronization is an optional, page-local mode and starts
-Off. `public/js/features/editor/textformatting.js` marks source lines;
+Off. The only Sync toggle is beside the Text preview in the Text Lyrics
+workspace. Enabling it automatically shows the embedded Video preview and its
+Appearance settings; disabling it hides that embedded panel and restores the
+normal standalone Video Lyrics inspector. Text Lyrics owns the lineup and
+reading position. While Sync is on, every populated lyric block across all Text
+Lyrics tabs becomes a separate mirrored Video Lyrics lineup row, in tab order
+and then block order. Empty placeholders are excluded, the lineup count reflects
+the populated blocks, and each row label combines its Text tab name and block
+title. Adding, removing, renaming, or editing a tab or block, and changing the
+active Text tab or selected block, republishes the projection so the Video
+Lyrics lineup stays current even when that workspace is already selected. With
+no bound prompter position, the selected populated block in the active Text tab
+is selected; if it is empty, the first populated block in that tab is used. A
+position from the Text prompter bound to any listed tab selects its matching
+tab and block even when its source-line index is null. Only an exact live source
+line is highlighted. The Video lineup page follows the selected block. Clicking
+a mirrored row seeks the Text prompter to that block's first populated source
+line; clicking one of its source-line cues seeks that exact line. Cross-tab
+navigation loads the target into the already-open Text prompter without opening
+or focusing it. Text Lyrics remains the source of truth; Video Lyrics does not
+edit its content, and Video output follows the Text prompter's position
+broadcast. Stale positions whose source tab, block, or line was removed are
+discarded. With Sync off, Video Lyrics restores its
+standalone lineup and prepared item while leaving the already-live output in
+place. `public/js/features/editor/textformatting.js` marks source lines;
 `public/js/features/prompter/prompter.js` reads the line crossing the
 configurable marker and publishes its text and source index over the
 `eclyrics-prompter` BroadcastChannel. `public/js/features/video-lyrics/index.js`
-accepts positions only from the Text prompter lineup bound to this editor.
-`public/js/features/video-lyrics/model.js` sends the received text directly to
-the Video Lyrics stage. Sync does not match against a Video Lyrics song, so
-Video Lyrics search and lineup preparation are not required for text-driven
-output.
+accepts positions only from the bound Text prompter and refreshes the projected
+lineup on editor updates. Its mirrored-row and cue handlers call
+`eclyricsEditorPrompter.navigateToSourceLine` in
+`public/js/features/editor/index.js`; cross-tab requests load the target lineup
+into the existing Text prompter without opening or focusing the window.
+`public/js/features/prompter/prompter.js` seeks to the requested source line and
+broadcasts the resulting marker position. `public/js/features/video-lyrics/model.js`
+validates that position against the projected tab, block, and source line before
+sending the received text directly to the Video Lyrics stage. The mirrored
+lineup does not require a separate Video Lyrics search or preparation step.
 
-Text Lyrics remains the main workspace. With Sync on and Text Lyrics active, the
-Video preview is placed below the Text prompter preview in the existing
-right-hand preview column. The reading marker defaults to the midpoint and can
-be dragged or adjusted from the keyboard; its position is remembered in browser
-storage and controls which source lyric line drives the Video stage. Video
-appearance and background settings stay in the Video Lyrics workspace and
-apply to synced output. The embedded Video card reuses the Video preview card,
-hides **Open Prompter**, and keeps **Blank**, the shared font picker, and
-**Background**. The same font trigger and background chooser work from either
-workspace; detailed appearance controls remain in Video Lyrics. The card shows
-the selected curated or custom background name and background loading/error
-status. Background and appearance changes update the preview and audience
-popup. **Blank** clears the lyric while keeping its background. Audience popup
-playback errors appear in the embedded status and clear after **Start** succeeds.
+Text Lyrics remains the main workspace. With Sync on and Text Lyrics active,
+the wide layout gives the Text editor the left third and uses the right two
+thirds for two stacked preview rows. The upper row places the Text preview
+stage on the left and its prompter controls on the right. The labeled **Send
+to prompter** action spans the top of the Text control rail; transport and
+navigation follow, with text sizing, line width, and speed below. The lower row
+places the Video preview stage on the left and its Video controls and Appearance
+settings on the right. At medium widths, the editor moves above both full-width
+preview rows; at narrow widths, the editor moves above the preview rows while
+each preview stays paired with its controls.
+The reading marker defaults to the midpoint and can be dragged or adjusted
+from the keyboard; its position is remembered in browser storage and controls
+which source lyric line drives the Video stage. The synced editor uses two
+lyric blocks per row. Text and Video preview stages share the same 16:9 size
+and align in the left side of their respective rows. The embedded Video inspector reuses the Video preview
+card and appearance controls. It hides **Open Prompter** and keeps **Blank**,
+the font picker, **Background**, and the full appearance settings. The Video
+action buttons match the Text toolbar's height and corner radius, with
+Appearance directly below them. The same font trigger and background chooser
+work in either workspace. The card shows the selected curated or custom
+background name while suppressing repetitive success messages. The picker
+shows status in its dialog while open; when it is closed, loading and selection
+errors use the dedicated background status surface. Background and
+appearance changes update the preview and audience popup. Vertical pixel
+position, fade, and video-speed controls use the same settings in standalone Video Lyrics, the
+synced embedded preview, and audience output. These settings live in page
+memory and reset on reload. **Blank** clears the lyric while keeping its
+background. Audience popup playback errors appear in
+the embedded status and clear after **Start** succeeds.
 
 The Sync toggle alone opens no windows if the Text prompter is not already
 open. If it is open, enabling Sync opens or focuses only the Video Lyrics
 window. Sending Text Lyrics opens or updates the Text prompter and, when Sync is
 on, opens or focuses the Video Lyrics window too. A blocked Video popup is
-reported in the Sync status. Turning Sync off leaves existing output windows
-and the current video line live; manually cueing a Video Lyrics line pauses
-Sync and turns off both switches. Sync state resets to Off on page reload.
+reported through temporary feedback. Routine Sync changes do not display
+changing status text. Turning Sync off leaves existing output windows and the
+current video line live. In Sync, Video lineup and cue clicks seek the Text
+prompter, and Video output follows the resulting prompter position broadcast.
+Sync state resets to Off on page reload.
 
 The seven repository-hosted background presets live under
 `public/assets/videos/`; `white-stars.mp4` is **Background 1** and the default.
@@ -128,14 +180,16 @@ video sources are attached and played only while the background picker is open,
 then paused and detached when it closes. The default background loads lazily
 when Video Lyrics is activated or Sync/output needs video, so Text-only synced
 use does not require visiting the Video Lyrics workspace. The media adapter
-fetches the selected preset and saves only that Blob to per-browser IndexedDB
-under its catalogue ID/version key; it does not download or cache the full
-catalogue on activation. Later selections reuse saved entries, while an
-uncached preset is fetched when selected. This browser storage is distinct from
-Firebase Hosting's CDN cache and is subject to browser eviction or clearing. A
-user-selected video is decode-checked and held only in page memory for that
-session; it is neither uploaded nor saved to IndexedDB. Video output
-fonts and local declarations are owned by `video-lyrics/fonts.js` and
+fetches a selected preset and, after successful session playback, attempts to
+save only that Blob to per-browser IndexedDB under its catalogue ID/version
+key; it does not download or cache the full catalogue on activation. Saving is
+best-effort: a failure is silent and does not interrupt current playback, so
+future offline reuse is not guaranteed. Later selections reuse saved entries,
+while an uncached preset is fetched when selected. This browser storage is
+distinct from Firebase Hosting's CDN cache and is subject to browser eviction
+or clearing. A user-selected video is decode-checked and held only in page
+memory for that session; it is neither uploaded nor saved to IndexedDB. Video
+output fonts and local declarations are owned by `video-lyrics/fonts.js` and
 `public/assets/css/video-fonts.css`; font licenses/source notices are stored
 alongside the font files. The actual-face font picker searches alphabetical
 metadata and filters Sans Serif, Serif, and Cursive families. Imported fonts
@@ -148,8 +202,10 @@ The Video Lyrics workspace has three equally tall fixed shells. Only the
 middle cue container scrolls; its highlighted cue is centered with clamped
 container scrolling. Lineup pagination keeps entries reachable without another
 workspace scroll area. Native modal dialogs retain their own bounded content.
-The stacked preview layout, workspace fragments, and related controllers use
-the `20261017-sync-stacked-preview` cache version. Prompter marker assets use
+The Text Lyrics stylesheet uses `20261017-sync-horizontal-rows`; the Video
+Lyrics stylesheet, bootstrap entry, Video fragment, and Video controller assets
+use `20261017-video-position-speed`. The Text fragment uses
+`20261017-sync-preview-refinement`. Prompter marker assets use
 `20261017-sync-marker`; the Video Lyrics model and source-line formatting use
 `20261017-lyric-sync`.
 

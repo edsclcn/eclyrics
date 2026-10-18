@@ -22,16 +22,16 @@
     function create() {
         let nextId = 0;
         const state = { lineup: [], preparedId: null, preparedIndex: -1, live: null, background: null,
-            sync: { enabled: false, paused: false, status: 'Off by default', lineupKey: null, projection: [], latestPosition: null },
-            settings: { fontFamily: 'Satoshi', fontWeight: 700, fontSize: 120, color: '#ffffff', alignment: 'center', fadeMs: 400, dimming: 0.3 } };
+            sync: { enabled: false, status: 'Off by default', lineupKey: null, activeLineupKey: null, activeBlockIndex: null, projection: [], songs: [], latestPosition: null },
+            settings: { fontFamily: 'Satoshi', fontWeight: 700, fontSize: 120, color: '#ffffff', positionUnit: 'stage-px-v1', y: 540, fadeMs: 400, playbackRate: 1, dimming: 0.3 } };
         const listeners = new Set();
         const prepared = () => state.lineup.find(entry => entry.id === state.preparedId);
         const notify = () => listeners.forEach(listener => listener(state));
-        function pauseSyncForManualCue() {
-            if (!state.sync.enabled) return;
-            state.sync.enabled = false;
-            state.sync.paused = true;
-            state.sync.status = 'Sync paused after a manual video cue. Turn Sync on to resume.';
+        const findTextSong = lineupKey => state.sync.songs.find(song => song.lineupKey === lineupKey);
+        function isValidTextPosition(position) {
+            const song = findTextSong(position?.lineupKey);
+            const block = song?.blocks.find(entry => entry.blockIndex === position?.blockIndex);
+            return Boolean(block && (position.sourceLineIndex === null || block.lines.some(line => line.sourceLineIndex === position.sourceLineIndex)));
         }
         function setCue(index) {
             const entry = prepared();
@@ -41,23 +41,22 @@
             return true;
         }
         function applyTextPosition(position) {
-            const block = state.sync.projection.find(entry => entry.blockIndex === position.blockIndex);
+            const song = findTextSong(position.lineupKey);
+            const block = song?.blocks.find(entry => entry.blockIndex === position.blockIndex);
             const line = block?.lines.find(entry => entry.sourceLineIndex === position.sourceLineIndex);
             if (!Number.isInteger(position.sourceLineIndex) || !line) {
-                state.live = null;
                 state.sync.status = 'Sync on · Waiting for a lyric at the text marker.';
                 notify();
                 return;
             }
             const text = line.text || position.lineText.trim();
             if (!text) {
-                state.live = null;
                 state.sync.status = 'Sync on · Waiting for a lyric at the text marker.';
                 notify();
                 return;
             }
-            state.live = { entryId: 'text-sync', blockIndex: position.blockIndex, index: position.sourceLineIndex, text };
-            state.sync.status = `Following text · Line ${position.sourceLineIndex + 1}.`;
+            state.live = { entryId: 'text-sync', lineupKey: song.lineupKey, songTitle: song.title, blockIndex: position.blockIndex, index: position.sourceLineIndex, text };
+            state.sync.status = `Following ${song.title} · Line ${position.sourceLineIndex + 1}.`;
             notify();
         }
         function applyLatestPositionWhenEnabled() {
@@ -66,52 +65,78 @@
         }
         function prepare(id) { if (!state.lineup.some(entry => entry.id === id)) return; state.preparedId = id; state.preparedIndex = state.live?.entryId === id ? state.live.index : -1; if (state.sync.enabled && state.sync.latestPosition) applyLatestPositionWhenEnabled(); else notify(); }
         function cue(index) {
+            if (state.sync.enabled) return false;
             const entry = prepared();
-            if (!entry?.cues[index]) return;
-            pauseSyncForManualCue();
+            if (!entry?.cues[index]) return false;
             setCue(index); notify();
+            return true;
         }
         function setSyncEnabled(enabled) {
             const syncEnabled = Boolean(enabled);
             state.sync.enabled = syncEnabled;
-            state.sync.paused = false;
             if (!state.sync.enabled) {
                 state.sync.status = 'Sync off.';
                 notify();
                 return;
             }
-            state.sync.status = 'Sync on · Send text lyrics to start.';
+            state.sync.status = 'Sync on · Waiting for a text prompter position.';
             if (state.sync.latestPosition) applyTextPosition(state.sync.latestPosition);
             else notify();
         }
         function setTextLineup(source) {
             if (!source) {
                 state.sync.lineupKey = null;
+                state.sync.activeLineupKey = null;
+                state.sync.activeBlockIndex = null;
                 state.sync.projection = [];
+                state.sync.songs = [];
                 state.sync.latestPosition = null;
                 if (state.live?.entryId === 'text-sync') state.live = null;
-                if (state.sync.enabled) state.sync.status = 'Sync on · Send text lyrics to start.';
+                if (state.sync.enabled) state.sync.status = 'Sync on · Waiting for a text prompter position.';
                 notify();
                 return true;
             }
-            if (typeof source.lineupKey !== 'string' || !Array.isArray(source.blocks)) return false;
-            const projection = source.blocks.filter(block => Number.isInteger(block?.blockIndex) && block.blockIndex >= 0).map(block => ({
-                id: `text-${block.blockIndex}`,
-                blockIndex: block.blockIndex,
-                title: String(block.title || `Block ${block.blockIndex + 1}`),
-                lines: Array.isArray(block.lines) ? block.lines.filter(line => Number.isInteger(line?.sourceLineIndex) && line.sourceLineIndex >= 0 && typeof line.text === 'string' && line.text.trim()).map(line => ({
-                    sourceLineIndex: line.sourceLineIndex,
-                    text: line.text.trim(),
-                })) : [],
+            const sourceSongs = Array.isArray(source.songs)
+                ? source.songs
+                : typeof source.lineupKey === 'string' && Array.isArray(source.blocks)
+                    ? [{ lineupKey: source.lineupKey, title: source.title || source.lineupKey, blocks: source.blocks }]
+                    : null;
+            if (!sourceSongs) return false;
+            const songs = sourceSongs.filter(song => typeof song?.lineupKey === 'string' && Array.isArray(song.blocks)).map((song, songIndex) => ({
+                id: `text-song-${song.lineupKey}`,
+                lineupKey: song.lineupKey,
+                title: String(song.title || `Song ${songIndex + 1}`),
+                blocks: song.blocks.filter(block => Number.isInteger(block?.blockIndex) && block.blockIndex >= 0).map(block => ({
+                    id: `text-${song.lineupKey}-${block.blockIndex}`,
+                    blockIndex: block.blockIndex,
+                    title: String(block.title || `Block ${block.blockIndex + 1}`),
+                    lines: Array.isArray(block.lines) ? block.lines.filter(line => Number.isInteger(line?.sourceLineIndex) && line.sourceLineIndex >= 0 && typeof line.text === 'string' && line.text.trim()).map(line => ({
+                        sourceLineIndex: line.sourceLineIndex,
+                        text: line.text.trim(),
+                    })) : [],
+                })),
             }));
-            const lineupChanged = state.sync.lineupKey !== source.lineupKey;
-            state.sync.lineupKey = source.lineupKey;
-            state.sync.projection = projection;
-            if (lineupChanged) {
+            const activeLineupKey = typeof source.activeLineupKey === 'string'
+                ? source.activeLineupKey
+                : typeof source.lineupKey === 'string' ? source.lineupKey : null;
+            const activeSong = songs.find(song => song.lineupKey === activeLineupKey);
+            state.sync.activeLineupKey = activeSong?.lineupKey || null;
+            state.sync.lineupKey = state.sync.activeLineupKey;
+            state.sync.activeBlockIndex = Number.isInteger(source.activeBlockIndex) && source.activeBlockIndex >= 0
+                ? source.activeBlockIndex
+                : null;
+            state.sync.projection = activeSong?.blocks || [];
+            state.sync.songs = songs;
+            if (state.sync.latestPosition && !isValidTextPosition(state.sync.latestPosition)) {
                 state.sync.latestPosition = null;
                 if (state.live?.entryId === 'text-sync') state.live = null;
-                state.sync.status = state.sync.enabled ? 'Sync on · Waiting for a lyric at the text marker.' : state.sync.status;
+                if (state.sync.enabled) state.sync.status = 'Sync on · Waiting for a text prompter position.';
             }
+            if (state.live?.entryId === 'text-sync' && !isValidTextPosition({
+                lineupKey: state.live.lineupKey,
+                blockIndex: state.live.blockIndex,
+                sourceLineIndex: state.live.index,
+            })) state.live = null;
             if (state.sync.enabled && state.sync.latestPosition) applyTextPosition(state.sync.latestPosition);
             else notify();
             return true;
@@ -120,8 +145,7 @@
             if (!position || typeof position !== 'object' || !Number.isInteger(position.blockIndex) || position.blockIndex < 0) return;
             if (position.sourceLineIndex !== null && (!Number.isInteger(position.sourceLineIndex) || position.sourceLineIndex < 0)) return;
             if (typeof position.lineText !== 'string') return;
-            if (typeof position.lineupKey !== 'string' || position.lineupKey !== state.sync.lineupKey) return;
-            if (!state.sync.projection.some(block => block.blockIndex === position.blockIndex)) return;
+            if (typeof position.lineupKey !== 'string' || !isValidTextPosition(position)) return;
             const latestPosition = {
                 lineupKey: position.lineupKey,
                 blockIndex: position.blockIndex,
@@ -131,23 +155,17 @@
             state.sync.latestPosition = latestPosition;
             if (state.sync.enabled) applyTextPosition(latestPosition);
         }
-        function getNextTextPosition(delta) {
-            if (delta !== -1 && delta !== 1) return null;
-            const lines = state.sync.projection.flatMap(block => block.lines.map(line => ({ blockIndex: block.blockIndex, sourceLineIndex: line.sourceLineIndex })));
-            if (!lines.length) return null;
-            const current = state.sync.latestPosition && lines.findIndex(line => line.blockIndex === state.sync.latestPosition.blockIndex && line.sourceLineIndex === state.sync.latestPosition.sourceLineIndex);
-            const targetIndex = Number.isInteger(current) && current >= 0 ? current + delta : delta > 0 ? 0 : lines.length - 1;
-            return targetIndex >= 0 && targetIndex < lines.length ? lines[targetIndex] : null;
-        }
         function updateSettings(patch) {
             const settings = state.settings;
             if ((window.eclyricsVideoFonts?.allowedFamilies || ['Satoshi']).includes(patch.fontFamily)) settings.fontFamily = patch.fontFamily;
             if ([400, 500, 600, 700, 800, 900].includes(Number(patch.fontWeight))) settings.fontWeight = Number(patch.fontWeight);
-            [['fontSize', 24, 160], ['fadeMs', 0, 2000], ['dimming', 0, .9]].forEach(([key, min, max]) => {
+            [['fontSize', 24, 160], ['fadeMs', 0, 2000], ['dimming', 0, .9], ['y', 0, 1080], ['playbackRate', .5, 2]].forEach(([key, min, max]) => {
                 if (patch[key] !== undefined && Number.isFinite(Number(patch[key]))) settings[key] = Math.max(min, Math.min(max, Number(patch[key])));
             });
+            if (patch.fadeMs !== undefined && Number.isFinite(Number(patch.fadeMs))) settings.fadeMs = Math.round(settings.fadeMs / 100) * 100;
+            if (patch.y !== undefined && Number.isFinite(Number(patch.y))) settings.y = Math.round(settings.y / 10) * 10;
+            if (patch.playbackRate !== undefined && Number.isFinite(Number(patch.playbackRate))) settings.playbackRate = Math.round(settings.playbackRate * 10) / 10;
             if (/^#[\da-f]{6}$/i.test(patch.color || '')) settings.color = patch.color.toLowerCase();
-            if (['left', 'center', 'right'].includes(patch.alignment)) settings.alignment = patch.alignment;
             notify();
         }
         return { getState: () => state, subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); }, prepare, cue, updateSettings,
@@ -171,8 +189,8 @@
             },
             remove(id) { const index = state.lineup.findIndex(entry => entry.id === id); if (index < 0) return; state.lineup.splice(index, 1); if (state.live?.entryId === id) state.live = null; if (state.preparedId === id) { state.preparedId = state.lineup[Math.min(index, state.lineup.length - 1)]?.id ?? null; state.preparedIndex = -1; } if (state.sync.enabled && state.sync.latestPosition) applyLatestPositionWhenEnabled(); else notify(); },
             move(id, delta) { const index = state.lineup.findIndex(entry => entry.id === id), target = index + delta; if (index < 0 || target < 0 || target >= state.lineup.length) return; const [entry] = state.lineup.splice(index, 1); state.lineup.splice(target, 0, entry); notify(); },
-            advance(delta) { const entry = prepared(); if (!entry?.cues.length) return; pauseSyncForManualCue(); setCue(Math.max(0, Math.min(entry.cues.length - 1, state.preparedIndex + delta))); notify(); },
-            setSyncEnabled, setTextLineup, updateTextPosition, getNextTextPosition,
+            advance(delta) { if (state.sync.enabled) return false; const entry = prepared(); if (!entry?.cues.length) return false; setCue(Math.max(0, Math.min(entry.cues.length - 1, state.preparedIndex + delta))); notify(); return true; },
+            setSyncEnabled, setTextLineup, updateTextPosition,
             blankOutput() { if (!state.live) return; state.live = null; notify(); },
             setBackground(background) { state.background = background; notify(); },
         };

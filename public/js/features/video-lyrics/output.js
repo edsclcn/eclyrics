@@ -3,8 +3,8 @@
     if (!api || !renderer) return;
     function isBackgroundPlaybackError(message) { return /background|video.*(?:playback|could not play|could not start)/i.test(message); }
     const stage = renderer.create(document.getElementById('video-lyrics-preview-stage'), message => {
-        api.status(message, true);
         if (isBackgroundPlaybackError(message)) api.backgroundStatus?.(message, true);
+        else api.status(message, true);
     });
     let popup = null, ready = false, revision = 0, syncRevision = 0, sentBackground = undefined, lastAcknowledged = -1, sentFont = undefined;
     function payload(includeBackground) {
@@ -32,7 +32,7 @@
         void window.eclyricsVideoBackgrounds?.ensureDefault?.();
         if (popup && !popup.closed) { popup.focus(); sync(); return { ok: true }; }
         ready = false; sentFont = undefined; sentBackground = undefined; lastAcknowledged = -1;
-        popup = window.open('video-prompter.html?v=20261003-video-cue-fit-sync', 'eclyricsVideoPrompter', 'popup,width=1280,height=720');
+        popup = window.open('video-prompter.html?v=20261017-video-position-controls', 'eclyricsVideoPrompter', 'popup,width=1280,height=720');
         api.status(popup ? 'Opening video prompter…' : 'Allow popups to open the video prompter.', !popup);
         return popup ? { ok: true } : { ok: false, reason: 'popup-blocked' };
     }
@@ -45,8 +45,8 @@
         else if (message.type === 'ack' && Number.isSafeInteger(message.revision) && message.revision > lastAcknowledged && message.revision <= revision) lastAcknowledged = message.revision;
         else if (message.type === 'error' && typeof message.message === 'string') {
             const error = message.message.slice(0, 300);
-            api.status(error, true);
             if (isBackgroundPlaybackError(error)) api.backgroundStatus?.(error, true);
+            else api.status(error, true);
         }
         else if (message.type === 'playback-started') api.backgroundStatus?.('', false);
         else if (message.type === 'advance' && [1, -1].includes(message.delta)) api.advance(message.delta);

@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const read = file => fs.readFileSync(`public/js/features/${file}`, 'utf8');
-const settings = { fontFamily: 'Satoshi', fontWeight: 700, fontSize: 64, color: '#ffffff', alignment: 'center', fadeMs: 300 };
+const settings = { fontFamily: 'Satoshi', fontWeight: 700, fontSize: 64, color: '#ffffff', positionUnit: 'stage-px-v1', y: 540, fadeMs: 300, playbackRate: 1 };
 const state = (revision, text, extra = {}) => ({ revision, text, settings: { ...settings }, ...extra });
 function stageHarness({ reducedMotion = false, fontFamilies = ['Satoshi'] } = {}) {
     const nodes = [], fonts = [];
@@ -42,16 +42,41 @@ function stageHarness({ reducedMotion = false, fontFamilies = ['Satoshi'] } = {}
     vm.runInNewContext(read('video-lyrics/stage.js'), { window, document, Blob, URL, getComputedStyle, location: { href: 'https://example.org/', origin: 'https://example.org' }, ResizeObserver: class { observe() {} disconnect() {} }, matchMedia: () => ({ matches: reducedMotion }) });
     return { api: window.eclyricsVideoStage, renderer: window.eclyricsVideoStage.create(host), host, nodes, fonts };
 }
+
+test('stage converts legacy percentage vertical positions to the pixel anchor once', () => {
+    const payload = state(0, 'Legacy', { settings: { ...settings, positionUnit: undefined, y: 50, x: 16, alignment: 'right' } });
+    const { api } = stageHarness();
+    assert.equal(api.validate(payload), payload);
+    assert.equal(payload.settings.y, 540, 'legacy 50% maps to the 540 px center of the canonical 1080 px stage');
+    assert.equal(payload.settings.positionUnit, 'stage-px-v1');
+    assert.equal(payload.settings.x, 16, 'the output keeps legacy data harmlessly; placement ignores it');
+});
 test('stage preserves selected size for natural one/two-line cues and shrinks only cues that exceed two lines', async () => {
     const { api } = stageHarness();
     assert.ok(api.validate(state(0, 'valid')));
-    for (const invalid of [state(-1, 'bad'), state(1, 5), state(1, 'x', { settings: { ...settings, fontFamily: 'Unknown' } }), state(1, 'x', { effectiveFontSize: 0 }), state(1, 'x', { effectiveFontSize: 161 }), state(1, 'x', { background: { id: 'broken' } })]) assert.equal(api.validate(invalid), null);
+    for (const invalid of [
+        state(-1, 'bad'), state(1, 5),
+        state(1, 'x', { settings: { ...settings, fontFamily: 'Unknown' } }),
+        state(1, 'x', { settings: { ...settings, y: -1 } }),
+        state(1, 'x', { settings: { ...settings, y: 1081 } }),
+        state(1, 'x', { settings: { ...settings, fadeMs: 450 } }),
+        state(1, 'x', { settings: { ...settings, playbackRate: 1.25 } }),
+        state(1, 'x', { effectiveFontSize: 0 }), state(1, 'x', { effectiveFontSize: 161 }),
+        state(1, 'x', { background: { id: 'broken' } }),
+    ]) assert.equal(api.validate(invalid), null);
+    for (const validSettings of [
+        { y: 0, fadeMs: 0, playbackRate: .5 },
+        { y: 1080, fadeMs: 2000, playbackRate: 2 },
+    ]) assert.ok(api.validate(state(0, 'valid', { settings: { ...settings, ...validSettings } })));
     const h = stageHarness();
     const short = state(1, 'Bless His name');
     const request = h.renderer.update(short); h.fonts[0](); await request;
     const lyric = h.nodes.find(node => node.className === 'video-stage-lyric');
     const line = h.nodes.find(node => node.className === 'video-stage-line');
     assert.equal(line.textContent, short.text);
+    assert.equal(lyric.style.left, '50%', 'lyrics stay horizontally centered');
+    assert.equal(lyric.style.top, '540px', 'the default vertical anchor is the center of the 1080 px stage');
+    assert.equal(lyric.style.transform, 'translate(-50%, -50%)', 'the default anchor centers the content-sized lyric box');
     assert.equal(lyric.style.fontSize, '64px', 'one-line cues retain the selected font size');
     assert.deepEqual(short.settings, settings, 'the selected settings remain unchanged');
     const twoLines = 'Bless His name '.repeat(6);
@@ -66,6 +91,11 @@ test('stage preserves selected size for natural one/two-line cues and shrinks on
     assert.ok(estimatedLines <= 2, 'the fitted font size leaves the full cue within two lines');
     assert.equal(Object.hasOwn(short.settings, 'effectiveFontSize'), false, 'effective size is not added to persisted settings');
     const css = require('node:fs').readFileSync('public/assets/css/video-prompter.css', 'utf8');
+    const lyricRule = css.match(/\.video-stage-lyric\s*\{([^}]*)\}/)?.[1] || '';
+    assert.match(lyricRule, /width:\s*max-content/,
+        'the position anchor applies to the measured lyric box instead of a full-stage box');
+    assert.match(lyricRule, /max-width:\s*84%/,
+        'the content-sized lyric box stays within the stage at edge positions');
     assert.match(css, /\.video-stage-line\s*\{[^}]*box-sizing:\s*content-box/);
     assert.match(css, /\.video-stage-line\s*\{[^}]*padding:\s*\.22em\s+0/);
     assert.match(css, /\.video-stage-line\s*\{[^}]*overflow:\s*hidden/);
@@ -109,6 +139,47 @@ test('stage honors the preview fitted size when applying the same cue to output'
     assert.equal(lyric.style.fontSize, '113.2px');
     assert.equal(payload.settings.fontSize, 120, 'the selected size remains unchanged');
 });
+
+test('stage applies vertical pixel anchors and playback speed to current, pending, and newly loaded video', async () => {
+    const h = stageHarness();
+    const apply = async payload => { const request = h.renderer.update(payload); h.fonts.shift()(); assert.equal(await request, true); };
+    const background = { id: 'ambient', version: 1, url: '/ambient.mp4' };
+    await apply(state(1, 'Centered', { background, settings: { ...settings, y: 540, playbackRate: 1.2 } }));
+
+    const lyric = h.nodes.find(node => node.className === 'video-stage-lyric');
+    const firstVideo = h.nodes.find(node => node.className === 'video-stage-video');
+    assert.equal(lyric.style.left, '50%', 'the lyric remains centered on the horizontal axis');
+    assert.equal(lyric.style.top, '540px');
+    assert.equal(firstVideo.playbackRate, 1.2, 'a pending video starts at the current configured speed');
+
+    await apply(state(2, 'Moved', { background, settings: { ...settings, y: 780, playbackRate: 1.7, alignment: 'left', x: 23 } }));
+    assert.equal(lyric.style.left, '50%', 'legacy X and alignment values cannot change centered text');
+    assert.equal(lyric.style.top, '780px');
+    assert.equal(lyric.style.transform, 'translate(-50%, -72.22222222222221%)', 'pixel position maps to the same vertical anchor on the 1080 px stage');
+    assert.equal(firstVideo.playbackRate, 1.7, 'speed changes apply before the pending video loads');
+    firstVideo.listeners.loadeddata();
+    assert.equal(firstVideo.playbackRate, 1.7, 'the loaded video keeps the latest speed');
+
+    await apply(state(3, 'At top', { background, settings: { ...settings, y: 0, playbackRate: .8 } }));
+    assert.equal(lyric.style.left, '50%');
+    assert.equal(lyric.style.top, '0px');
+    assert.equal(lyric.style.transform, 'translate(-50%, -0%)', 'zero places the lyric box top at the stage top');
+    assert.equal(firstVideo.playbackRate, .8, 'speed changes apply to current playback');
+
+    await apply(state(4, 'At bottom', { background, settings: { ...settings, y: 1080, playbackRate: .8 } }));
+    assert.equal(lyric.style.left, '50%');
+    assert.equal(lyric.style.top, '1080px');
+    assert.equal(lyric.style.transform, 'translate(-50%, -100%)', '1080 places the lyric box bottom at the stage bottom');
+
+    const nextBackground = { id: 'second', version: 1, url: '/second.mp4' };
+    await apply(state(5, 'New background', { background: nextBackground, settings: { ...settings, playbackRate: 1.4 } }));
+    const nextVideo = h.nodes.filter(node => node.className === 'video-stage-video').at(-1);
+    assert.equal(nextVideo.playbackRate, 1.4, 'a newly created pending video inherits the current speed');
+    await apply(state(6, 'New background updated', { background: nextBackground, settings: { ...settings, playbackRate: .9 } }));
+    assert.equal(nextVideo.playbackRate, .9, 'a pending replacement video tracks speed changes');
+    nextVideo.listeners.loadeddata();
+    assert.equal(nextVideo.playbackRate, .9, 'a newly loaded replacement keeps the latest speed');
+});
 test('latest asynchronous font request wins; cue crossfade does not restart background', async () => {
     const h = stageHarness(), background = { id: 'ambient', version: 1, url: '/ambient.mp4' };
     const first = h.renderer.update(state(1, 'First', { background })); h.fonts.shift()(); assert.equal(await first, true);
@@ -130,13 +201,13 @@ test('blank fades the current lyric for the configured duration and subsequent l
     await apply(state(1, 'Current lyric'));
     const line = h.nodes.find(node => node.className === 'video-stage-line');
     assert.equal(line.textContent, 'Current lyric');
-    await apply(state(2, '', { settings: { ...settings, fadeMs: 650 } }));
+    await apply(state(2, '', { settings: { ...settings, fadeMs: 700 } }));
 
-    const outgoing = h.nodes.find(node => node.className === 'video-stage-lyric' && node.animations.some(animation => animation.options.duration === 650));
+    const outgoing = h.nodes.find(node => node.className === 'video-stage-lyric' && node.animations.some(animation => animation.options.duration === 700));
     assert.equal(line.textContent, '', 'blank removes the lyric from the live layer immediately');
     assert.ok(outgoing, 'the prior lyric remains in an outgoing layer while it fades');
-    const fade = outgoing.animations.find(animation => animation.options.duration === 650);
-    assert.equal(fade.options.duration, 650);
+    const fade = outgoing.animations.find(animation => animation.options.duration === 700);
+    assert.equal(fade.options.duration, 700);
     assert.deepEqual(Array.from(fade.frames, frame => frame.opacity), [1, 0]);
 
     await apply(state(3, 'Next lyric'));

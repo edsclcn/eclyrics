@@ -5,13 +5,19 @@
     const model = window.eclyricsVideoModel.create();
     const syncToggles = [...document.querySelectorAll('[data-lyrics-sync-toggle]')];
     const videoPreviewCard = panel.querySelector('.video-lyrics-preview-card');
+    const videoAppearance = panel.querySelector('.video-lyrics-appearance');
     const videoPreviewHost = document.getElementById('lyrics-sync-video-preview');
+    const videoPreviewContent = document.getElementById('lyrics-sync-video-content');
     const textWorkspace = document.getElementById('workspace');
     const textPreview = document.getElementById('workspace-preview-panel');
     const readingMarker = document.getElementById('lyrics-sync-reading-marker');
     const originalVideoPreviewPosition = {
         parent: videoPreviewCard?.parentNode || null,
         nextSibling: videoPreviewCard?.nextSibling || null,
+    };
+    const originalVideoAppearancePosition = {
+        parent: videoAppearance?.parentNode || null,
+        nextSibling: videoAppearance?.nextSibling || null,
     };
     const READING_MARKER_STORAGE_KEY = 'eclyrics-prompter-reading-marker-ratio';
     const READING_MARKER_MIN = 0.1;
@@ -31,11 +37,13 @@
     }
     function updateSyncPreviewLayout(enabled = model.getState().sync.enabled) {
         const showBothPreviews = enabled && document.getElementById('panel-text')?.classList.contains('is-active');
-        if (showBothPreviews && !videoPreviewMoved && videoPreviewCard && videoPreviewHost) {
-            videoPreviewHost.append(videoPreviewCard);
+        if (showBothPreviews && !videoPreviewMoved && videoPreviewCard && videoAppearance && videoPreviewContent) {
+            videoPreviewContent.append(videoPreviewCard, videoAppearance);
             videoPreviewMoved = true;
         } else if (!showBothPreviews && videoPreviewMoved) {
             restoreSyncPreviewElement(originalVideoPreviewPosition);
+            const nextSibling = originalVideoAppearancePosition.nextSibling?.parentNode === originalVideoAppearancePosition.parent ? originalVideoAppearancePosition.nextSibling : null;
+            originalVideoAppearancePosition.parent?.insertBefore(videoAppearance, nextSibling);
             videoPreviewMoved = false;
         }
         if (videoPreviewHost) videoPreviewHost.hidden = !showBothPreviews;
@@ -43,7 +51,11 @@
         textPreview?.classList.toggle('is-video-sync-preview', Boolean(showBothPreviews));
         videoPreviewCard?.classList.toggle('is-sync-embedded-preview', Boolean(showBothPreviews));
         const videoPreviewHeading = videoPreviewCard?.querySelector('.video-lyrics-section-head h3');
-        if (videoPreviewHeading) videoPreviewHeading.textContent = showBothPreviews ? 'Video Lyrics preview' : 'Prompter preview';
+        if (videoPreviewHeading) videoPreviewHeading.textContent = showBothPreviews ? 'VIDEO LYRICS PREVIEW' : 'Prompter preview';
+        const videoDescription = document.getElementById('video-lyrics-description');
+        if (videoDescription) videoDescription.textContent = model.getState().sync.enabled
+            ? 'Following Text Lyrics. Control the lyric position in Text Lyrics.'
+            : 'Prepare your lineup. Prompt one line at a time.';
         if (readingMarker) readingMarker.hidden = !showBothPreviews;
     }
     function ensureVideoBackground() {
@@ -98,42 +110,86 @@
             }
         });
     }
-    let syncFeedback = '', syncFeedbackTimer = 0;
+    let syncFeedbackTimer = 0;
     function showSyncFeedback(message) {
-        syncFeedback = message;
+        const feedback = document.getElementById('lyrics-sync-feedback');
+        if (feedback) { feedback.textContent = message; feedback.hidden = false; }
+        status(message, true);
         clearTimeout(syncFeedbackTimer);
         syncFeedbackTimer = setTimeout(() => {
-            syncFeedback = '';
-            document.querySelectorAll('.lyrics-sync-status').forEach(element => { element.textContent = model.getState().sync.status; });
+            if (feedback) { feedback.textContent = ''; feedback.hidden = true; }
+            if (get('status').textContent === message) status('');
         }, 5000);
-        document.querySelectorAll('.lyrics-sync-status').forEach(element => { element.textContent = syncFeedback; });
     }
-    function navigateToTextPosition(position) {
-        if (!model.getState().sync.enabled) return false;
-        const bridge = window.eclyricsEditorPrompter;
-        const lineupKey = getExpectedPrompterLineupKey();
-        if (!lineupKey || lineupKey !== model.getState().sync.lineupKey) {
-            model.setTextLineup(bridge?.getBoundLineup?.() || null);
-            return false;
+    function navigateToTextSourceLine(entry, sourceLineIndex) {
+        const accepted = window.eclyricsEditorPrompter?.navigateToSourceLine?.({
+            lineupKey: entry?.lineupKey,
+            blockIndex: entry?.blockIndex,
+            sourceLineIndex,
+        });
+        if (!accepted) {
+            showSyncFeedback('Could not navigate: the Text prompter is unavailable or its lineup changed. Open or resend Text Lyrics, then try again.');
         }
-        const accepted = bridge?.navigateToSourceLine?.({ lineupKey, ...position });
-        if (!accepted) showSyncFeedback('Send Text Lyrics again to control its current prompter.');
         return Boolean(accepted);
     }
     function advanceVideoLyrics(delta) {
-        if (!model.getState().sync.enabled) return model.advance(delta);
-        const position = model.getNextTextPosition(delta);
-        return position ? navigateToTextPosition(position) : false;
-    }
-    function navigateToTextBlock(block) {
-        if (!block) return false;
-        return navigateToTextPosition({
-            blockIndex: block.blockIndex,
-            sourceLineIndex: block.lines[0]?.sourceLineIndex ?? null,
-        });
+        if (model.getState().sync.enabled) return false;
+        return model.advance(delta);
     }
     let prompterPositionChannel = null;
     const getExpectedPrompterLineupKey = () => window.eclyricsEditorPrompter?.getBoundLineupKey?.() || null;
+    function getTextLineupProjection() {
+        const editor = window.eclyricsEditorPrompter;
+        if (editor?.getTextLineupProjection) return editor.getTextLineupProjection();
+        const activeLineup = editor?.getActiveLineup?.();
+        return activeLineup ? {
+            activeLineupKey: activeLineup.lineupKey,
+            songs: [{ ...activeLineup, title: activeLineup.title || activeLineup.lineupKey }],
+        } : null;
+    }
+    function navigateAdjacentTextLine(delta) {
+        const sync = model.getState().sync;
+        if (!sync.enabled) return false;
+
+        const expectedLineupKey = getExpectedPrompterLineupKey();
+        const position = sync.latestPosition;
+        const boundPosition = position?.lineupKey === expectedLineupKey ? position : null;
+        let song = boundPosition ? sync.songs.find(entry => entry.lineupKey === boundPosition.lineupKey) : null;
+        let block = song?.blocks.find(entry => entry.blockIndex === boundPosition.blockIndex && entry.lines.length > 0);
+        let currentSourceLineIndex = boundPosition?.sourceLineIndex ?? null;
+
+        if (!block) {
+            song = sync.songs.find(entry => entry.lineupKey === sync.activeLineupKey) || null;
+            block = song?.blocks.find(entry => entry.blockIndex === sync.activeBlockIndex && entry.lines.length > 0)
+                || song?.blocks.find(entry => entry.lines.length > 0)
+                || null;
+            currentSourceLineIndex = null;
+        }
+        if (!song || !block?.lines.length) return false;
+
+        let targetIndex = 0;
+        if (Number.isInteger(currentSourceLineIndex)) {
+            const currentIndex = block.lines.findIndex(line => line.sourceLineIndex === currentSourceLineIndex);
+            if (currentIndex < 0) return false;
+            targetIndex = currentIndex + delta;
+        }
+        const targetLine = block.lines[targetIndex];
+        if (!targetLine) return false;
+        return navigateToTextSourceLine({ lineupKey: song.lineupKey, blockIndex: block.blockIndex }, targetLine.sourceLineIndex);
+    }
+    function projectionHasLineup(projection, lineupKey) {
+        return Boolean(lineupKey && (projection?.songs?.some(song => song.lineupKey === lineupKey) || projection?.lineupKey === lineupKey));
+    }
+    function setTextLineupProjection(projection) {
+        const state = model.getState();
+        const expectedLineupKey = getExpectedPrompterLineupKey();
+        const positionLineupKey = state.sync.latestPosition?.lineupKey || state.live?.lineupKey;
+        if ((positionLineupKey && (positionLineupKey !== expectedLineupKey || !projectionHasLineup(projection, positionLineupKey)))
+            || (state.live?.entryId === 'text-sync' && !projectionHasLineup(projection, state.live.lineupKey))) {
+            model.setTextLineup(null);
+        }
+        model.setTextLineup(projection);
+    }
     try {
         prompterPositionChannel = new BroadcastChannel('eclyrics-prompter');
         prompterPositionChannel.addEventListener('message', event => {
@@ -146,27 +202,25 @@
         prompterPositionChannel = null;
     }
     document.addEventListener('eclyrics-text-lineup-updated', event => {
-        const expectedLineupKey = getExpectedPrompterLineupKey();
-        if (!expectedLineupKey || event.detail?.lineupKey !== expectedLineupKey) return;
-        model.setTextLineup(event.detail);
+        setTextLineupProjection(event.detail || null);
     });
     window.addEventListener('focus', () => {
         if (!model.getState().sync.enabled) return;
-        const boundLineup = window.eclyricsEditorPrompter?.getBoundLineup?.() || null;
-        if (!boundLineup || boundLineup.lineupKey !== model.getState().sync.lineupKey) model.setTextLineup(boundLineup);
+        setTextLineupProjection(getTextLineupProjection());
     });
     syncToggles.forEach(toggle => toggle.addEventListener('change', () => {
-        if (!toggle.checked) {
+        const syncEnabled = toggle.checked;
+        if (!syncEnabled) {
             clearTimeout(syncFeedbackTimer);
             syncFeedbackTimer = 0;
-            syncFeedback = '';
+            const feedback = document.getElementById('lyrics-sync-feedback');
+            if (feedback) { feedback.textContent = ''; feedback.hidden = true; }
         }
         const expectedLineupKey = getExpectedPrompterLineupKey();
-        const boundLineup = window.eclyricsEditorPrompter?.getBoundLineup?.() || null;
-        model.setTextLineup(boundLineup);
-        model.setSyncEnabled(toggle.checked);
-        if (toggle.checked) ensureVideoBackground();
-        if (toggle.checked && expectedLineupKey) {
+        setTextLineupProjection(getTextLineupProjection());
+        model.setSyncEnabled(syncEnabled);
+        if (syncEnabled) ensureVideoBackground();
+        if (syncEnabled && expectedLineupKey) {
             setReadingMarkerRatio(readingMarkerRatio);
             prompterPositionChannel?.postMessage({ type: 'eclyrics-prompter-position-request' });
             const videoOutput = window.eclyricsVideoLyrics?.openOutputWindow?.();
@@ -183,15 +237,16 @@
     function status(message, error = false) { get('status').textContent = message; get('status').classList.toggle('is-error', error); }
     function backgroundStatus(message, error = false) {
         const element = get('background-status');
-        element.textContent = message;
+        const visibleMessage = error || message.startsWith('Loading ') ? message : '';
+        element.textContent = visibleMessage;
         element.dataset.error = String(error);
-        element.hidden = !message;
+        element.hidden = !visibleMessage;
     }
     function button(text, label, callback, className = 'video-lyrics-icon') {
         const element = document.createElement('button'); element.type = 'button'; element.className = className;
         element.textContent = text; element.setAttribute('aria-label', label); element.title = label; element.onclick = callback; return element;
     }
-    let lineupPage = 0, pageSize = 4, previousPrepared = null, previousCues = null, previousCueKey = null;
+    let lineupPage = 0, pageSize = 4, previousPrepared = null, previousCues = null, previousCueKey = null, previousSyncLineupKey = null;
     function addSlot(label) {
         const item = document.createElement('li'); item.className = 'video-lyrics-lineup-slot';
         const add = button('', label, openSearch, 'video-lyrics-lineup-slot-button');
@@ -251,19 +306,63 @@
         const focusedControl = panel.contains(document.activeElement) ? document.activeElement.dataset.videoFocus : null;
         const syncing = state.sync.enabled;
         const expectedLineupKey = getExpectedPrompterLineupKey();
-        const hasBoundTextPrompter = Boolean(expectedLineupKey && expectedLineupKey === state.sync.lineupKey);
-        const textProjection = syncing && hasBoundTextPrompter ? state.sync.projection : [];
-        const displayLineup = syncing ? textProjection : state.lineup;
-        const activeTextPosition = syncing && hasBoundTextPrompter ? state.sync.latestPosition : null;
+        const hasBoundTextPrompter = Boolean(expectedLineupKey && state.sync.songs.some(song => song.lineupKey === expectedLineupKey));
+        const textProjection = syncing ? state.sync.songs : [];
+        const textLineup = textProjection.flatMap(song => song.blocks
+            .filter(block => block.lines.length > 0)
+            .map(block => ({
+                key: `${song.lineupKey}:${block.blockIndex}`,
+                lineupKey: song.lineupKey,
+                tabTitle: song.title,
+                blockIndex: block.blockIndex,
+                title: block.title,
+                lines: block.lines,
+            })));
+        const displayLineup = syncing ? textLineup : state.lineup;
+        const boundTextPosition = syncing && hasBoundTextPrompter && state.sync.latestPosition?.lineupKey === expectedLineupKey
+            ? state.sync.latestPosition
+            : null;
+        const boundLineupItem = boundTextPosition
+            ? textLineup.find(entry => entry.lineupKey === boundTextPosition.lineupKey
+                && entry.blockIndex === boundTextPosition.blockIndex
+                && (boundTextPosition.sourceLineIndex === null
+                    || entry.lines.some(line => line.sourceLineIndex === boundTextPosition.sourceLineIndex)))
+            : null;
+        const activeSong = textProjection.find(entry => entry.lineupKey === state.sync.activeLineupKey);
+        const activeTextBlock = activeSong?.blocks.find(block => block.blockIndex === state.sync.activeBlockIndex && block.lines.length > 0)
+            || activeSong?.blocks.find(block => block.lines.length > 0)
+            || null;
+        const selectedLineupItem = boundLineupItem
+            || (activeTextBlock && textLineup.find(entry => entry.lineupKey === activeSong.lineupKey && entry.blockIndex === activeTextBlock.blockIndex))
+            || null;
+        const selectedLineupKey = selectedLineupItem?.key || null;
+        if (syncing) {
+            const selectedSongIndex = displayLineup.findIndex(entry => entry.key === selectedLineupKey);
+            if (selectedLineupKey !== previousSyncLineupKey && selectedSongIndex >= 0) {
+                lineupPage = Math.floor(selectedSongIndex / pageSize);
+            }
+            previousSyncLineupKey = selectedSongIndex >= 0 ? selectedLineupKey : null;
+        } else {
+            previousSyncLineupKey = null;
+        }
         const prepared = syncing
-            ? textProjection.find(entry => entry.blockIndex === activeTextPosition?.blockIndex)
+            ? textProjection.find(entry => entry.lineupKey === selectedLineupItem?.lineupKey) || activeSong
             : state.lineup.find(entry => entry.id === state.preparedId);
-        const displayCues = prepared ? (syncing ? prepared.lines : prepared.cues) : [];
+        const selectedTextBlock = syncing && selectedLineupItem
+            ? prepared?.blocks.find(block => block.blockIndex === selectedLineupItem.blockIndex)
+            : null;
+        const liveTextPosition = syncing && state.live?.entryId === 'text-sync'
+            && Number.isInteger(state.sync.latestPosition?.sourceLineIndex)
+            && state.live.lineupKey === selectedLineupItem?.lineupKey
+            && state.live.blockIndex === selectedLineupItem?.blockIndex
+            && state.live.index === state.sync.latestPosition.sourceLineIndex
+            ? state.live
+            : null;
+        const displayCues = syncing ? (selectedTextBlock?.lines || []) : (prepared?.cues || []);
         const activeCueIndex = syncing
-            ? displayCues.findIndex(cue => cue.sourceLineIndex === activeTextPosition?.sourceLineIndex)
+            ? liveTextPosition ? displayCues.findIndex(cue => cue.sourceLineIndex === liveTextPosition.index) : -1
             : state.preparedIndex;
         syncToggles.forEach(toggle => { toggle.checked = state.sync.enabled; });
-        document.querySelectorAll('.lyrics-sync-status').forEach(element => { element.textContent = syncFeedback || state.sync.status; });
         updateSyncPreviewLayout(state.sync.enabled);
         get('count').textContent = displayLineup.length;
         const displayCount = syncing ? displayLineup.length : Math.max(3, displayLineup.length + 1);
@@ -275,12 +374,26 @@
         for (let index = start; index < end; index++) {
             const entry = displayLineup[index];
             if (!entry) { if (!syncing) items.push(addSlot(`Add lyrics to lineup slot ${index + 1}`)); continue; }
-            const activeBlock = syncing ? entry.blockIndex === activeTextPosition?.blockIndex : entry.id === state.preparedId;
+            const activeBlock = syncing ? entry.key === selectedLineupKey : entry.id === state.preparedId;
             const item = document.createElement('li'); item.className = 'video-lyrics-lineup-entry' + (activeBlock ? ' is-prepared' : '');
             item.classList.toggle('is-text-sync-entry', syncing);
-            item.dataset.lineupId = entry.id;
-            const tag = document.createElement('span'); tag.className = 'video-lyrics-lineup-tag'; tag.textContent = activeBlock && state.live?.entryId === 'text-sync' ? 'ON OUTPUT' : String((syncing ? entry.blockIndex : index) + 1).padStart(2, '0');
-            const select = button(entry.title, syncing ? `Go to ${entry.title}` : `Prepare ${entry.title}`, () => syncing ? navigateToTextBlock(entry) : model.prepare(entry.id), 'video-lyrics-lineup-select'); select.setAttribute('aria-current', String(activeBlock)); select.dataset.videoFocus = `prepare-${entry.id}`;
+            item.dataset.lineupId = syncing ? entry.key : entry.id;
+            const tag = document.createElement('span'); tag.className = 'video-lyrics-lineup-tag'; tag.textContent = syncing
+                ? state.live?.entryId === 'text-sync' && state.live.lineupKey === entry.lineupKey && state.live.blockIndex === entry.blockIndex
+                    ? 'ON OUTPUT'
+                    : String(index + 1).padStart(2, '0')
+                : String(index + 1).padStart(2, '0');
+            const label = `${entry.tabTitle} · ${entry.title}`;
+            const select = syncing
+                ? button('', `Go to ${label}, first lyric line in Text Lyrics`, () => navigateToTextSourceLine(entry, entry.lines[0].sourceLineIndex), 'video-lyrics-lineup-select')
+                : button(entry.title, `Prepare ${entry.title}`, () => model.prepare(entry.id), 'video-lyrics-lineup-select');
+            if (syncing) {
+                select.title = `${label} · Following Text Lyrics`;
+                select.textContent = label;
+                select.dataset.videoFocus = `sync-lineup-${entry.key}`;
+            }
+            else select.dataset.videoFocus = `prepare-${entry.id}`;
+            select.setAttribute('aria-current', String(activeBlock));
             const actions = document.createElement('div'); actions.className = 'video-lyrics-lineup-actions';
             if (!syncing) {
                 const handle = button('', `Drag ${entry.title} to reorder`, () => {}, 'video-lyrics-drag-handle'); handle.innerHTML = '<i class="fa-solid fa-grip-vertical" aria-hidden="true"></i>';
@@ -311,48 +424,67 @@
         const later = button('›', 'Next lineup page', () => { lineupPage++; render(model.getState()); }); later.disabled = lineupPage >= pages - 1;
         const pageLabel = document.createElement('span'); pageLabel.textContent = `${lineupPage + 1} / ${Math.max(1, pages)}`;
         get('lineup-pages').replaceChildren(earlier, pageLabel, later);
-        get('song-title').textContent = syncing ? (prepared?.title || 'Waiting for Text Lyrics') : (prepared?.title || 'Ready when you are');
+        get('song-title').textContent = syncing
+            ? (selectedTextBlock?.title || 'No populated Text Lyrics blocks')
+            : (prepared?.title || 'Ready when you are');
         get('song-meta').textContent = syncing
-            ? (prepared ? `${prepared.lines.length} source lines · Click a line or use ↑ / ↓ to navigate Text Lyrics` : 'Send Text Lyrics to populate the synced lineup.')
+            ? (selectedTextBlock
+                ? `${prepared.title} · ${selectedTextBlock.lines.length} source lines · Following Text Lyrics`
+                : textProjection.length
+                    ? 'Add lyrics to a Text Lyrics block to populate this lineup.'
+                    : 'Add a tab in Text Lyrics to populate this lineup.')
             : (prepared ? `${prepared.cues.length} cues · Click a line or use ↑ / ↓ to cue` : 'Search the library to build a lineup.');
         const emptyHeading = get('cue-empty').querySelector('h3');
         const emptyMessage = get('cue-empty').querySelector('p');
         if (syncing) {
-            emptyHeading.textContent = hasBoundTextPrompter ? 'Waiting for a text lyric.' : 'Waiting for Text Lyrics.';
-            emptyMessage.textContent = hasBoundTextPrompter ? 'The current text marker is not on a lyric line.' : 'Send Text Lyrics to bind a prompter and build this lineup.';
+            emptyHeading.textContent = textProjection.length ? 'No populated lyric blocks.' : 'Waiting for the text prompter.';
+            emptyMessage.textContent = textProjection.length
+                ? 'Add lyrics to a Text Lyrics block to show its source lines here.'
+                : 'Add a tab in Text Lyrics to populate this lineup.';
         } else {
             emptyHeading.textContent = 'Select a song.';
             emptyMessage.textContent = 'Add a song, then click a lyric or use the arrow keys to prompt it.';
         }
         get('cue-empty').hidden = displayCues.length > 0;
         get('cues').hidden = displayCues.length === 0;
-        const cuesChanged = previousPrepared !== prepared?.id || previousCues !== displayCues;
+        if (syncing) {
+            get('cues').setAttribute('role', 'group');
+            get('cues').setAttribute('aria-label', `Source lines from ${selectedLineupItem?.tabTitle || 'Text Lyrics'}, ${selectedTextBlock?.title || 'selected block'}`);
+        } else {
+            get('cues').removeAttribute('role');
+            get('cues').removeAttribute('aria-label');
+        }
+        const preparedKey = syncing
+            ? selectedLineupKey
+            : prepared?.id;
+        const cuesChanged = previousPrepared !== preparedKey || previousCues !== displayCues;
         if (cuesChanged) get('cues').replaceChildren(...displayCues.map((cue, index) => {
             const isLive = syncing
-                ? activeTextPosition?.blockIndex === prepared.blockIndex && activeTextPosition?.sourceLineIndex === cue.sourceLineIndex
+                ? liveTextPosition?.lineupKey === selectedLineupItem?.lineupKey && liveTextPosition?.blockIndex === selectedTextBlock?.blockIndex && liveTextPosition?.index === cue.sourceLineIndex
                 : state.live?.entryId === prepared.id && state.live.index === index;
             const sourceLineNumber = cue.sourceLineIndex + 1;
-            const label = syncing ? `Go to Text Lyrics line ${sourceLineNumber}: ${cue.text}` : `${cue.isTitle ? 'Cue song title' : `Cue line ${index + 1}`}: ${cue.text}`;
-            const cueButton = button('', label, () => syncing
-                ? navigateToTextPosition({ blockIndex: prepared.blockIndex, sourceLineIndex: cue.sourceLineIndex })
-                : model.cue(index), 'video-lyrics-cue');
+            const cueButton = syncing
+                ? button('', `Go to ${selectedLineupItem.tabTitle} · ${selectedTextBlock.title}, line ${sourceLineNumber} in Text Lyrics: ${cue.text}`, () => navigateToTextSourceLine(selectedLineupItem, cue.sourceLineIndex), 'video-lyrics-cue')
+                : button('', `${cue.isTitle ? 'Cue song title' : `Cue line ${index + 1}`}: ${cue.text}`, () => model.cue(index), 'video-lyrics-cue');
+            if (syncing) cueButton.dataset.videoFocus = `sync-cue-${selectedLineupItem.key}-${cue.sourceLineIndex}`;
             cueButton.classList.toggle('is-live', isLive); cueButton.classList.toggle('is-prepared', !syncing && !isLive && index === state.preparedIndex);
             cueButton.classList.toggle('is-title', !syncing && !!cue.isTitle);
             cueButton.classList.toggle('is-section', !syncing && index > 0 && prepared.cues[index - 1].section !== cue.section);
-            cueButton.setAttribute('aria-current', String(isLive)); cueButton.dataset.videoFocus = `cue-${prepared.id}-${syncing ? cue.sourceLineIndex : index}`;
+            cueButton.setAttribute('aria-current', String(isLive));
+            if (!syncing) cueButton.dataset.videoFocus = `cue-${prepared.id}-${index}`;
             const number = document.createElement('span'); number.className = 'video-lyrics-cue-number'; number.textContent = String(syncing ? sourceLineNumber : index + 1).padStart(2, '0');
             const text = document.createElement('span'); text.textContent = cue.text; cueButton.append(number, text); return cueButton;
         }));
-        previousPrepared = prepared?.id; previousCues = displayCues;
+        previousPrepared = preparedKey; previousCues = displayCues;
         Array.from(get('cues').children).forEach((element, index) => {
             const cue = displayCues[index];
             const live = syncing
-                ? activeTextPosition?.blockIndex === prepared?.blockIndex && activeTextPosition?.sourceLineIndex === cue?.sourceLineIndex
+                ? liveTextPosition?.lineupKey === selectedLineupItem?.lineupKey && liveTextPosition?.blockIndex === selectedTextBlock?.blockIndex && liveTextPosition?.index === cue?.sourceLineIndex
                 : state.live?.entryId === prepared?.id && state.live.index === index;
             element.classList.toggle('is-live', live); element.classList.toggle('is-prepared', !syncing && !live && index === state.preparedIndex);
             element.setAttribute('aria-current', String(live));
         });
-        const cueKey = `${prepared?.id}:${activeCueIndex}`;
+        const cueKey = `${preparedKey}:${activeCueIndex}`;
         if (cueKey !== previousCueKey || cuesChanged) {
             previousCueKey = cueKey;
             const active = get('cues').children[activeCueIndex];
@@ -362,20 +494,17 @@
                 container.scrollTo({ top: Math.max(0, Math.min(container.scrollHeight - container.clientHeight, top)), behavior: 'instant' });
             } else if (cuesChanged) get('cues').scrollTop = 0;
         }
-        get('prev').disabled = syncing
-            ? !hasBoundTextPrompter || !model.getNextTextPosition(-1)
-            : !prepared?.cues.length || state.preparedIndex <= 0;
-        get('next').disabled = syncing
-            ? !hasBoundTextPrompter || !model.getNextTextPosition(1)
-            : !prepared?.cues.length || state.preparedIndex >= prepared.cues.length - 1;
+        get('prev').disabled = syncing || !prepared?.cues.length || state.preparedIndex <= 0;
+        get('next').disabled = syncing || !prepared?.cues.length || state.preparedIndex >= prepared.cues.length - 1;
         const liveEntry = state.lineup.find(entry => entry.id === state.live?.entryId);
         get('background-name').textContent = state.background?.name || 'No background selected';
         get('background-name').title = state.background?.name || '';
         get('live-label').textContent = !state.live ? 'No lyric on output'
-            : state.live.entryId === 'text-sync' ? `ON OUTPUT · TEXT LYRICS · Block ${(state.live.blockIndex ?? 0) + 1} · Line ${state.live.index + 1}`
+            : state.live.entryId === 'text-sync' ? `ON OUTPUT · ${state.live.songTitle || 'TEXT LYRICS'} · Block ${(state.live.blockIndex ?? 0) + 1} · Line ${state.live.index + 1}`
                 : `ON OUTPUT · ${liveEntry?.title} · Cue ${state.live.index + 1}`;
         const settings = state.settings;
-        [['font', 'fontFamily'], ['weight', 'fontWeight'], ['size', 'fontSize'], ['color', 'color'], ['hex', 'color'], ['alignment', 'alignment'], ['fade', 'fadeMs'], ['dimming', 'dimming']].forEach(([id, key]) => { if (document.activeElement !== get(id)) get(id).value = settings[key]; });
+        [['font', 'fontFamily'], ['weight', 'fontWeight'], ['size', 'fontSize'], ['color', 'color'], ['hex', 'color'], ['fade', 'fadeMs'], ['fade-value', 'fadeMs'], ['y', 'y'], ['playback-rate', 'playbackRate'], ['dimming', 'dimming']].forEach(([id, key]) => { if (document.activeElement !== get(id)) get(id).value = settings[key]; });
+        get('playback-rate-value').textContent = `${settings.playbackRate.toFixed(1)}×`;
         syncFontPicker(settings);
         if (focusedControl) panel.querySelector(`[data-video-focus="${focusedControl}"]`)?.focus({ preventScroll: true });
     }
@@ -450,8 +579,13 @@
         });
     }
     get('prev').onclick = () => advanceVideoLyrics(-1); get('next').onclick = () => advanceVideoLyrics(1);
-    [['font', 'fontFamily'], ['weight', 'fontWeight'], ['size', 'fontSize'], ['color', 'color'], ['alignment', 'alignment'], ['fade', 'fadeMs'], ['dimming', 'dimming']].forEach(([id, key]) => get(id).addEventListener('input', () => { if (get(id).value !== '') model.updateSettings({ [key]: get(id).value }); }));
-    [['size', 'fontSize'], ['fade', 'fadeMs'], ['dimming', 'dimming']].forEach(([id, key]) => {
+    [['font', 'fontFamily'], ['weight', 'fontWeight'], ['size', 'fontSize'], ['color', 'color'], ['fade', 'fadeMs'], ['y', 'y'], ['playback-rate', 'playbackRate'], ['dimming', 'dimming']].forEach(([id, key]) => get(id).addEventListener('input', () => { if (get(id).value !== '') model.updateSettings({ [key]: get(id).value }); }));
+    get('fade-value').addEventListener('change', () => {
+        if (get('fade-value').value !== '') model.updateSettings({ fadeMs: get('fade-value').value });
+        get('fade-value').value = model.getState().settings.fadeMs;
+    });
+    get('fade-value').addEventListener('blur', () => { get('fade-value').value = model.getState().settings.fadeMs; });
+    [['size', 'fontSize'], ['y', 'y'], ['playback-rate', 'playbackRate'], ['dimming', 'dimming']].forEach(([id, key]) => {
         const field = get(id);
         const syncClampedValue = () => { field.value = model.getState().settings[key]; };
         field.addEventListener('change', syncClampedValue);
@@ -470,7 +604,10 @@
         if (!panel.classList.contains('is-active') || event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || document.querySelector('dialog[open]') || event.target.closest('input,textarea,select,[contenteditable="true"],[role="dialog"]')) return;
         if (!['ArrowUp', 'ArrowDown'].includes(event.key)) return;
         if (event.repeat) return;
-        event.preventDefault(); advanceVideoLyrics(event.key === 'ArrowDown' ? 1 : -1);
+        event.preventDefault();
+        const delta = event.key === 'ArrowDown' ? 1 : -1;
+        if (model.getState().sync.enabled) navigateAdjacentTextLine(delta);
+        else advanceVideoLyrics(delta);
 
     });
     const fontRegistry = window.eclyricsVideoFonts;

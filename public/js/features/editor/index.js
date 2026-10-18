@@ -752,14 +752,40 @@ function buildTextLineupProjection(tabId) {
     return { lineupKey: getLineupKeyForTab(tabId), blocks };
 }
 
-function publishTextLineupProjection(tabId) {
-    if (prompterBoundTabId !== tabId || !isPrompterWindowOpen()) return;
+function buildTextSongsProjection() {
+    const activeTabId = getActiveTabId();
+    const selectedTextarea = activeTabId == null ? null : textNum[activeTabId.toString()]?.[2];
+    const selectedTextareaMatch = selectedTextarea?.id.match(/^textarea-(\d+)-(\d+)$/);
+    const songs = [...document.querySelectorAll('#tabs-list .tab')].map((tab) => {
+        const tabId = parseInt(tab.dataset.tabId, 10);
+        return {
+            ...buildTextLineupProjection(tabId),
+            title: getTabLabel(tab) || `Tab ${tabId}`,
+        };
+    });
+    return {
+        activeLineupKey: activeTabId == null ? null : getLineupKeyForTab(activeTabId),
+        activeBlockIndex: selectedTextareaMatch && parseInt(selectedTextareaMatch[1], 10) === activeTabId
+            ? parseInt(selectedTextareaMatch[2], 10) - 1
+            : null,
+        songs,
+    };
+}
+
+function publishTextLineupProjection() {
     document.dispatchEvent(new CustomEvent('eclyrics-text-lineup-updated', {
-        detail: buildTextLineupProjection(tabId),
+        detail: buildTextSongsProjection(),
     }));
 }
 
 window.eclyricsEditorPrompter = {
+    getTextLineupProjection() {
+        return buildTextSongsProjection();
+    },
+    getActiveLineup() {
+        const tabId = getActiveTabId();
+        return tabId == null ? null : buildTextLineupProjection(tabId);
+    },
     getBoundLineupKey() {
         if (prompterBoundTabId == null || !isPrompterWindowOpen()) return null;
         return getLineupKeyForTab(prompterBoundTabId);
@@ -768,14 +794,44 @@ window.eclyricsEditorPrompter = {
         if (prompterBoundTabId == null || !isPrompterWindowOpen()) return null;
         return buildTextLineupProjection(prompterBoundTabId);
     },
-    navigateToSourceLine({ lineupKey, blockIndex, sourceLineIndex }) {
-        const currentLineupKey = this.getBoundLineupKey();
-        if (typeof lineupKey !== 'string' || lineupKey !== currentLineupKey) return false;
-        if (!Number.isInteger(blockIndex) || blockIndex < 0) return false;
-        const projection = buildTextLineupProjection(prompterBoundTabId);
-        const block = projection.blocks.find((entry) => entry.blockIndex === blockIndex);
-        if (!block) return false;
-        if (sourceLineIndex !== null && (!Number.isInteger(sourceLineIndex) || !block.lines.some((line) => line.sourceLineIndex === sourceLineIndex))) return false;
+    navigateToSourceLine({ lineupKey, blockIndex, sourceLineIndex } = {}) {
+        if (!isPrompterWindowOpen()) return false;
+        if (
+            typeof lineupKey !== 'string' ||
+            !Number.isInteger(blockIndex) || blockIndex < 0 ||
+            !Number.isInteger(sourceLineIndex)
+        ) return false;
+
+        const projection = buildTextSongsProjection();
+        const song = projection.songs.find((entry) => entry.lineupKey === lineupKey);
+        const block = song?.blocks.find((entry) => entry.blockIndex === blockIndex);
+        if (!block?.lines.some((line) => line.sourceLineIndex === sourceLineIndex)) return false;
+
+        const targetTab = [...document.querySelectorAll('#tabs-list .tab')].find((tab) => {
+            const tabId = parseInt(tab.dataset.tabId, 10);
+            return getLineupKeyForTab(tabId) === lineupKey;
+        });
+        if (!targetTab) return false;
+
+        const tabId = parseInt(targetTab.dataset.tabId, 10);
+        const currentPosition = lastPrompterSync;
+        const targetBlockMarkup = buildLineupForTab(tabId)[blockIndex];
+        const guard = getSyncGuardApi();
+        const targetContentFingerprint =
+            typeof targetBlockMarkup === 'string' && typeof guard?.hashString === 'function'
+                ? guard.hashString(targetBlockMarkup)
+                : null;
+        const alreadyOnTarget =
+            prompterBoundTabId === tabId &&
+            currentPosition?.lineupKey === lineupKey &&
+            currentPosition.currentIndex === blockIndex &&
+            typeof currentPosition.contentFingerprint === 'string' &&
+            typeof targetContentFingerprint === 'string' &&
+            currentPosition.contentFingerprint === targetContentFingerprint;
+        if (!alreadyOnTarget) {
+            sendPrompt(tabId, blockIndex + 1, { openIfClosed: false, focusWindow: false });
+        }
+
         return postPrompterControl({ action: 'goToSourceLine', lineupKey, blockIndex, sourceLineIndex });
     },
 };
@@ -795,7 +851,7 @@ function pushLineupToOpenPrompter(tabId) {
     const lineupKey = getLineupKeyForTab(tabId);
     const data = buildLineupForTab(tabId);
     localStorage.setItem(lineupKey, JSON.stringify(data));
-    publishTextLineupProjection(tabId);
+    publishTextLineupProjection();
     postPrompterControl({ action: 'updateLineup', lineupKey, data });
 }
 
@@ -1047,6 +1103,10 @@ function selectTextarea(textarea) {
     const m = textarea.id.match(/^textarea-(\d+)-(\d+)$/);
     if (!m) return;
     const tabId = m[1];
+    const previousSelectedTextarea = textNum[tabId]?.[2];
+    const previousSelectedIndex = previousSelectedTextarea?.id.match(/^textarea-(\d+)-(\d+)$/);
+    const selectionChanged = previousSelectedTextarea !== textarea
+        || previousSelectedIndex?.[2] !== m[2];
 
     document.querySelectorAll(`#tab-${tabId} .textarea-cell.is-selected`).forEach((cell) => {
         cell.classList.remove('is-selected');
@@ -1058,6 +1118,9 @@ function selectTextarea(textarea) {
     textNum[tabId][2] = textarea;
     updateActiveBlockToolbar();
     updatePreview();
+    if (selectionChanged && getActiveTabId() === parseInt(tabId, 10)) {
+        publishTextLineupProjection();
+    }
 }
 
 function getSelectedTextareaForActiveTab() {
@@ -1631,6 +1694,7 @@ function initShell() {
                 } else {
                     schedulePrompterLineupSync(tid);
                 }
+                publishTextLineupProjection();
             }
             const blockTabId = blockTabIdForTextarea(e.target);
             if (blockTabId && blockEditorSession?.blockTabId === blockTabId) {
@@ -1999,6 +2063,7 @@ function removeBlockCell(cell, tabId) {
         updateActiveBlockToolbar();
         updatePreview();
     }
+    publishTextLineupProjection();
 }
 
 function getOrCreateRowForNewBlock(container) {
@@ -2120,6 +2185,7 @@ function addSingleBlock(container, tabId) {
     syncBlockRemoveButtons(tabId);
     maintainEmptySlotForTab(tabId);
     if (prompterBoundTabId === tabId) schedulePrompterLineupSync(tabId);
+    if (container.isConnected) publishTextLineupProjection();
 }
 
 function showTabContent(tabId) {
@@ -2140,6 +2206,7 @@ function showTabContent(tabId) {
             updateActiveBlockToolbar();
             updatePreview();
         }
+        publishTextLineupProjection();
     }
 }
 
@@ -2187,6 +2254,7 @@ function handleTabClose(tab) {
             updatePreview();
         }
     }
+    publishTextLineupProjection();
 }
 
 let tabInlineRename = null;
@@ -2256,6 +2324,7 @@ function finishTabInlineRename(save) {
     label.textContent = name;
     tab.classList.remove('is-renaming');
     tabInlineRename = null;
+    if (name !== prevName) publishTextLineupProjection();
 }
 
 window.getActiveTabLabel = function getActiveTabLabel() {
@@ -2301,7 +2370,7 @@ function sendPrompt(tabId, textId, options = {}) {
     updatePreview();
 
     prompterBoundTabId = tabId;
-    publishTextLineupProjection(tabId);
+    publishTextLineupProjection();
 
     const payload = {
         type: 'eclyrics-prompter-load',
@@ -2344,7 +2413,7 @@ function sendPrompt(tabId, textId, options = {}) {
     const url = `prompter.html?title=${encodeURIComponent(lineupKey)}&current=${textId - 1}`;
     prompterPopupWindow = window.open(url, PROMPTER_WINDOW_NAME, popupFeatures);
     textNum[tabId.toString()][1] = prompterPopupWindow;
-    if (prompterPopupWindow) publishTextLineupProjection(tabId);
+    if (prompterPopupWindow) publishTextLineupProjection();
     if (prompterPopupWindow) prompterPopupWindow.focus();
     openVideoPrompterWhenSyncIsEnabled();
     updatePreview();

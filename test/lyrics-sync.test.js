@@ -18,19 +18,46 @@ function extractFunction(source, name) {
     assert.fail(`${name}() has a complete body`);
 }
 
-test('Text and Video lyric sync remain off by default and Text Lyrics stays the primary workspace', () => {
+test('Text Lyrics is the only Sync control and stays the primary workspace', () => {
     const text = read('public/modules/text-lyrics.html');
     const video = read('public/modules/video-lyrics.html');
-    const textToggle = text.match(/<input[^>]*data-lyrics-sync-toggle[^>]*>/)?.[0];
-    const videoToggle = video.match(/<input[^>]*data-lyrics-sync-toggle[^>]*>/)?.[0];
+    const textToggles = [...text.matchAll(/<input[^>]*data-lyrics-sync-toggle[^>]*>/g)];
+    const videoToggles = [...video.matchAll(/<input[^>]*data-lyrics-sync-toggle[^>]*>/g)];
 
     assert.match(text, /id="panel-text" class="panel is-active"/);
     assert.match(text, /id="workspace"/);
     assert.match(video, /id="panel-video" class="panel video-lyrics-panel"/);
     assert.match(video, /class="video-lyrics-workspace"/);
-    assert.ok(textToggle && videoToggle, 'both modes expose the optional Sync switch');
-    assert.doesNotMatch(textToggle, /\bchecked\b/);
-    assert.doesNotMatch(videoToggle, /\bchecked\b/);
+    assert.equal(textToggles.length, 1, 'Text Lyrics exposes the Sync switch');
+    assert.equal(videoToggles.length, 0, 'Video Lyrics has no independent Sync switch');
+    assert.doesNotMatch(textToggles[0][0], /\bchecked\b/, 'Sync is off by default');
+});
+
+test('the Text to Video sync and preview refinement cache tokens match their entry points', () => {
+    const oneWayToken = '20261017-text-video-one-way';
+    const previewToken = '20261017-sync-preview-refinement';
+    const videoPositionToken = '20261017-video-position-controls';
+    const compactVideoRowToken = '20261017-sync-balanced-preview-rows';
+    const shell = read('public/index.html');
+    const prompter = read('public/prompter.html');
+    const bootstrap = read('public/js/core/app-bootstrap.js');
+
+    assert.match(shell, new RegExp(`assets/css/index\\.css\\?v=${compactVideoRowToken}`));
+    assert.match(shell, new RegExp(`assets/css/video-lyrics\\.css\\?v=${compactVideoRowToken}`));
+    assert.match(shell, new RegExp(`assets/css/video-prompter\\.css\\?v=${compactVideoRowToken}`));
+    assert.match(shell, new RegExp(`js/core/app-bootstrap\\.js\\?v=${compactVideoRowToken}`));
+    assert.match(prompter, new RegExp(`js/features/prompter/prompter\\.js\\?v=${oneWayToken}`));
+    assert.ok(bootstrap.includes(`js/features/editor/index.js?v=${oneWayToken}`), 'Text editor uses the one-way sync token');
+    assert.ok(bootstrap.includes(`js/features/video-lyrics/index.js?v=${videoPositionToken}`), 'Video control behavior uses the position and speed token');
+    assert.ok(bootstrap.includes(`js/features/video-lyrics/backgrounds.js?v=${previewToken}`), 'Video backgrounds retain their preview refinement token');
+    assert.ok(bootstrap.includes(`js/features/video-lyrics/model.js?v=${videoPositionToken}`), 'Video model settings use the position and speed token');
+    assert.ok(bootstrap.includes(`js/features/video-lyrics/stage.js?v=${videoPositionToken}`), 'Video output stage uses the position and speed token');
+    assert.ok(bootstrap.includes(`js/features/video-lyrics/output.js?v=${videoPositionToken}`), 'Video output bridge uses the position and speed token');
+    assert.match(bootstrap, new RegExp(`cacheVersion: '${previewToken}'`));
+    assert.equal((bootstrap.match(new RegExp(`cacheVersion: '${previewToken}'`, 'g')) || []).length, 1,
+        'the Text fragment retains its preview refinement token');
+    assert.ok(bootstrap.includes(`file: 'video-lyrics.html', panelId: 'panel-video', cacheVersion: '${videoPositionToken}'`),
+        'the lazy-loaded Video fragment uses the position and speed token');
 });
 
 test('each source lyric line is retained as one semantic span for direct video sync', () => {
@@ -41,6 +68,29 @@ test('each source lyric line is retained as one semantic span for direct video s
 
     assert.equal(context.formatForTest('First source line\nSecond source line'),
         '<span data-prompter-source-line="0">First source line</span>\n<span data-prompter-source-line="1">Second source line</span>');
+});
+
+test('the Video lineup projection includes each Text block and preserves original source line indexes', () => {
+    const source = read('public/js/features/editor/index.js');
+    const projection = extractFunction(source, 'buildTextLineupProjection');
+    const values = new Map([
+        ['textarea-tab-a-1', 'Opening\n\nSecond line'],
+        ['textarea-tab-a-2', '  Chorus  \nLast line'],
+    ]);
+    const document = { getElementById: id => values.has(id) ? { value: values.get(id) } : null };
+    const normalizeSmartQuotes = text => text.replace(/[’‘]/g, "'");
+    const build = new Function(
+        'document', 'window', 'getLineupKeyForTab',
+        `${projection}; return buildTextLineupProjection;`,
+    )(document, { eclyricsSmartQuotes: { normalizeSmartQuotes } }, tabId => `text-${tabId}`);
+
+    assert.deepEqual(build('tab-a'), {
+        lineupKey: 'text-tab-a',
+        blocks: [
+            { blockIndex: 0, title: 'Opening', lines: [{ sourceLineIndex: 0, text: 'Opening' }, { sourceLineIndex: 2, text: 'Second line' }] },
+            { blockIndex: 1, title: 'Chorus', lines: [{ sourceLineIndex: 0, text: 'Chorus' }, { sourceLineIndex: 1, text: 'Last line' }] },
+        ],
+    });
 });
 
 test('the default 50% marker selects the Text line at its reading point, and moving it changes the selected line', () => {

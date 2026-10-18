@@ -84,12 +84,35 @@ test('blank output clears the live lyric, notifies subscribers, and keeps prepar
     assert.equal(notifications.length, 2);
 });
 test('appearance accepts permitted fonts and colors and clamps numeric settings', () => {
-    const m = model(); m.updateSettings({ fontFamily: 'Inter', color: '#AaBBcc', fontWeight: '500', fontSize: 999, fadeMs: -1, alignment: 'right' });
+    const m = model(); m.updateSettings({ fontFamily: 'Inter', color: '#AaBBcc', fontWeight: '500', fontSize: 999, fadeMs: -1 });
     const s = m.getState().settings;
     assert.equal(s.fontFamily, 'Inter'); assert.equal(s.color, '#aabbcc'); assert.equal(s.fontSize, 160);
     assert.equal(s.fadeMs, 0); assert.equal(s.fontWeight, 500);
-    m.updateSettings({ fontFamily: 'Unknown', color: 'red', fontWeight: 42, fontSize: NaN, alignment: 'bad' });
-    assert.equal(s.fontFamily, 'Inter'); assert.equal(s.color, '#aabbcc'); assert.equal(s.fontSize, 160); assert.equal(s.alignment, 'right');
+    m.updateSettings({ fontFamily: 'Unknown', color: 'red', fontWeight: 42, fontSize: NaN });
+    assert.equal(s.fontFamily, 'Inter'); assert.equal(s.color, '#aabbcc'); assert.equal(s.fontSize, 160);
+});
+
+test('video vertical position, fade stops, and playback speed use bounded shared settings', () => {
+    const m = model(), settings = m.getState().settings;
+    assert.equal(settings.y, 540, 'the default vertical anchor centers the lyric on a 1080 px stage');
+    assert.equal(settings.positionUnit, 'stage-px-v1');
+    assert.equal(Object.hasOwn(settings, 'x'), false, 'horizontal positioning is not a Video Lyrics setting');
+    assert.equal(Object.hasOwn(settings, 'alignment'), false, 'text alignment is always centered');
+    assert.equal(settings.playbackRate, 1);
+
+    m.updateSettings({ y: -20, fadeMs: 449, playbackRate: 1.26 });
+    assert.equal(settings.y, 0, 'the vertical anchor is clamped to the top edge');
+    assert.equal(settings.fadeMs, 400, 'fade duration snaps to the nearest 100 ms stop');
+    assert.equal(settings.playbackRate, 1.3, 'playback speed snaps to a tenth');
+
+    m.updateSettings({ y: 547, fadeMs: 455, playbackRate: 0.1 });
+    assert.equal(settings.y, 550, 'vertical position snaps to a 10 px control stop');
+    assert.equal(settings.fadeMs, 500);
+    assert.equal(settings.playbackRate, 0.5, 'playback speed clamps at its minimum');
+    m.updateSettings({ y: 2400, fadeMs: 2400, playbackRate: 3 });
+    assert.equal(settings.y, 1080, 'the vertical anchor is clamped to the bottom edge');
+    assert.equal(settings.fadeMs, 2000);
+    assert.equal(settings.playbackRate, 2, 'playback speed clamps at its maximum');
 });
 
 test('editing one duplicate lineup instance preserves the other and refreshes a clamped live cue', () => {
@@ -116,11 +139,19 @@ test('appearance defaults and video-only dimming clamps both boundaries', () => 
     m.updateSettings({ dimming: 'invalid' }); assert.equal(settings.dimming, .9);
 });
 
-test('Text sync starts off and sends each active Text source line directly without a Video lineup', () => {
+test('Text sync follows projected blocks and source lines without requiring a separate Video lineup', () => {
     const m = model();
     assert.equal(m.getState().sync.enabled, false);
     assert.equal(m.getState().lineup.length, 0, 'Sync does not require a searched or prepared Video song');
 
+    m.setTextLineup({ lineupKey: 'text-tab-a', blocks: [{
+        blockIndex: 8,
+        title: 'Text block 9',
+        lines: [
+            { sourceLineIndex: 14, text: 'Café, déjà-vu!' },
+            { sourceLineIndex: 15, text: 'A line from the same Text block' },
+        ],
+    }] });
     m.setSyncEnabled(true);
     m.updateTextPosition({ lineupKey: 'text-tab-a', blockIndex: 8, sourceLineIndex: 14, lineText: '  Café, déjà-vu!  ' });
 
@@ -129,16 +160,21 @@ test('Text sync starts off and sends each active Text source line directly witho
     assert.equal(m.getState().live.text, 'Café, déjà-vu!', 'video output uses the same active Text lyric, preserving its spelling and punctuation');
     assert.equal(m.getState().lineup.length, 0);
 
-    m.updateTextPosition({ lineupKey: 'text-tab-a', blockIndex: 8, sourceLineIndex: 15, lineText: 'A line that is not in the Video song set' });
-    assert.equal(m.getState().live.text, 'A line that is not in the Video song set');
+    m.updateTextPosition({ lineupKey: 'text-tab-a', blockIndex: 8, sourceLineIndex: 15, lineText: 'A line from the same Text block' });
+    assert.equal(m.getState().live.text, 'A line from the same Text block');
     assert.equal(m.getState().live.index, 15);
 });
 
 test('a blank position at the adjustable Text marker keeps the last active Video lyric', () => {
     const m = model();
+    m.setTextLineup({ lineupKey: 'text-tab-a', blocks: [{
+        blockIndex: 0,
+        title: 'Text block',
+        lines: [{ sourceLineIndex: 2, text: 'Last active line' }],
+    }] });
     m.setSyncEnabled(true);
-    m.updateTextPosition({ blockIndex: 0, sourceLineIndex: 2, lineText: 'Last active line' });
-    m.updateTextPosition({ blockIndex: 0, sourceLineIndex: null, lineText: '' });
+    m.updateTextPosition({ lineupKey: 'text-tab-a', blockIndex: 0, sourceLineIndex: 2, lineText: 'Last active line' });
+    m.updateTextPosition({ lineupKey: 'text-tab-a', blockIndex: 0, sourceLineIndex: null, lineText: '' });
 
     assert.equal(m.getState().live.text, 'Last active line');
     assert.match(m.getState().sync.status, /Waiting for a lyric at the text marker/);
@@ -147,42 +183,81 @@ test('a blank position at the adjustable Text marker keeps the last active Video
 test('sync off retains the cue and turning it on follows the latest text position', () => {
     const m = model();
     m.add({ title: 'Song', lyrics: 'First\nSecond\nThird' });
+    m.setTextLineup({ lineupKey: 'text-tab-a', blocks: [{
+        blockIndex: 0,
+        title: 'Text block',
+        lines: [
+            { sourceLineIndex: 0, text: 'First' },
+            { sourceLineIndex: 1, text: 'Second' },
+            { sourceLineIndex: 2, text: 'Third' },
+        ],
+    }] });
     m.setSyncEnabled(true);
-    const position = lineText => ({ lineupKey: 'text-tab-a', blockIndex: 0, sourceLineIndex: 0, lineText });
-    m.updateTextPosition(position('Second'));
+    const position = sourceLineIndex => ({ lineupKey: 'text-tab-a', blockIndex: 0, sourceLineIndex, lineText: ['First', 'Second', 'Third'][sourceLineIndex] });
+    m.updateTextPosition(position(1));
     assert.equal(m.getState().live.text, 'Second');
 
     m.setSyncEnabled(false);
     assert.equal(m.getState().live.text, 'Second');
-    m.updateTextPosition(position('Third'));
+    m.updateTextPosition(position(2));
     assert.equal(m.getState().live.text, 'Second', 'positions received while off are stored without changing output');
 
     m.setSyncEnabled(true);
     assert.equal(m.getState().live.text, 'Third', 'resuming applies the most recently received position');
 });
 
-test('manual video cue and advance pause sync; re-enabling follows the latest text position', () => {
+test('Video cue and advance cannot move Text while synced; standalone Video controls work when Sync is off', () => {
     const m = model();
     const songId = m.add({ title: 'Song', lyrics: 'First\nSecond\nThird' });
     m.prepare(songId);
+    m.setTextLineup({ lineupKey: 'text-tab-a', blocks: [{
+        blockIndex: 0,
+        title: 'Text block',
+        lines: [
+            { sourceLineIndex: 0, text: 'First' },
+            { sourceLineIndex: 1, text: 'Second' },
+            { sourceLineIndex: 2, text: 'Third' },
+        ],
+    }] });
     m.setSyncEnabled(true);
-    const position = (sourceLineIndex, lineText) => ({ lineupKey: 'text-tab-a', blockIndex: 0, sourceLineIndex, lineText });
-    m.updateTextPosition(position(0, 'First'));
-    m.updateTextPosition(position(1, 'Second'));
+    const position = sourceLineIndex => ({ lineupKey: 'text-tab-a', blockIndex: 0, sourceLineIndex, lineText: ['First', 'Second', 'Third'][sourceLineIndex] });
+    m.updateTextPosition(position(0));
+    m.updateTextPosition(position(1));
     assert.equal(m.getState().live.text, 'Second');
 
-    m.cue(4);
-    assert.equal(m.getState().sync.enabled, false);
-    assert.equal(m.getState().sync.paused, true);
-    assert.equal(m.getState().live.text, 'To God be the Glory');
-    m.updateTextPosition(position(2, 'Third'));
-    assert.equal(m.getState().live.text, 'To God be the Glory');
-    m.setSyncEnabled(true);
+    const syncedPosition = { ...m.getState().sync.latestPosition };
+    assert.equal(m.cue(4), false, 'a Video cue cannot take control from Text');
+    assert.equal(m.advance(-1), false, 'Video previous/next and popup advance are rejected during Sync');
+    m.prepare(songId);
+    assert.equal(m.getState().sync.enabled, true);
+    assert.equal(m.getState().sync.latestPosition.lineText, syncedPosition.lineText);
+    assert.equal(m.getState().live.text, 'Second');
+    m.updateTextPosition(position(2));
     assert.equal(m.getState().live.text, 'Third');
 
-    m.advance(-1);
-    assert.equal(m.getState().sync.enabled, false);
-    assert.equal(m.getState().live.text, 'Third', 'manual Video navigation returns to its own prepared lineup');
-    m.updateTextPosition(position(0, 'First'));
+    m.setSyncEnabled(false);
+    assert.equal(m.cue(4), true, 'a Video cue works in standalone mode');
+    assert.equal(m.getState().live.text, 'To God be the Glory');
+    assert.equal(m.advance(-1), true, 'Video previous/next works in standalone mode');
     assert.equal(m.getState().live.text, 'Third');
+});
+
+test('Text projection preserves block order and source line indexes across Video blocks', () => {
+    const m = model();
+    m.setTextLineup({ lineupKey: 'text-tab-a', blocks: [
+        { blockIndex: 0, title: 'Opening', lines: [{ sourceLineIndex: 0, text: 'First line' }, { sourceLineIndex: 2, text: 'Second line' }] },
+        { blockIndex: 3, title: 'Chorus', lines: [{ sourceLineIndex: 1, text: 'Chorus line' }] },
+    ] });
+    m.setSyncEnabled(true);
+
+    assert.deepEqual(Array.from(m.getState().sync.projection, block => [block.blockIndex, block.title, block.lines.map(line => line.sourceLineIndex)]), [
+        [0, 'Opening', [0, 2]],
+        [3, 'Chorus', [1]],
+    ]);
+    m.updateTextPosition({ lineupKey: 'text-tab-a', blockIndex: 0, sourceLineIndex: 2, lineText: 'Second line' });
+    assert.equal(m.getState().live.text, 'Second line', 'Text position selects a matching line in the first Video block');
+    m.updateTextPosition({ lineupKey: 'text-tab-a', blockIndex: 3, sourceLineIndex: 1, lineText: 'Chorus line' });
+    assert.equal(m.getState().live.text, 'Chorus line', 'Text position selects a matching line across Video blocks');
+    assert.equal(m.getState().live.blockIndex, 3);
+    assert.equal(m.getState().lineup.length, 0, 'mirroring the Text lineup does not create a second editable Video lineup');
 });

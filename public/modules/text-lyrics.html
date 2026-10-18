@@ -2,7 +2,9 @@
                     <div class="workspace" id="workspace">
                         <div class="workspace-editor">
                             <div class="lyrics-toolbar">
-                                <h2 id="panel-text-title" class="lyrics-mode-heading"><i class="fa-solid fa-align-left" aria-hidden="true"></i>Text Lyrics</h2>
+                                <div class="lyrics-toolbar-heading-row">
+                                    <h2 id="panel-text-title" class="lyrics-mode-heading"><i class="fa-solid fa-align-left" aria-hidden="true"></i>Text Lyrics</h2>
+                                </div>
                                 <div class="tabs-toolbar-row">
                                     <div class="song-tabs-group">
                                         <ul id="tabs-list"></ul>
@@ -39,6 +41,13 @@
                                     <div class="preview-viewfinder-label">
                                         <span>Prompter preview</span>
                                         <span class="preview-viewfinder-format">16∶9</span>
+                                    </div>
+                                    <div class="lyrics-sync-control" role="group" aria-label="Video lyric sync">
+                                        <label class="lyrics-sync-switch" for="lyrics-sync-toggle-text">
+                                            <input type="checkbox" role="switch" id="lyrics-sync-toggle-text" data-lyrics-sync-toggle>
+                                            <span class="lyrics-sync-switch-track" aria-hidden="true"></span>
+                                            <span class="lyrics-sync-switch-label">Sync video</span>
+                                        </label>
                                     </div>
                                 </div>
                                 <div class="preview-viewfinder-slot">
@@ -78,15 +87,7 @@
                                             <i class="fa-solid fa-display" aria-hidden="true"></i>
                                             <span class="preview-send-btn-label">Send to prompter</span>
                                         </button>
-                                        <div class="preview-toolbar-group lyrics-sync-control" role="group" aria-label="Video lyric sync">
-                                            <label class="lyrics-sync-switch" for="lyrics-sync-toggle-text">
-                                                <input type="checkbox" role="switch" id="lyrics-sync-toggle-text"
-                                                    data-lyrics-sync-toggle aria-describedby="lyrics-sync-status-text">
-                                                <span class="lyrics-sync-switch-track" aria-hidden="true"></span>
-                                                <span class="lyrics-sync-switch-label">Sync video</span>
-                                            </label>
-                                            <span class="lyrics-sync-status" id="lyrics-sync-status-text" role="status" aria-live="polite">Off by default</span>
-                                        </div>
+                                        <span class="lyrics-sync-feedback" id="lyrics-sync-feedback" role="status" aria-live="polite" hidden></span>
                                         <div class="preview-toolbar-group" role="group" aria-label="Playback">
                                             <button type="button" class="preview-icon-btn" id="preview-btn-play"
                                                 title="Play / Pause (Space)" aria-pressed="false" disabled>
@@ -167,7 +168,9 @@
                             </div>
                         </aside>
                         <div class="lyrics-sync-video-preview" id="lyrics-sync-video-preview" hidden
-                            aria-label="Video Lyrics preview"></div>
+                            aria-label="Video Lyrics preview">
+                            <div class="lyrics-sync-video-content" id="lyrics-sync-video-content"></div>
+                        </div>
 
                         <div class="lineup-dialog" id="lineup-dialog" hidden role="dialog" aria-modal="true"
                             aria-labelledby="lineup-dialog-title">
