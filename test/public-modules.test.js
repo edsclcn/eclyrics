@@ -110,7 +110,7 @@ test('lineup parser omits the adaptation marker from exported lyrics', () => {
     assert.equal(summary.lyrics, 'First lyric line');
 });
 
-test('prompt formatter italicizes the matching adaptation marker', () => {
+test('Text prompt formatter keeps Interlude, Instrumental, and Adaptation cue lines visible', () => {
     const source = fs.readFileSync(path.join(repoRoot, 'public/js/features/editor/textformatting.js'), 'utf8');
     const window = {};
     const context = { window };
@@ -120,6 +120,36 @@ test('prompt formatter italicizes the matching adaptation marker', () => {
     });
 
     assert.equal(window.testFormatText('(Adaptation)'), '<span data-prompter-source-line="0"><em>(Adaptation)</em></span>');
+    assert.equal(window.testFormatText('(Adaptation of “My Way”)'), '<span data-prompter-source-line="0"><em>(Adaptation of “My Way”)</em></span>');
+    assert.equal(window.testFormatText('Adaptation\n(Adaptation)'), [
+        '<span data-prompter-source-line="0">Adaptation</span>',
+        '<span data-prompter-source-line="1"><em>(Adaptation)</em></span>',
+    ].join('\n'), 'Text Lyrics keeps bare and parenthesized Adaptation text visible');
+
+    const sourceLyrics = [
+        'Opening lyric',
+        'Interlude',
+        'INSTRUMENTAL',
+        '(interlude)',
+        ' ( Instrumental ) ',
+        ' (  iNTeRlUdE  ) ',
+        'The Interlude returns in this mixed-content line',
+        'Instrumental cue remains visible here',
+        'Closing lyric',
+    ].join('\n');
+    const originalSourceLyrics = sourceLyrics;
+    assert.equal(window.testFormatText(sourceLyrics), [
+        '<span data-prompter-source-line="0">Opening lyric</span>',
+        '<span data-prompter-source-line="1"><em>Interlude</em></span>',
+        '<span data-prompter-source-line="2"><em>INSTRUMENTAL</em></span>',
+        '<span data-prompter-source-line="3"><em>(interlude)</em></span>',
+        '<span data-prompter-source-line="4"> <em>( Instrumental )</em> </span>',
+        '<span data-prompter-source-line="5"> <em>(  iNTeRlUdE  )</em> </span>',
+        '<span data-prompter-source-line="6">The <em>Interlude</em> returns in this mixed-content line</span>',
+        '<span data-prompter-source-line="7"><em>Instrumental</em> cue remains visible here</span>',
+        '<span data-prompter-source-line="8">Closing lyric</span>',
+    ].join('\n'), 'bare and parenthesized cues remain visible in Text formatting with source indexes intact');
+    assert.equal(sourceLyrics, originalSourceLyrics, 'formatting does not mutate the source lyrics');
 });
 
 test('song search fallback matches title, adaptation source, and lyrics with limits', () => {
@@ -715,13 +745,16 @@ test('Video song selection uses the shared dialog once and leaves Text Lyrics in
         querySelectorAll(selector) { return selector === '[data-lyrics-sync-toggle]' ? syncToggles : []; },
         addEventListener(type, handler) { documentListeners[type] = handler; },
     };
-    const song = { id: 'song-1', title: 'Song One', lyrics: 'First line\nSecond line', category: ['Original'] };
+    document.getElementById('panel-text').classList.add('is-active');
+    const song = { id: 'song-1', title: 'Song One', lyrics: 'First line\nInterlude\nSecond line', category: ['Original'] };
     const textInsertions = [];
+    const textNavigations = [];
     let boundLineupKey = 'text-tab-a';
     const mirroredLineup = {
         lineupKey: 'text-tab-a',
+        title: 'Tab 1',
         blocks: [
-            { blockIndex: 0, title: 'Block One', lines: [{ sourceLineIndex: 0, text: 'First line' }, { sourceLineIndex: 1, text: 'Second line' }] },
+            { blockIndex: 0, title: 'Block One', lines: [{ sourceLineIndex: 0, text: 'First line' }, { sourceLineIndex: 1, text: 'Interlude' }, { sourceLineIndex: 2, text: 'Second line' }] },
             { blockIndex: 1, title: 'Block Two', lines: [{ sourceLineIndex: 1, text: 'Bridge line' }, { sourceLineIndex: 2, text: 'Last line' }] },
         ],
     };
@@ -729,6 +762,10 @@ test('Video song selection uses the shared dialog once and leaves Text Lyrics in
         eclyricsEditorPrompter: {
             getBoundLineupKey: () => boundLineupKey,
             getBoundLineup: () => boundLineupKey ? mirroredLineup : null,
+            getTextLineupProjection: () => ({
+                activeLineupKey: 'text-tab-a', activeBlockIndex: 0, songs: [mirroredLineup],
+            }),
+            navigateToSourceLine: source => { textNavigations.push(source); return true; },
         },
         eclyricsSongLibrary: {
             getState: () => ({ loaded: true, count: 1 }),
@@ -749,6 +786,9 @@ test('Video song selection uses the shared dialog once and leaves Text Lyrics in
     loadBrowserScript('public/js/features/video-lyrics/fonts.js', setup);
     loadBrowserScript('public/js/features/video-lyrics/index.js', setup);
     window.eclyricsVideoLyrics.openOutputWindow = () => ({ ok: true });
+    const blankButton = document.getElementById('video-lyrics-blank');
+    assert.equal(blankButton.attributes['aria-pressed'], 'false', 'the Video workspace initializes Blank as off');
+    assert.equal(blankButton.classList.contains('is-blank-active'), false);
 
     document.getElementById('video-lyrics-lineup').children[0].children[0].click();
     await new Promise(resolve => setImmediate(resolve));
@@ -797,39 +837,76 @@ test('Video song selection uses the shared dialog once and leaves Text Lyrics in
 
     const videoLineup = document.getElementById('video-lyrics-lineup');
     assert.equal(videoLineup.children.length, 2, 'both Text blocks appear in the Video lineup while Sync is enabled');
-    assert.deepEqual(videoLineup.children.map(row => row.children[0].children[1].textContent), ['Block One', 'Block Two']);
-    assert.equal(videoLineup.children[0].children[0].children[1].tagName, 'SPAN', 'projected Text blocks are read-only in Video Lyrics');
+    assert.deepEqual(videoLineup.children.map(row => row.children[0].children[1].children.map(label => label.textContent)), [
+        ['Tab 1', 'Block One'],
+        ['Tab 1', 'Block Two'],
+    ], 'projected rows show both their Text tab and block title');
+
+    positionListener(position('text-tab-a', 'Interlude', 0, 1));
+    assert.equal(window.eclyricsVideoLyrics.getState().live.text, '', 'a Text-synced cue-only line has blank live output');
+    assert.equal(window.eclyricsVideoLyrics.getState().live.index, 1, 'the synced blank cue keeps its source line index');
+    const syncedCueRow = document.getElementById('video-lyrics-cues').children[1];
+    assert.equal(syncedCueRow.children[0].textContent, '02', 'the synced blank cue keeps its numbered source row');
+    assert.equal(syncedCueRow.children[1].textContent, '', 'the synced cue row remains present with blank display text');
+    assert.match(syncedCueRow.attributes['aria-label'], /line 2 in Text Lyrics: $/,
+        'the synced blank cue retains its source-line identity for access');
 
     positionListener(position('text-tab-a', 'Bridge line', 1, 1));
     assert.equal(window.eclyricsVideoLyrics.getState().live.text, 'Bridge line', 'a Text position updates the matching Video line across block boundaries');
+    assert.equal(document.getElementById('video-lyrics-song-title').textContent, 'Block Two');
+    assert.match(document.getElementById('video-lyrics-song-meta').textContent, /Tab 1 · Block Two · 2 source lines/);
     const projectedCues = document.getElementById('video-lyrics-cues');
     assert.equal(projectedCues.children.length, 2, 'the selected Text block renders all of its source lines as Video cues');
-    assert.equal(projectedCues.children[1].tagName, 'DIV', 'projected Text lines are read-only in Video Lyrics');
-    assert.equal(projectedCues.children[1].attributes.role, 'listitem');
+    assert.equal(projectedCues.children[1].tagName, 'BUTTON', 'the Video workspace exposes projected lyrics as cues');
+    assert.match(projectedCues.children[1].attributes['aria-label'], /Text Lyrics: Last line/);
     const syncedPosition = { ...window.eclyricsVideoLyrics.getState().sync.latestPosition };
-    const syncedLiveText = window.eclyricsVideoLyrics.getState().live.text;
-    projectedCues.children[1].click();
-    videoLineup.children[0].children[0].children[1].click();
-    assert.equal(window.eclyricsVideoLyrics.getState().sync.latestPosition.sourceLineIndex, syncedPosition.sourceLineIndex,
-        'clicking a Video cue or projected block cannot move the Text marker');
-    assert.equal(window.eclyricsVideoLyrics.getState().live.text, syncedLiveText,
-        'Video lineup and cue clicks cannot replace the Text-controlled output');
-    assert.equal(document.getElementById('video-lyrics-prev').disabled, true);
-    assert.equal(document.getElementById('video-lyrics-next').disabled, true);
-    document.getElementById('video-lyrics-prev').click();
-    document.getElementById('video-lyrics-next').click();
-    assert.equal(window.eclyricsVideoLyrics.getState().sync.latestPosition.sourceLineIndex, syncedPosition.sourceLineIndex,
-        'Video previous/next buttons cannot move the Text marker');
-
     const videoPanel = document.getElementById('panel-video');
+    const textPanel = document.getElementById('panel-text');
+    textPanel.classList.remove('is-active');
     videoPanel.classList.add('is-active');
+    documentListeners.click({ target: { closest: selector => selector === '.sidebar-nav button[data-panel]' ? {} : null } });
+    assert.equal(window.eclyricsVideoLyrics.getState().sync.followingText, false, 'Video takes control of projected cues when its workspace opens');
+    assert.equal(window.eclyricsVideoLyrics.getState().live.text, 'Bridge line', 'the current projected Text line stays live at handoff');
+    assert.match(document.getElementById('video-lyrics-cues').children[1].attributes['aria-label'], /Video Lyrics: Last line/);
+    assert.deepEqual(textNavigations, [], 'Video ownership does not request a Text prompter seek');
+    const videoPosition = window.eclyricsVideoLyrics.getState().sync.videoPosition;
+    assert.deepEqual({ lineupKey: videoPosition.lineupKey, blockIndex: videoPosition.blockIndex, sourceLineIndex: videoPosition.sourceLineIndex }, {
+        lineupKey: 'text-tab-a', blockIndex: 1, sourceLineIndex: 1,
+    });
+    const textPositionBeforeVideoControl = { ...window.eclyricsVideoLyrics.getState().sync.latestPosition };
+    document.getElementById('video-lyrics-next').click();
+    assert.equal(window.eclyricsVideoLyrics.getState().live.text, 'Last line', 'Video next advances the local projected cue');
+    assert.equal(window.eclyricsVideoLyrics.getState().sync.latestPosition.sourceLineIndex, textPositionBeforeVideoControl.sourceLineIndex,
+        'Video stepping does not move the Text marker');
+    videoLineup.children[0].children[0].children[1].click();
+    assert.equal(window.eclyricsVideoLyrics.getState().live.text, 'First line', 'choosing another Video lineup row cues its first lyric');
+    assert.equal(window.eclyricsVideoLyrics.getState().sync.latestPosition.sourceLineIndex, textPositionBeforeVideoControl.sourceLineIndex);
+    document.getElementById('video-lyrics-next').click();
+    assert.equal(window.eclyricsVideoLyrics.getState().live.text, '', 'Video-local next can project a blank cue-only line');
+    assert.equal(window.eclyricsVideoLyrics.getState().live.index, 1, 'Video-local blank cue keeps its source index');
+    assert.equal(document.getElementById('video-lyrics-song-title').textContent, 'Block One', 'the selected Video projection keeps its block title visible');
+    const videoCueRows = document.getElementById('video-lyrics-cues').children;
+    assert.equal(videoCueRows.length, 3, 'all projected source rows, including the blank cue placeholder, remain available');
+    assert.equal(videoCueRows[1].children[0].textContent, '02');
+    assert.equal(videoCueRows[1].children[1].textContent, '');
+    assert.match(videoCueRows[1].attributes['aria-label'], /line 2 in Video Lyrics: $/);
+    document.getElementById('video-lyrics-next').click();
+    assert.equal(window.eclyricsVideoLyrics.getState().live.text, 'Second line');
+    assert.equal(window.eclyricsVideoLyrics.getState().live.index, 2, 'the lyric after a blank source row remains reachable');
+    assert.equal(window.eclyricsVideoLyrics.getState().sync.latestPosition.sourceLineIndex, textPositionBeforeVideoControl.sourceLineIndex);
+
     let keyPrevented = false;
     documentListeners.keydown({ key: 'ArrowDown', repeat: false, target: { closest: () => null }, preventDefault() { keyPrevented = true; } });
-    assert.equal(keyPrevented, false, 'Video keyboard navigation does not consume Text navigation keys during Sync');
-    assert.equal(window.eclyricsVideoLyrics.getState().sync.latestPosition.sourceLineIndex, syncedPosition.sourceLineIndex,
-        'Video keyboard navigation cannot move the Text marker');
+    assert.equal(keyPrevented, true, 'Video workspace keyboard navigation is active while Sync preference remains enabled');
+    assert.equal(window.eclyricsVideoLyrics.getState().live.text, 'Second line', 'keyboard stepping respects the selected block boundary');
+    assert.equal(window.eclyricsVideoLyrics.getState().sync.latestPosition.sourceLineIndex, textPositionBeforeVideoControl.sourceLineIndex);
 
-    const outputPopup = { closed: false, focus() {}, postMessage() {} };
+    const outputStates = [];
+    const outputPopup = {
+        closed: false,
+        focus() {},
+        postMessage(message) { if (message.type === 'state') outputStates.push(message.payload); },
+    };
     window.open = () => outputPopup;
     window.eclyricsVideoStage = { CHANNEL: 'video', create: () => ({ update: async () => true, destroy() {} }) };
     loadBrowserScript('public/js/features/video-lyrics/output.js', {
@@ -838,33 +915,78 @@ test('Video song selection uses the shared dialog once and leaves Text Lyrics in
     window.eclyricsVideoLyrics.openOutputWindow();
     const sendPopupMessage = data => windowListeners.message({ origin: 'https://example.org', source: outputPopup, data: { channel: 'video', ...data } });
     sendPopupMessage({ type: 'ready' });
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(outputStates.at(-1).text, 'Second line', 'the output starts with the live cue');
+    blankButton.click();
+    assert.equal(window.eclyricsVideoLyrics.getState().outputBlanked, true);
+    assert.equal(blankButton.attributes['aria-pressed'], 'true');
+    assert.equal(blankButton.classList.contains('is-blank-active'), true);
+    assert.equal(window.eclyricsVideoLyrics.getState().live.text, 'Second line', 'Blank does not clear the live cue');
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(outputStates.at(-1).text, '', 'the popup output payload is empty while Blank is on');
+    sendPopupMessage({ type: 'advance', delta: -1 });
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(window.eclyricsVideoLyrics.getState().live.text, '', 'Video navigation can change the live cue while Blank remains on');
+    assert.equal(window.eclyricsVideoLyrics.getState().outputBlanked, true);
+    assert.equal(outputStates.at(-1).text, '', 'navigation still cannot leak lyric text into blanked output');
     sendPopupMessage({ type: 'advance', delta: 1 });
-    assert.equal(window.eclyricsVideoLyrics.getState().sync.latestPosition.sourceLineIndex, syncedPosition.sourceLineIndex,
-        'Video popup advance cannot move the Text marker during Sync');
-    assert.equal(window.eclyricsVideoLyrics.getState().live.text, syncedLiveText);
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(window.eclyricsVideoLyrics.getState().live.text, 'Second line', 'navigation restores the latest live cue');
+    assert.equal(outputStates.at(-1).text, '', 'the latest cue stays hidden until Blank is turned off');
+    blankButton.click();
+    assert.equal(window.eclyricsVideoLyrics.getState().outputBlanked, false);
+    assert.equal(blankButton.attributes['aria-pressed'], 'false');
+    assert.equal(blankButton.classList.contains('is-blank-active'), false);
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(outputStates.at(-1).text, 'Second line', 'turning Blank off publishes the latest live cue');
+    sendPopupMessage({ type: 'advance', delta: -1 });
+    assert.equal(window.eclyricsVideoLyrics.getState().live.text, '', 'Video popup advance changes the local projected cue');
+    assert.equal(window.eclyricsVideoLyrics.getState().live.index, 1);
+    assert.equal(window.eclyricsVideoLyrics.getState().sync.latestPosition.sourceLineIndex, textPositionBeforeVideoControl.sourceLineIndex,
+        'Video popup controls do not move the Text marker during Video ownership');
+
+    positionListener(position('text-tab-a', 'Second line', 0, 2));
+    assert.equal(window.eclyricsVideoLyrics.getState().sync.latestPosition.sourceLineIndex, 2, 'the latest Text position is retained while Video is active');
+    assert.equal(window.eclyricsVideoLyrics.getState().live.text, '', 'incoming Text movement does not take over Video output');
+    videoPanel.classList.remove('is-active');
+    textPanel.classList.add('is-active');
+    documentListeners.click({ target: { closest: selector => selector === '.sidebar-nav button[data-panel]' ? {} : null } });
+    assert.equal(window.eclyricsVideoLyrics.getState().sync.followingText, true, 'Text regains control when its workspace opens');
+    assert.equal(window.eclyricsVideoLyrics.getState().live.text, 'Second line', 'Text resumes from its latest projected position');
 
     positionListener(position('another-text-tab', 'Wrong Text window'));
-    assert.equal(window.eclyricsVideoLyrics.getState().live.text, syncedLiveText, 'a different Text popup cannot take over the active sync session');
+    assert.equal(window.eclyricsVideoLyrics.getState().live.text, 'Second line', 'a different Text popup cannot take over the active sync session');
     positionListener(position('text-tab-a', 'Wrong source line', 1, 99));
-    assert.equal(window.eclyricsVideoLyrics.getState().live.text, syncedLiveText, 'a position outside the bound Text projection is ignored');
+    assert.equal(window.eclyricsVideoLyrics.getState().live.text, 'Second line', 'a position outside the bound Text projection is ignored');
 
     syncToggles[0].checked = false;
     syncToggles[0].listeners.change[0]();
     assert.equal(window.eclyricsVideoLyrics.getState().sync.enabled, false);
+    textPanel.classList.remove('is-active');
+    videoPanel.classList.add('is-active');
+    documentListeners.click({ target: { closest: selector => selector === '.sidebar-nav button[data-panel]' ? {} : null } });
     const standaloneCues = document.getElementById('video-lyrics-cues');
     assert.equal(standaloneCues.children[1].tagName, 'BUTTON', 'standalone Video cues remain interactive');
     standaloneCues.children[1].click();
     assert.equal(window.eclyricsVideoLyrics.getState().live.text, 'First line');
     document.getElementById('video-lyrics-next').click();
+    assert.equal(window.eclyricsVideoLyrics.getState().live.text, '', 'standalone cue-only lines have blank live output');
+    assert.equal(window.eclyricsVideoLyrics.getState().live.index, 2, 'standalone blank cues keep their cue index');
+    assert.equal(standaloneCues.children.length, 5, 'the blank cue placeholder remains in the standalone cue list');
+    assert.equal(standaloneCues.children[2].children[0].textContent, '03', 'the blank standalone cue keeps its number');
+    assert.equal(standaloneCues.children[2].children[1].textContent, '', 'the standalone cue row displays blank text');
+    assert.match(standaloneCues.children[2].attributes['aria-label'], /Cue line 3: $/);
+    document.getElementById('video-lyrics-next').click();
     assert.equal(window.eclyricsVideoLyrics.getState().live.text, 'Second line');
+    assert.equal(window.eclyricsVideoLyrics.getState().live.index, 3, 'the next standalone lyric remains reachable');
     document.getElementById('video-lyrics-prev').click();
-    assert.equal(window.eclyricsVideoLyrics.getState().live.text, 'First line');
+    assert.equal(window.eclyricsVideoLyrics.getState().live.text, '');
     keyPrevented = false;
     documentListeners.keydown({ key: 'ArrowDown', repeat: false, target: { closest: () => null }, preventDefault() { keyPrevented = true; } });
     assert.equal(keyPrevented, true, 'Video keyboard navigation works in standalone mode');
-    assert.equal(window.eclyricsVideoLyrics.getState().live.text, 'Second line');
+    assert.equal(window.eclyricsVideoLyrics.getState().live.text, 'Second line', 'keyboard navigation can move past the blank cue');
     sendPopupMessage({ type: 'advance', delta: -1 });
-    assert.equal(window.eclyricsVideoLyrics.getState().live.text, 'First line', 'Video popup advance works again in standalone mode');
+    assert.equal(window.eclyricsVideoLyrics.getState().live.text, '', 'Video popup advance works again in standalone mode across a blank cue');
 });
 
 test('shared picker manual and clipboard callbacks close the picker before opening the instance editor', () => {
@@ -912,7 +1034,14 @@ test('Video Lyrics preview keeps its output controls, selected background label,
     const actionStart = html.indexOf('<div class="video-lyrics-preview-actions">');
     const actions = html.slice(actionStart, html.indexOf('<section class="video-lyrics-appearance">', actionStart));
     assert.match(actions, /id="video-lyrics-open"[^>]*class="[^"]*video-lyrics-action--primary/);
-    assert.match(actions, /id="video-lyrics-blank"/);
+    assert.match(actions, /id="video-lyrics-blank"[^>]*aria-pressed="false"/,
+        'Blank starts off with an exposed pressed state');
+    assert.match(css, /\.video-lyrics-action--blank\.is-blank-active\s*\{[^}]*animation:\s*video-lyrics-blank-pulse 1\.2s ease-in-out infinite/s,
+        'the active Blank control pulses to show output is blanked');
+    assert.match(css, /@keyframes\s+video-lyrics-blank-pulse\s*\{/,
+        'the Blank pulse animation is defined');
+    assert.match(css, /@media\s*\(\s*prefers-reduced-motion:\s*reduce\s*\)\s*\{\s*\.video-lyrics-action--blank\.is-blank-active\s*\{\s*animation:\s*none;/,
+        'reduced-motion users do not receive the Blank pulse');
     assert.match(actions, /id="video-lyrics-font-trigger"/);
     assert.match(actions, /id="video-lyrics-background"/);
     assert.doesNotMatch(actions, /clear|blackout/i);
@@ -954,6 +1083,8 @@ test('Video Lyrics preview keeps its output controls, selected background label,
     assert.doesNotMatch(backgrounds, /classList\.add\('video-background-upload'\)/, 'the own-video card does not rely on the obsolete upload-card modifier');
     assert.match(css, /\.video-lyrics-lineup-slot\s*\{[^}]*height:62px/s, 'plus-only lineup slots stay compact');
     assert.match(css, /\.video-lyrics-lineup-entry\s*\{[^}]*grid-template-columns:1\.1rem minmax\(0,1fr\) auto/s, 'lineup controls remain inside a centered grid row');
+    assert.match(css, /\.video-lyrics-lineup-entry\.is-text-sync-entry\s*\{[^}]*grid-template-columns:\s*minmax\(0,1fr\);/s,
+        'projected Text lineup entries override the standalone columns with one full-width column');
     const panelStart = html.indexOf('<section id="panel-video"');
     const sectionTokens = [...html.slice(panelStart).matchAll(/<section\b[^>]*>|<\/section>/g)];
     let depth = 0, panelEnd = -1;
@@ -1088,9 +1219,13 @@ test('Video Lyrics controls remain wired after preview reparenting and selected 
     backgroundButton.listeners.click({ currentTarget: backgroundButton });
     assert.deepEqual(openedWith, [backgroundButton], 'the reparented Background control opens the shared picker with itself as the focus-return target');
 
+    const backgroundName = elements.get('video-lyrics-background-name');
+    const embeddedBackgroundNameSlot = { children: [backgroundName] };
+    backgroundName.parentNode = embeddedBackgroundNameSlot;
     window.eclyricsVideoLyrics.setBackground({ id: 'session-video', version: '1', name: 'worship-background.mp4', blob: new Blob(['video']) });
-    assert.equal(elements.get('video-lyrics-background-name').textContent, 'worship-background.mp4', 'the selected custom background name stays visible');
-    assert.equal(elements.get('video-lyrics-background-name').title, 'worship-background.mp4');
+    assert.equal(backgroundName.parentNode, embeddedBackgroundNameSlot, 'background selection leaves the label in its embedded slot');
+    assert.equal(backgroundName.textContent, 'worship-background.mp4', 'the selected custom background name stays visible after reparenting');
+    assert.equal(backgroundName.title, 'worship-background.mp4', 'the title stays current after reparenting');
     window.eclyricsVideoLyrics.backgroundStatus('worship-background.mp4 selected for this session. Nothing was uploaded.');
     assert.equal(elements.get('video-lyrics-background-status').textContent, '', 'successful background selection text is suppressed because the selected name is already visible');
     assert.equal(elements.get('video-lyrics-background-status').hidden, true);

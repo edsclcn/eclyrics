@@ -9,7 +9,7 @@
     let popup = null, ready = false, revision = 0, syncRevision = 0, sentBackground = undefined, lastAcknowledged = -1, sentFont = undefined;
     function payload(includeBackground) {
         const state = api.getState();
-        const value = { revision: ++revision, text: state.live?.text || '', settings: { ...state.settings } };
+        const value = { revision: ++revision, text: state.outputBlanked ? '' : state.live?.text || '', settings: { ...state.settings } };
         if (includeBackground) value.background = state.background;
         return value;
     }

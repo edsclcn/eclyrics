@@ -205,9 +205,10 @@ document.addEventListener('keydown', (event) => {
         action = 'scrollBy';
         values.delta = event.code === 'ArrowUp' ? 100 : -100;
     } else if (event.code === 'KeyT') action = 'top';
-    else if (event.code === 'Digit0') action = 'pause';
-    else if (/^Digit[1-9]$/.test(event.code)) {
-        speed = Number(event.code.slice(-1)) * 0.5;
+    else if (/^Digit[0-9]$/.test(event.code)) {
+        const speedPreset = window.EclyricsPrompterShortcuts?.getScrollSpeedPreset(event.code);
+        if (speedPreset === null || speedPreset === undefined) return;
+        speed = speedPreset;
         controls.speed.value = String(speed);
         $('image-lyrics-speed-value').value = speed.toFixed(1);
         action = 'speed';

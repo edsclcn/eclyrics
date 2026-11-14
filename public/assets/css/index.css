@@ -4617,6 +4617,14 @@ a:hover {
     padding: 2px;
 }
 
+#lyrics-preview-viewfinder [data-prompter-source-line] {
+    transition: opacity 0.2s ease;
+}
+
+#lyrics-preview-viewfinder [data-prompter-source-line].is-future-source-line {
+    opacity: 0.42;
+}
+
 /* Portrait column — full block, readable scroll */
 .preview-portrait-body {
     container-type: inline-size;
@@ -5923,8 +5931,13 @@ body.auth-gate-open {
     overflow: hidden;
 }
 
-.workspace.is-video-sync-workspace .textareas-row {
+.workspace.is-video-sync-workspace .textareas-container {
+    display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.workspace.is-video-sync-workspace .textareas-row {
+    display: contents;
 }
 
 .workspace.is-video-sync-workspace > .workspace-preview {

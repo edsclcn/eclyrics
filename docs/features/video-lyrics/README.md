@@ -33,23 +33,31 @@ video.
    cue, then parses lyric lines into ordered cues. Blank lyric lines are
    omitted and advance the section marker used for visual grouping. The first
    added song becomes prepared; selecting a lineup entry changes the prepared
-   song without changing the live output.
+   song without changing the live output. Exact cue-only bare or parenthesized
+   `Interlude` and `Instrumental` lines retain their cue text and position in
+   the Video model, while displaying as blank numbered rows and blank Video
+   output; mixed-content `Interlude`/`Instrumental` lines without `Adaptation`
+   remain visible. Lines containing `Adaptation` are also retained but
+   rendered blank in Video Lyrics. Projected Text cues retain their source-line
+   indexes, and the Video lineup still shows the Text tab and block titles. The
+   Text preview and audience Text prompter continue to show `Interlude`,
+   `Instrumental`, and `Adaptation` text.
 4. With Sync off, click a cue row, press **Down**/**Up**, or use the
    previous/next controls to cue a line. This immediately makes that line live
-   and updates the preview. With Sync on, clicking a mirrored block row seeks
-   the Text prompter to its first populated source line; clicking a source-line
-   cue seeks that exact line. These controls navigate Text rather than edit its
-   content, and Video output follows the Text prompter's position broadcast.
-   With Sync enabled and the Video Lyrics panel active, **ArrowUp** and
-   **ArrowDown** seek the adjacent populated source line in the current Text
-   block through the Text prompter. The current block comes from its bound
-   prompter position, or from the selected populated block in the active Text
-   tab when there is no bound position. At the first or last populated line,
-   navigation stops at that block boundary instead of moving to another block
-   or tab. With Sync off, the arrow keys retain standalone cue stepping. The
-   keys are ignored while focus is in an input, select, editable element, or open
-   dialog. In standalone mode, the output popup also forwards its Up/Down keys
-   to the control window for cue stepping.
+   and updates the preview. With Sync on, control ownership follows the active
+   workspace. While Text Lyrics is active, its prompter position drives Video
+   output. Switching to Video Lyrics keeps the projected Text lineup and
+   current line, then gives Video control: the visible lineup identifies each
+   Text tab and block title, and its cue list exposes the populated source
+   lines. Clicking a row cues its first line; clicking a cue or using the
+   previous/next controls, **ArrowUp**/**ArrowDown**, or the output popup's
+   Up/Down keys changes Video output without moving or editing Text Lyrics.
+   Stepping stops at the selected block's first or last populated line. Text
+   position broadcasts received while Video is active are retained, and
+   returning to Text Lyrics resumes Video output from the latest Text position.
+   Video appearance and background controls remain in the same page state
+   across the handoff. The keys are ignored while focus is in an input, select,
+   editable element, or open dialog.
 5. Set appearance and playback for the whole lineup: font family, weight, size,
    text color, vertical position, fade duration, video speed, and background
    dimming. Text stays horizontally centered. Defaults are Satoshi, bold,
@@ -112,27 +120,27 @@ video.
 
 Sync is off by default and is controlled only by the **Sync video** switch
 beside the Text preview in Text Lyrics; Video Lyrics has no Sync toggle. When
-enabled, each populated lyric block across all Text Lyrics tabs projects
-one-way as a mirrored Video Lyrics lineup row, in tab order and then block
-order. Empty placeholders are excluded, the lineup count reflects populated
-blocks, and each row label combines the Text tab name and block title. Adding,
-removing, renaming, or editing a tab or block, and changing the active Text tab
-or selected block, refreshes the projection, including while the Video Lyrics
-workspace is already selected. With no bound prompter position, the selected
-populated block in the active Text tab is used, falling back to that tab's first
-populated block if the selected block is empty. A position from the Text
-prompter bound to any listed tab selects its matching tab and block even when
-its source-line index is null. The cue list shows that block's source lines;
-only an exact live source line is highlighted. The Video lineup page follows
-the selected block. Clicking a mirrored row seeks the Text prompter to that
-block's first populated source line; clicking a cue seeks that exact line. When
-the target is on another tab, its lineup loads into the already-open Text
-prompter without opening or focusing it. Text Lyrics remains the source of truth
-and Video Lyrics does not edit its content; Video output follows the position
-broadcast by the Text prompter. The mirrored lineup does not require a separate
-Video Lyrics search or preparation step. With Sync off, Video Lyrics restores its own
-lineup and prepared item while leaving the already-live output in place. When
-Text Lyrics is active and Sync is on, the wide layout gives the
+enabled, each populated lyric block across all Text Lyrics tabs is projected
+into the Video Lyrics lineup, in tab order and then block order. Empty
+placeholders are excluded, and each projected row shows the Text tab name and
+block title separately. Adding, removing, renaming, or editing a tab or block,
+and changing the active Text tab or selected block, refreshes the projection.
+With no bound prompter position, the selected populated block in the active
+Text tab is used, falling back to that tab's first populated block if the
+selected block is empty. A position from the Text prompter bound to any listed
+tab selects its matching tab and block even when its source-line index is null.
+While Text Lyrics is active, Text prompter movement drives Video output; the
+Video preview and appearance controls are embedded beside the Text preview.
+When Video Lyrics is active, the same projected lineup and lyrics are available
+for local Video control. The current Text line seeds Video's cue position when
+available. Video cue selection and stepping do not move the Text prompter or
+edit Text content. Valid Text position broadcasts continue to update the retained
+Text position, so returning to Text Lyrics resumes Video output from that
+position. The independent Video lineup is kept in memory and returns when Sync
+is turned off; the current output, background, and appearance settings remain
+in page state across workspace changes. With Sync off, Video Lyrics restores
+its own lineup and prepared item while leaving the already-live output in place.
+When Text Lyrics is active and Sync is on, the wide layout gives the
 editor the left third and uses the right two thirds for two stacked horizontal
 preview rows. The upper row has the Text preview stage on the left and its
 controls on the right; the lower row has the Video preview stage on the left
@@ -165,9 +173,12 @@ Vertical position value and **px** unit stay grouped at the right edge.
 The embedded card shows the selected curated or custom background name. The
 picker shows status in its dialog while open; when it is closed, loading and
 selection errors use the dedicated background status surface. Background and
-appearance changes update the preview and audience popup. **Blank** clears
-the live lyric but keeps the selected background. Audience popup playback
-errors appear in the embedded status and clear after **Start** succeeds.
+appearance changes update the preview and audience popup. **Blank** toggles
+Video lyric visibility while retaining the current cue and selected background.
+Navigation continues while Blank is active: cue stepping updates the current
+cue while output stays blank, and toggling Blank off reveals the latest cue.
+Audience popup playback errors appear in the embedded status and clear after
+**Start** succeeds.
 Turning Sync off hides the embedded preview and restores the standalone Video
 Lyrics inspector.
 
@@ -180,13 +191,14 @@ that Video popup, temporary feedback says to allow popups.
 
 Turning Sync off stops text-driven updates, restores the independent Video
 Lyrics lineup and prepared item, and leaves output windows and the current Video
-Lyrics line live. While Sync is on, Video lineup and cue clicks seek the Text
-prompter rather than edit Text content. The Text prompter broadcasts its
-resulting position, which drives Video output. When no lyric line crosses the
-reading marker, Sync waits for a line and leaves the current video output
-unchanged. If a tab, block, or source line is removed, its stale position and
-Text-derived live state are cleared; Video Lyrics then falls back to the active
-Text tab until a valid prompter position arrives.
+Lyrics line live. With Text Lyrics active and Sync on, the Text prompter
+broadcasts positions that drive Video output. With Video Lyrics active, its
+projected cue controls change Video output locally; Text position broadcasts
+are retained for when Text Lyrics becomes active again. When no lyric line
+crosses the reading marker, Text-owned Sync waits for a line and leaves the
+current Video output unchanged. If a tab, block, or source line is removed, its
+stale Text position and derived live state are cleared; Text-owned Video output
+then waits for a valid prompter position.
 
 ## Successful Output
 
@@ -226,9 +238,6 @@ Text tab until a valid prompter position arrives.
   be allowed. Reopening focuses an existing popup rather than creating another.
 - If the Text prompter is not open, enabling Sync alone opens no output window;
   there is no routine Sync status message.
-- If a mirrored row or cue is clicked while the Text prompter is unavailable or
-  its source lineup changed, temporary feedback says the navigation could not
-  be completed. This navigation does not open or focus the Text prompter.
 - If the browser blocks the Video Lyrics popup during Sync or a Text send, the
   temporary Sync feedback says to allow popups. Video Lyrics also reports popup
   opening and connection state in its workspace.
@@ -283,12 +292,11 @@ Text tab until a valid prompter position arrives.
   preview, output controls, and appearance settings
 - `public/js/features/video-lyrics/index.js` — picker integration, rendering,
   active-panel keyboard handling, settings controls, Text-owned Sync control,
-  populated-block projection rows and labels, count and page updates, selected
-  block fallback, row/cue navigation into Text Lyrics, position filtering,
-  reading marker, and responsive preview layout
+  workspace-specific Video cue ownership, projected row labels and cues,
+  position filtering, reading marker, and responsive preview layout
 - `public/js/features/video-lyrics/model.js` — in-memory lineup, line parsing,
-  standalone cue state, direct text-driven output, guards against standalone
-  cue changes while Sync is active, position validation, and settings validation
+  standalone cue state, separate Text and Video projected positions during
+  Sync, position validation, and settings validation
 - `public/js/features/editor/block-source.js` — shared Add Lyrics dialog API
   and close-after-selection behavior
 - `public/js/features/editor/index.js` — Text prompter send/update behavior,
@@ -318,5 +326,9 @@ Text tab until a valid prompter position arrives.
 
 ## Validation Notes
 
-Validation of the 2026-10-03 redesign is pending the final GPT-6 Luna test
-and browser QA results. OBS/vMix capture remains unverified.
+The workspace handoff regression tests passed with
+`node --test test/public-modules.test.js test/video-lyrics.test.js test/lyrics-sync.test.js`
+(69/69). `npm test` passed JavaScript checks and 156 of 158 tests. Two existing
+failures remain: the responsive row sizing expectation in
+`test/lyrics-sync-dock.test.js:236` and the picker status expectation in
+`test/video-media.test.js:253`. Browser QA and OBS/vMix capture were not run.

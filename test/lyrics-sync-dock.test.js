@@ -24,7 +24,7 @@ function syncSetupSource() {
     const start = videoIndex.indexOf('    const syncToggles = [...document.querySelectorAll(\'[data-lyrics-sync-toggle]\')];');
     const end = videoIndex.indexOf('    function status(', start);
     assert.ok(start >= 0 && end > start, 'expected to locate sync setup');
-    return `${videoIndex.slice(start, end)}\n globalThis.__syncTest = { updateSyncPreviewLayout, setReadingMarkerRatio, syncToggles, getMarkerRatio: () => readingMarkerRatio, getChannel: () => prompterPositionChannel };`;
+    return `const get = suffix => document.getElementById('video-lyrics-' + suffix);\n${videoIndex.slice(start, end)}\n globalThis.__syncTest = { updateSyncPreviewLayout, setReadingMarkerRatio, syncToggles, getMarkerRatio: () => readingMarkerRatio, getChannel: () => prompterPositionChannel };`;
 }
 
 class FakeNode {
@@ -89,7 +89,12 @@ function createSyncHarness({ textPopupOpen = false, videoResult = { ok: true }, 
     textPreview.children[0].append(stage);
     const textPanel = new FakeNode('text panel');
     textPanel.classList.add('is-active');
-    const videoCard = new FakeNode('video preview card', [new FakeNode('video preview controls')]);
+    const videoBackgroundName = new FakeNode('background name');
+    const videoBackgroundNameHeader = new FakeNode('video preview heading', [videoBackgroundName]);
+    const embeddedBackgroundNameSlot = new FakeNode('embedded background name slot');
+    const videoStageSlot = new FakeNode('video preview stage slot', [embeddedBackgroundNameSlot]);
+    const videoCard = new FakeNode('video preview card', [videoBackgroundNameHeader, videoStageSlot, new FakeNode('video preview controls')]);
+    videoCard.querySelector = selector => selector === '.video-lyrics-background-name-slot' ? embeddedBackgroundNameSlot : null;
     const videoAppearance = new FakeNode('video appearance', [new FakeNode('video settings controls')]);
     const videoInspector = new FakeNode('video inspector', [videoCard, videoAppearance]);
     const videoPreviewContent = new FakeNode('video preview content');
@@ -116,6 +121,9 @@ function createSyncHarness({ textPopupOpen = false, videoResult = { ok: true }, 
             this.state.sync.lineupKey = source?.lineupKey || null;
             this.state.sync.projection = source?.blocks || [];
         },
+        setTextFollowing(following) {
+            this.state.sync.followingText = Boolean(following);
+        },
         setSyncEnabled(enabled) {
             this.state.sync.enabled = Boolean(enabled);
             this.state.sync.status = enabled ? 'Sync on · Send text lyrics to start.' : 'Sync off.';
@@ -134,6 +142,7 @@ function createSyncHarness({ textPopupOpen = false, videoResult = { ok: true }, 
                 'lyrics-sync-video-content': videoPreviewContent,
                 'video-lyrics-description': videoDescription,
                 'video-lyrics-status': videoStatus,
+                'video-lyrics-background-name': videoBackgroundName,
             })[id] || null;
         },
         querySelector(selector) {
@@ -174,7 +183,7 @@ function createSyncHarness({ textPopupOpen = false, videoResult = { ok: true }, 
     vm.runInNewContext(syncSetupSource(), context);
     return {
         context, document, model, marker, stage, textPreview, textPanel, videoCard, videoAppearance, videoInspector,
-        videoPreviewHost, videoPreviewContent, videoStatus, videoDescription, syncFeedback, textWorkspace, statuses, documentListeners, windowListeners, channelMessages, outputCalls,
+        videoPreviewHost, videoPreviewContent, videoStatus, videoDescription, videoBackgroundName, videoBackgroundNameHeader, embeddedBackgroundNameSlot, syncFeedback, textWorkspace, statuses, documentListeners, windowListeners, channelMessages, outputCalls,
         getDefaultBackgroundRequests: () => defaultBackgroundRequests,
         toggles: [textSyncToggle],
         setTextPopupOpen(open) { boundLineupKey = open ? 'text-lineup-a' : null; },
@@ -184,6 +193,27 @@ function createSyncHarness({ textPopupOpen = false, videoResult = { ok: true }, 
         },
     };
 }
+
+test('embedded Video preview hides its format tag and positions one background label at bottom-right', () => {
+    const video = read('public/modules/video-lyrics.html');
+    const videoCss = read('public/assets/css/video-lyrics.css');
+
+    assert.equal((video.match(/id="video-lyrics-background-name"/g) || []).length, 1,
+        'the one background-name element is reused when the preview moves');
+    assert.match(video, /<span class="video-lyrics-muted video-lyrics-preview-format">16:9<\/span>/,
+        'standalone Video retains its 16:9 format tag');
+    const formatHideRules = [...videoCss.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+        .filter(([, selector, declarations]) => selector.includes('.video-lyrics-preview-format') && /display:\s*none/.test(declarations))
+        .map(([, selector]) => selector.trim());
+    assert.deepEqual(formatHideRules, ['.video-lyrics-preview-card.is-sync-embedded-preview .video-lyrics-preview-format'],
+        'the format tag is hidden only while the preview card is embedded in Text Sync');
+    assert.match(video, /class="video-lyrics-preview-stage-slot"[\s\S]*?class="video-lyrics-background-name-slot"/,
+        'the embedded label slot sits in the Video preview stage');
+    assert.match(videoCss, /\.video-lyrics-background-name-slot\s*\{[^}]*position:\s*absolute;[^}]*right:\s*\.55rem;[^}]*bottom:\s*\.55rem/s,
+        'the embedded label slot is placed at the preview bottom-right');
+    assert.match(videoCss, /\.workspace\.is-video-sync-workspace \.video-lyrics-preview-stage-slot\s*\{[^}]*position:\s*relative/s,
+        'the stage slot anchors the embedded label position');
+});
 
 test('Text Lyrics remains the default workspace; Sync gives lyric blocks the left column and stacks preview-control rows on the right', () => {
     const text = read('public/modules/text-lyrics.html');
@@ -201,7 +231,7 @@ test('Text Lyrics remains the default workspace; Sync gives lyric blocks the lef
     assert.equal((text.match(/data-lyrics-sync-toggle/g) || []).length, 1, 'Text Lyrics has the sole Sync control');
     assert.equal((video.match(/data-lyrics-sync-toggle/g) || []).length, 0, 'Video Lyrics has no Sync control');
     const previewHeading = text.match(/<div class="preview-viewfinder-heading">([\s\S]*?)<div class="preview-viewfinder-slot">/)?.[1] || '';
-    assert.match(previewHeading, /Prompter preview[\s\S]*?class="lyrics-sync-control"[\s\S]*?Sync video/,
+    assert.match(previewHeading, /TEXT LYRICS PREVIEW[\s\S]*?class="lyrics-sync-control"[\s\S]*?Sync video/,
         'the Sync toggle sits in the Text preview header');
     const toolbarHeading = text.match(/<div class="lyrics-toolbar-heading-row">([\s\S]*?)<div class="tabs-toolbar-row">/)?.[1] || '';
     assert.doesNotMatch(toolbarHeading, /lyrics-sync-control/, 'Sync is not attached to the Text Lyrics title');
@@ -264,11 +294,6 @@ test('Text Lyrics remains the default workspace; Sync gives lyric blocks the lef
     assert.match(sendButtonMarkup, /preview-send-btn-label">Send to prompter/);
     assert.match(styles, /\.preview-send-btn:disabled\s*\{[^}]*opacity:\s*0\.55[^}]*cursor:\s*not-allowed/s,
         'the visible Send button retains its disabled treatment when there are no lyrics');
-    assert.match(styles, /\.workspace\.is-video-sync-workspace \.textareas-row\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/s,
-        'Text blocks use two columns only in Sync mode');
-    assert.match(styles, /\.textareas-row\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/s,
-        'standalone Text Lyrics keeps its normal three-column block layout');
-
     const videoCss = read('public/assets/css/video-lyrics.css');
     assert.match(videoCss, /\.workspace\.is-video-sync-workspace \.lyrics-sync-video-content\s*\{[^}]*align-content:\s*center/s,
         'the Video preview and controls group is balanced vertically within its row');
@@ -283,7 +308,6 @@ test('Text Lyrics remains the default workspace; Sync gives lyric blocks the lef
     assert.match(videoActions, /id="video-lyrics-blank"/);
     assert.match(videoActions, /id="video-lyrics-font-trigger"/);
     assert.match(videoActions, /id="video-lyrics-background"/);
-    assert.match(video, /id="video-lyrics-background-name"/);
     assert.match(video, /id="video-lyrics-background-status"[^>]*role="status"/);
     const inspector = video.match(/<aside class="video-lyrics-inspector"[\s\S]*?<\/aside>/)?.[0] || '';
     assert.ok(inspector.indexOf('class="video-lyrics-preview-card"') < inspector.indexOf('class="video-lyrics-appearance"'),
@@ -356,6 +380,17 @@ test('Text Lyrics remains the default workspace; Sync gives lyric blocks the lef
     assert.match(syncStagesRule, /aspect-ratio:\s*16\s*\/\s*9/);
 });
 
+test('Sync keeps two lyric columns with transparent wrappers and standalone Text keeps three', () => {
+    const styles = read('public/assets/css/index.css');
+
+    assert.match(styles, /\.workspace\.is-video-sync-workspace \.textareas-container\s*\{[^}]*display:\s*grid[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/s,
+        'the Sync block container uses two columns');
+    assert.match(styles, /\.workspace\.is-video-sync-workspace \.textareas-row\s*\{[^}]*display:\s*contents/s,
+        'Sync rows expose their block children directly to the two-column container');
+    assert.match(styles, /\.textareas-row\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/s,
+        'standalone Text Lyrics keeps its normal three-column block layout');
+});
+
 test('Sync automatically shows the Video preview and inspector, then restores standalone placement when disabled', () => {
     const harness = createSyncHarness({ textPopupOpen: true });
     const { updateSyncPreviewLayout } = harness.context.__syncTest;
@@ -373,6 +408,10 @@ test('Sync automatically shows the Video preview and inspector, then restores st
     assert.ok(harness.textPreview.classList.contains('is-video-sync-preview'));
     assert.equal(harness.videoPreviewHost.hidden, false);
     assert.equal(harness.videoPreviewContent.hidden, false);
+    assert.ok(harness.videoCard.classList.contains('is-sync-embedded-preview'), 'the embedded preview state controls its compact format tag');
+    assert.equal(harness.videoBackgroundName.parentNode, harness.embeddedBackgroundNameSlot,
+        'the same background-name node moves into the embedded bottom-right slot');
+    assert.deepEqual(harness.embeddedBackgroundNameSlot.children, [harness.videoBackgroundName]);
     assert.equal(harness.marker.hidden, false);
     assert.equal(harness.videoStatus.textContent, 'Normal Video status', 'sync layout does not change the normal Video status');
 
@@ -382,6 +421,10 @@ test('Sync automatically shows the Video preview and inspector, then restores st
     assert.deepEqual(harness.videoInspector.children, [harness.videoCard, harness.videoAppearance]);
     assert.equal(harness.videoCard.parentNode, harness.videoInspector, 'the preview card returns to its original inspector');
     assert.equal(harness.videoAppearance.parentNode, harness.videoInspector, 'the appearance node returns to its original inspector');
+    assert.equal(harness.videoBackgroundName.parentNode, harness.videoBackgroundNameHeader,
+        'turning Sync off restores the same background-name node to its original header');
+    assert.deepEqual(harness.videoBackgroundNameHeader.children, [harness.videoBackgroundName]);
+    assert.ok(!harness.videoCard.classList.contains('is-sync-embedded-preview'));
     assert.ok(!harness.textWorkspace.classList.contains('is-video-sync-workspace'));
     assert.ok(!harness.textPreview.classList.contains('is-video-sync-preview'));
     assert.equal(harness.videoPreviewHost.hidden, true);
@@ -398,6 +441,8 @@ test('changing to a different panel restores the Video preview to its own inspec
     harness.documentListeners.click({ target: { closest: selector => selector === '.sidebar-nav button[data-panel]' ? {} : null } });
 
     assert.equal(harness.videoCard.parentNode, harness.videoInspector);
+    assert.equal(harness.videoBackgroundName.parentNode, harness.videoBackgroundNameHeader,
+        'leaving Text ownership restores the same background-name node to its original header');
     assert.equal(harness.videoPreviewHost.hidden, true);
 });
 
@@ -500,7 +545,7 @@ test('Send to prompter opens Text first and opens Video in the same click only w
             formatText: value => value,
             clearAllLiveBlocks() {}, syncLiveBlockBadges() {}, updateActiveBlockToolbar() {}, updatePreview() {},
             updatePreviewPrompterDock() {}, postPrompterControl() {}, clearTimeout() {}, setTimeout() { return 1; },
-            publishTextLineupProjection(tabId) { projectionCalls.push(tabId); },
+            publishTextLineupProjection() { projectionCalls.push('published'); },
             isPrompterWindowOpen: () => Boolean(popup && !popup.closed),
             prompterPopupWindow: null,
         };
@@ -515,11 +560,11 @@ test('Send to prompter opens Text first and opens Video in the same click only w
     const syncOn = sendHarness(true);
     syncOn.context.sendForTest(1, 1);
     assert.deepEqual(syncOn.calls, ['text', 'video']);
-    assert.deepEqual(syncOn.projectionCalls, [1, 1], 'Send publishes the active Text blocks before and after opening the prompter');
+    assert.deepEqual(syncOn.projectionCalls, ['published', 'published'], 'Send publishes the active Text blocks before and after opening the prompter');
     assert.ok(syncOn.popup(), 'the Text popup opened from the same Send interaction');
     syncOn.context.sendForTest(1, 1);
     assert.deepEqual(syncOn.calls, ['text', 'video', 'text-update', 'video'], 'sending another block updates Text and keeps Video in sync');
-    assert.deepEqual(syncOn.projectionCalls, [1, 1, 1], 'subsequent Text sends refresh the Video lineup projection');
+    assert.deepEqual(syncOn.projectionCalls, ['published', 'published', 'published'], 'subsequent Text sends refresh the Video lineup projection');
 
     const blocked = sendHarness(true, { ok: false, reason: 'popup-blocked' });
     blocked.context.sendForTest(1, 1);

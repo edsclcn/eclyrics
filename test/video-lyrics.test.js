@@ -35,6 +35,144 @@ test('song title is the first audience cue, then manual navigation skips blank l
     m.cue(99); assert.equal(m.getState().live.index, 4);
     m.remove(m.getState().lineup[0].id); assert.equal(m.getState().live, null);
 });
+test('Video cue-only lines keep raw source positions while rendering and outputting blank text', () => {
+    const standalone = model();
+    const standaloneId = standalone.add({
+        title: 'Cue Song',
+        lyrics: 'First lyric\nInterlude\n ( Instrumental ) \nInterlude returns in a verse\nLast lyric',
+    });
+    const standaloneCues = standalone.getState().lineup[0].cues;
+    assert.deepEqual(Array.from(standaloneCues, cue => [cue.text, cue.isCueOnly || false, cue.displayText]), [
+        ['Cue Song', false, undefined],
+        ['First lyric', false, undefined],
+        ['Interlude', true, ''],
+        ['( Instrumental )', true, ''],
+        ['Interlude returns in a verse', false, undefined],
+        ['Last lyric', false, undefined],
+        ['To God be the Glory', false, undefined],
+    ], 'standalone Video keeps cue source text and order while marking exact cue-only lines for blank display');
+
+    standalone.prepare(standaloneId);
+    assert.equal(standalone.cue(2), true);
+    assert.equal(standalone.getState().live.text, '', 'a bare standalone cue has blank live output');
+    assert.equal(standalone.getState().live.index, 2, 'the blank cue retains its standalone cue index');
+    assert.equal(standalone.advance(1), true);
+    assert.equal(standalone.getState().live.text, '', 'the parenthesized cue keeps its own blank row');
+    assert.equal(standalone.getState().live.index, 3);
+    assert.equal(standalone.advance(1), true, 'the next lyric remains reachable after blank cues');
+    assert.equal(standalone.getState().live.text, 'Interlude returns in a verse', 'mixed-content cues remain visible in standalone output');
+
+    const synced = model();
+    synced.setTextLineup({ lineupKey: 'text-tab-a', title: 'Tab 1', songs: [{
+        lineupKey: 'text-tab-a',
+        title: 'Tab 1',
+        blocks: [{
+            blockIndex: 4,
+            title: 'Verse',
+            lines: [
+                { sourceLineIndex: 10, text: 'First lyric' },
+                { sourceLineIndex: 12, text: 'Interlude' },
+                { sourceLineIndex: 15, text: ' ( Instrumental ) ' },
+                { sourceLineIndex: 20, text: 'Interlude returns in a verse' },
+                { sourceLineIndex: 21, text: 'Last lyric' },
+            ],
+        }],
+    }] });
+    synced.setTextFollowing(true);
+    synced.setSyncEnabled(true);
+    const projectedBlock = synced.getState().sync.songs[0].blocks[0];
+    assert.deepEqual(Array.from(projectedBlock.lines, line => [line.sourceLineIndex, line.text, line.isCueOnly || false, line.displayText]), [
+        [10, 'First lyric', false, undefined],
+        [12, 'Interlude', true, ''],
+        [15, '( Instrumental )', true, ''],
+        [20, 'Interlude returns in a verse', false, undefined],
+        [21, 'Last lyric', false, undefined],
+    ], 'Text projection retains original source indexes and raw cue text');
+
+    synced.updateTextPosition({ lineupKey: 'text-tab-a', blockIndex: 4, sourceLineIndex: 12, lineText: 'Interlude' });
+    assert.equal(synced.getState().live.text, '', 'Text-synced cue output is blank');
+    assert.equal(synced.getState().live.index, 12, 'Text-synced cue retains its source line index');
+    synced.updateTextPosition({ lineupKey: 'text-tab-a', blockIndex: 4, sourceLineIndex: 15, lineText: '( Instrumental )' });
+    assert.equal(synced.getState().live.text, '', 'parenthesized synced cue output is blank');
+    assert.equal(synced.getState().live.index, 15);
+    synced.updateTextPosition({ lineupKey: 'text-tab-a', blockIndex: 4, sourceLineIndex: 20, lineText: 'Interlude returns in a verse' });
+    assert.equal(synced.getState().live.text, 'Interlude returns in a verse', 'mixed-content cues remain visible in Text-synced output');
+
+    synced.setTextFollowing(false);
+    assert.equal(synced.cueTextLine('text-tab-a', 4, 12), true);
+    assert.equal(synced.getState().live.text, '', 'Video-local projected cue output is also blank');
+    assert.equal(synced.getState().live.index, 12);
+    assert.equal(synced.advance(1), true);
+    assert.equal(synced.getState().live.text, '', 'Video advances to the following source cue without renumbering');
+    assert.equal(synced.getState().live.index, 15);
+    assert.equal(synced.advance(1), true, 'Video can advance beyond the blank cue placeholder');
+    assert.equal(synced.getState().live.text, 'Interlude returns in a verse');
+    assert.equal(synced.getState().live.index, 20);
+});
+test('Adaptation lines retain their source text and positions while Video displays them blank', () => {
+    const standalone = model();
+    const standaloneId = standalone.add({
+        title: 'Adapted hymn',
+        lyrics: 'Opening lyric\nAdaptation\n(Adaptation)\n(Adaptation of “My Way”)\nClosing lyric',
+    });
+    const standaloneCues = standalone.getState().lineup[0].cues;
+    assert.deepEqual(Array.from(standaloneCues, cue => [cue.text, cue.displayText]), [
+        ['Adapted hymn', undefined],
+        ['Opening lyric', undefined],
+        ['Adaptation', ''],
+        ['(Adaptation)', ''],
+        ['(Adaptation of “My Way”)', ''],
+        ['Closing lyric', undefined],
+        ['To God be the Glory', undefined],
+    ], 'standalone Video keeps the raw Adaptation cue text and its lineup indexes');
+    standalone.prepare(standaloneId);
+    assert.equal(standalone.cue(2), true);
+    assert.equal(standalone.getState().live.text, '');
+    assert.equal(standalone.getState().live.index, 2);
+    assert.equal(standalone.advance(1), true);
+    assert.equal(standalone.getState().live.text, '');
+    assert.equal(standalone.getState().live.index, 3);
+    assert.equal(standalone.advance(1), true);
+    assert.equal(standalone.getState().live.text, '', 'Adaptation of a named source is blank in Video output');
+    assert.equal(standalone.getState().live.index, 4);
+    assert.equal(standalone.advance(1), true);
+    assert.equal(standalone.getState().live.text, 'Closing lyric', 'the next lyric stays reachable after blank Adaptation cues');
+
+    const projected = model();
+    projected.setTextLineup({ lineupKey: 'text-adaptation-tab', songs: [{
+        lineupKey: 'text-adaptation-tab',
+        title: 'Tab Adaptation',
+        blocks: [{
+            blockIndex: 3,
+            title: 'Adapted verse',
+            lines: [
+                { sourceLineIndex: 4, text: 'Opening lyric' },
+                { sourceLineIndex: 9, text: 'Adaptation' },
+                { sourceLineIndex: 12, text: '(Adaptation)' },
+                { sourceLineIndex: 20, text: 'Closing lyric' },
+            ],
+        }],
+    }] });
+    projected.setTextFollowing(true);
+    projected.setSyncEnabled(true);
+    const projectedLines = projected.getState().sync.songs[0].blocks[0].lines;
+    assert.deepEqual(Array.from(projectedLines, line => [line.sourceLineIndex, line.text, line.displayText]), [
+        [4, 'Opening lyric', undefined],
+        [9, 'Adaptation', ''],
+        [12, '(Adaptation)', ''],
+        [20, 'Closing lyric', undefined],
+    ], 'Video projection keeps Text source text and indexes while marking Adaptation lines blank for display');
+    projected.updateTextPosition({ lineupKey: 'text-adaptation-tab', blockIndex: 3, sourceLineIndex: 9, lineText: 'Adaptation' });
+    assert.equal(projected.getState().live.text, '', 'Text-following Video output blanks an Adaptation line');
+    assert.equal(projected.getState().live.index, 9, 'the source line index remains unchanged');
+    projected.updateTextPosition({ lineupKey: 'text-adaptation-tab', blockIndex: 3, sourceLineIndex: 12, lineText: '(Adaptation)' });
+    assert.equal(projected.getState().live.text, '');
+    assert.equal(projected.getState().live.index, 12);
+    projected.setTextFollowing(false);
+    assert.equal(projected.cueTextLine('text-adaptation-tab', 3, 9), true, 'Video can cue a projected Adaptation line locally');
+    assert.equal(projected.getState().live.text, '');
+    assert.equal(projected.getState().live.index, 9);
+});
 test('automatic closing cue appears once after the lyrics and remains last after edits', () => {
     const m = model();
     const empty = m.add({ ...song, title: 'Empty', lyrics: '' });
@@ -48,10 +186,11 @@ test('automatic closing cue appears once after the lyrics and remains last after
     assert.equal(m.getState().live.index, m.getState().lineup.find(item => item.id === hasOutro).cues.length - 1);
     m.remove(empty);
 });
-test('blank output clears the live lyric, notifies subscribers, and keeps prepared song and background', () => {
+test('blank output toggles independently from the live cue and preserves navigation', () => {
     const m = model(), first = m.add(song), next = m.add({ ...song, title: 'Next song', lyrics: 'Next lyric' });
     const background = { id: 'ambient' };
     m.setBackground(background);
+    assert.equal(m.getState().outputBlanked, false, 'Blank starts off');
     m.prepare(first);
     m.cue(1);
 
@@ -61,27 +200,47 @@ test('blank output clears the live lyric, notifies subscribers, and keeps prepar
         preparedId: state.preparedId,
         preparedIndex: state.preparedIndex,
         background: state.background,
+        outputBlanked: state.outputBlanked,
     }));
-    m.blankOutput();
+    assert.equal(m.blankOutput(), true, 'the first toggle blanks Video output');
 
     assert.equal(notifications.length, 1);
-    assert.equal(notifications[0].live, null);
+    assert.equal(notifications[0].live.text, 'First', 'Blank preserves the current live cue');
+    assert.equal(notifications[0].live.index, 1);
     assert.equal(notifications[0].preparedId, first);
     assert.equal(notifications[0].preparedIndex, 1);
     assert.equal(notifications[0].background, background);
-    assert.equal(m.getState().live, null);
+    assert.equal(notifications[0].outputBlanked, true);
+    assert.equal(m.getState().live.text, 'First');
     assert.equal(m.getState().preparedId, first);
     assert.equal(m.getState().preparedIndex, 1);
     assert.equal(m.getState().background, background);
 
-    m.advance(1);
+    assert.equal(m.advance(1), true, 'navigation continues while output is blanked');
     assert.equal(notifications.length, 2);
     assert.equal(m.getState().live.text, 'Second');
+    assert.equal(m.getState().live.index, 2);
+    assert.equal(m.getState().outputBlanked, true);
     assert.equal(m.getState().preparedId, first);
     assert.equal(m.getState().background, background);
+    assert.equal(m.blankOutput(), false, 'the second toggle restores Video output');
+    assert.equal(notifications.length, 3);
+    assert.equal(m.getState().outputBlanked, false);
+    assert.equal(m.getState().live.text, 'Second', 'turning Blank off shows the latest cue');
+    assert.equal(m.getState().live.index, 2);
     unsubscribe();
     m.prepare(next);
-    assert.equal(notifications.length, 2);
+    assert.equal(notifications.length, 3);
+});
+test('Blank can toggle when there is no live cue', () => {
+    const m = model();
+    assert.equal(m.getState().live, null);
+    assert.equal(m.blankOutput(), true);
+    assert.equal(m.getState().outputBlanked, true);
+    assert.equal(m.getState().live, null);
+    assert.equal(m.blankOutput(), false);
+    assert.equal(m.getState().outputBlanked, false);
+    assert.equal(m.getState().live, null);
 });
 test('appearance accepts permitted fonts and colors and clamps numeric settings', () => {
     const m = model(); m.updateSettings({ fontFamily: 'Inter', color: '#AaBBcc', fontWeight: '500', fontSize: 999, fadeMs: -1 });
@@ -152,6 +311,7 @@ test('Text sync follows projected blocks and source lines without requiring a se
             { sourceLineIndex: 15, text: 'A line from the same Text block' },
         ],
     }] });
+    m.setTextFollowing(true);
     m.setSyncEnabled(true);
     m.updateTextPosition({ lineupKey: 'text-tab-a', blockIndex: 8, sourceLineIndex: 14, lineText: '  Café, déjà-vu!  ' });
 
@@ -172,6 +332,7 @@ test('a blank position at the adjustable Text marker keeps the last active Video
         title: 'Text block',
         lines: [{ sourceLineIndex: 2, text: 'Last active line' }],
     }] });
+    m.setTextFollowing(true);
     m.setSyncEnabled(true);
     m.updateTextPosition({ lineupKey: 'text-tab-a', blockIndex: 0, sourceLineIndex: 2, lineText: 'Last active line' });
     m.updateTextPosition({ lineupKey: 'text-tab-a', blockIndex: 0, sourceLineIndex: null, lineText: '' });
@@ -192,6 +353,7 @@ test('sync off retains the cue and turning it on follows the latest text positio
             { sourceLineIndex: 2, text: 'Third' },
         ],
     }] });
+    m.setTextFollowing(true);
     m.setSyncEnabled(true);
     const position = sourceLineIndex => ({ lineupKey: 'text-tab-a', blockIndex: 0, sourceLineIndex, lineText: ['First', 'Second', 'Third'][sourceLineIndex] });
     m.updateTextPosition(position(1));
@@ -206,7 +368,60 @@ test('sync off retains the cue and turning it on follows the latest text positio
     assert.equal(m.getState().live.text, 'Third', 'resuming applies the most recently received position');
 });
 
-test('Video cue and advance cannot move Text while synced; standalone Video controls work when Sync is off', () => {
+test('Text and Video control ownership hands off the current line without losing either position', () => {
+    const m = model();
+    const songId = m.add({ title: 'Independent song', lyrics: 'Local lyric' });
+    const background = { name: 'Stars' };
+    m.setBackground(background);
+    m.updateSettings({ fontSize: 135, color: '#aabbcc' });
+    m.setTextLineup({ activeLineupKey: 'text-tab-a', activeBlockIndex: 0, songs: [{
+        lineupKey: 'text-tab-a',
+        title: 'Tab 1',
+        blocks: [{
+            blockIndex: 0,
+            title: 'Song title',
+            lines: [
+                { sourceLineIndex: 0, text: 'First' },
+                { sourceLineIndex: 2, text: 'Second' },
+                { sourceLineIndex: 3, text: 'Third' },
+            ],
+        }, {
+            blockIndex: 1,
+            title: 'Next block',
+            lines: [{ sourceLineIndex: 0, text: 'Next block line' }],
+        }],
+    }] });
+    m.setTextFollowing(true);
+    m.setSyncEnabled(true);
+    const position = (sourceLineIndex, lineText) => ({ lineupKey: 'text-tab-a', blockIndex: 0, sourceLineIndex, lineText });
+    m.updateTextPosition(position(2, 'Second'));
+    assert.equal(m.getState().live.text, 'Second', 'Text owns Video while the Text workspace is active');
+
+    m.setTextFollowing(false);
+    assert.equal(m.getState().sync.videoPosition.sourceLineIndex, 2, 'Video takes over at the current Text line');
+    assert.equal(m.cueTextLine('text-tab-a', 0, 3), true, 'Video can select a projected lyric locally');
+    assert.equal(m.getState().live.text, 'Third');
+    assert.equal(m.getState().sync.latestPosition.sourceLineIndex, 2, 'Video cue selection leaves the Text position unchanged');
+    assert.equal(m.advance(-1), true, 'Video previous control advances its local projected cursor');
+    assert.equal(m.getState().live.text, 'Second');
+    assert.equal(m.getState().sync.latestPosition.sourceLineIndex, 2);
+    assert.equal(m.advance(-1), true);
+    assert.equal(m.getState().live.text, 'First');
+    assert.equal(m.advance(-1), false, 'Video stepping stops at the selected block boundary');
+    assert.equal(m.getState().lineup.find(entry => entry.id === songId).title, 'Independent song', 'Sync keeps the independent Video lineup intact');
+
+    m.updateTextPosition(position(3, 'Latest Text line'));
+    assert.equal(m.getState().live.text, 'First', 'incoming Text positions are retained without taking over Video output');
+    assert.equal(m.getState().sync.latestPosition.sourceLineIndex, 3);
+    m.setTextFollowing(true);
+    assert.equal(m.getState().live.text, 'Third', 'returning to Text applies its latest position');
+    assert.equal(m.getState().live.entryId, 'text-sync');
+    assert.equal(m.getState().settings.fontSize, 135);
+    assert.equal(m.getState().settings.color, '#aabbcc');
+    assert.equal(m.getState().background, background);
+});
+
+test('Video and Text navigation controls only operate in their owning mode', () => {
     const m = model();
     const songId = m.add({ title: 'Song', lyrics: 'First\nSecond\nThird' });
     m.prepare(songId);
@@ -219,15 +434,15 @@ test('Video cue and advance cannot move Text while synced; standalone Video cont
             { sourceLineIndex: 2, text: 'Third' },
         ],
     }] });
+    m.setTextFollowing(true);
     m.setSyncEnabled(true);
     const position = sourceLineIndex => ({ lineupKey: 'text-tab-a', blockIndex: 0, sourceLineIndex, lineText: ['First', 'Second', 'Third'][sourceLineIndex] });
-    m.updateTextPosition(position(0));
     m.updateTextPosition(position(1));
     assert.equal(m.getState().live.text, 'Second');
 
     const syncedPosition = { ...m.getState().sync.latestPosition };
-    assert.equal(m.cue(4), false, 'a Video cue cannot take control from Text');
-    assert.equal(m.advance(-1), false, 'Video previous/next and popup advance are rejected during Sync');
+    assert.equal(m.cue(2), false, 'Video cannot take cue control from Text');
+    assert.equal(m.advance(-1), false, 'Video popup/buttons cannot advance while Text owns control');
     m.prepare(songId);
     assert.equal(m.getState().sync.enabled, true);
     assert.equal(m.getState().sync.latestPosition.lineText, syncedPosition.lineText);
@@ -248,6 +463,7 @@ test('Text projection preserves block order and source line indexes across Video
         { blockIndex: 0, title: 'Opening', lines: [{ sourceLineIndex: 0, text: 'First line' }, { sourceLineIndex: 2, text: 'Second line' }] },
         { blockIndex: 3, title: 'Chorus', lines: [{ sourceLineIndex: 1, text: 'Chorus line' }] },
     ] });
+    m.setTextFollowing(true);
     m.setSyncEnabled(true);
 
     assert.deepEqual(Array.from(m.getState().sync.projection, block => [block.blockIndex, block.title, block.lines.map(line => line.sourceLineIndex)]), [

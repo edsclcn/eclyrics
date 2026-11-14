@@ -1,11 +1,19 @@
 (function () {
     const OUTRO_CUE = 'To God be the Glory';
+    const isVideoCueOnlyLine = text => /^(?:interlude|instrumental|\(\s*(?:interlude|instrumental)\s*\))$/i.test(String(text || '').trim());
+    const isAdaptationCue = text => /\badaptation\b/i.test(String(text || ''));
+    function markVideoOnlyDisplayCue(cue) {
+        if (isVideoCueOnlyLine(cue.text)) cue.isCueOnly = true;
+        if (cue.isCueOnly || isAdaptationCue(cue.text)) cue.displayText = '';
+    }
     function parseCues(lyrics) {
         let section = 0;
         return String(lyrics || '').split(/\r?\n/).reduce((cues, line) => {
             const text = line.trim();
             if (!text) { if (cues.length) section++; return cues; }
-            cues.push({ text, section });
+            const cue = { text, section };
+            markVideoOnlyDisplayCue(cue);
+            cues.push(cue);
             return cues;
         }, []);
     }
@@ -21,8 +29,8 @@
     }
     function create() {
         let nextId = 0;
-        const state = { lineup: [], preparedId: null, preparedIndex: -1, live: null, background: null,
-            sync: { enabled: false, status: 'Off by default', lineupKey: null, activeLineupKey: null, activeBlockIndex: null, projection: [], songs: [], latestPosition: null },
+        const state = { lineup: [], preparedId: null, preparedIndex: -1, live: null, outputBlanked: false, background: null,
+            sync: { enabled: false, followingText: false, status: 'Off by default', lineupKey: null, activeLineupKey: null, activeBlockIndex: null, projection: [], songs: [], latestPosition: null, videoPosition: null },
             settings: { fontFamily: 'Satoshi', fontWeight: 700, fontSize: 120, color: '#ffffff', positionUnit: 'stage-px-v1', y: 540, fadeMs: 400, playbackRate: 1, dimming: 0.3 } };
         const listeners = new Set();
         const prepared = () => state.lineup.find(entry => entry.id === state.preparedId);
@@ -37,7 +45,7 @@
             const entry = prepared();
             if (!entry?.cues[index]) return false;
             state.preparedIndex = index;
-            state.live = { entryId: entry.id, index, text: entry.cues[index].text };
+            state.live = { entryId: entry.id, index, text: entry.cues[index].displayText ?? entry.cues[index].text };
             return true;
         }
         function applyTextPosition(position) {
@@ -49,23 +57,74 @@
                 notify();
                 return;
             }
-            const text = line.text || position.lineText.trim();
-            if (!text) {
+            const text = line.displayText ?? (line.text || position.lineText.trim());
+            if (!text && line.displayText === undefined) {
                 state.sync.status = 'Sync on · Waiting for a lyric at the text marker.';
                 notify();
                 return;
             }
-            state.live = { entryId: 'text-sync', lineupKey: song.lineupKey, songTitle: song.title, blockIndex: position.blockIndex, index: position.sourceLineIndex, text };
+            state.live = { entryId: 'text-sync', lineupKey: song.lineupKey, songTitle: song.title, blockTitle: block.title, blockIndex: position.blockIndex, index: position.sourceLineIndex, text };
             state.sync.status = `Following ${song.title} · Line ${position.sourceLineIndex + 1}.`;
             notify();
         }
+        function getVideoPosition() {
+            const latest = state.sync.latestPosition;
+            if (Number.isInteger(latest?.sourceLineIndex) && isValidTextPosition(latest)) return latest;
+            const live = state.live;
+            if (['text-sync', 'text-video'].includes(live?.entryId)) {
+                const position = { lineupKey: live.lineupKey, blockIndex: live.blockIndex, sourceLineIndex: live.index };
+                if (isValidTextPosition(position)) return position;
+            }
+            const song = findTextSong(state.sync.activeLineupKey) || state.sync.songs[0];
+            const block = song?.blocks.find(entry => entry.blockIndex === state.sync.activeBlockIndex && entry.lines.length)
+                || song?.blocks.find(entry => entry.lines.length)
+                || state.sync.songs.flatMap(entry => entry.blocks).find(entry => entry.lines.length);
+            const owner = block && (song?.blocks.includes(block) ? song : state.sync.songs.find(entry => entry.blocks.includes(block)));
+            return block && owner ? { lineupKey: owner.lineupKey, blockIndex: block.blockIndex, sourceLineIndex: null } : null;
+        }
+        function cueTextLine(lineupKey, blockIndex, sourceLineIndex) {
+            if (!state.sync.enabled || state.sync.followingText) return false;
+            const song = findTextSong(lineupKey);
+            const block = song?.blocks.find(entry => entry.blockIndex === blockIndex);
+            const line = block?.lines.find(entry => entry.sourceLineIndex === sourceLineIndex);
+            if (!line) return false;
+            state.sync.videoPosition = { lineupKey, blockIndex, sourceLineIndex };
+            state.live = { entryId: 'text-video', lineupKey, songTitle: song.title, blockTitle: block.title, blockIndex, index: sourceLineIndex, text: line.displayText ?? line.text };
+            state.sync.status = `Video control · ${song.title} · Line ${sourceLineIndex + 1}.`;
+            notify();
+            return true;
+        }
+        function setTextFollowing(following) {
+            const wasFollowing = state.sync.followingText;
+            state.sync.followingText = Boolean(following);
+            if (state.sync.enabled && state.sync.followingText && state.sync.latestPosition) applyTextPosition(state.sync.latestPosition);
+            else if (state.sync.enabled && wasFollowing && !state.sync.followingText) {
+                state.sync.videoPosition = getVideoPosition();
+                notify();
+            } else notify();
+        }
+        function advanceTextLine(delta) {
+            if (![-1, 1].includes(delta) || !state.sync.enabled || state.sync.followingText) return false;
+            const position = state.sync.videoPosition;
+            const song = findTextSong(position?.lineupKey);
+            const block = song?.blocks.find(entry => entry.blockIndex === position?.blockIndex);
+            if (!block?.lines.length) return false;
+            const currentIndex = block.lines.findIndex(line => line.sourceLineIndex === position.sourceLineIndex);
+            const target = block.lines[currentIndex < 0 ? 0 : currentIndex + delta];
+            return target ? cueTextLine(song.lineupKey, block.blockIndex, target.sourceLineIndex) : false;
+        }
         function applyLatestPositionWhenEnabled() {
-            if (state.sync.enabled && state.sync.latestPosition) applyTextPosition(state.sync.latestPosition);
+            if (state.sync.enabled && state.sync.followingText && state.sync.latestPosition) applyTextPosition(state.sync.latestPosition);
             else notify();
         }
         function prepare(id) { if (!state.lineup.some(entry => entry.id === id)) return; state.preparedId = id; state.preparedIndex = state.live?.entryId === id ? state.live.index : -1; if (state.sync.enabled && state.sync.latestPosition) applyLatestPositionWhenEnabled(); else notify(); }
         function cue(index) {
-            if (state.sync.enabled) return false;
+            if (state.sync.enabled) {
+                const block = state.sync.songs.find(song => song.lineupKey === state.sync.videoPosition?.lineupKey)
+                    ?.blocks.find(entry => entry.blockIndex === state.sync.videoPosition?.blockIndex);
+                const line = block?.lines[index];
+                return line ? cueTextLine(state.sync.videoPosition.lineupKey, block.blockIndex, line.sourceLineIndex) : false;
+            }
             const entry = prepared();
             if (!entry?.cues[index]) return false;
             setCue(index); notify();
@@ -80,7 +139,8 @@
                 return;
             }
             state.sync.status = 'Sync on · Waiting for a text prompter position.';
-            if (state.sync.latestPosition) applyTextPosition(state.sync.latestPosition);
+            if (state.sync.followingText && state.sync.latestPosition) applyTextPosition(state.sync.latestPosition);
+            else if (!state.sync.followingText) { state.sync.videoPosition = getVideoPosition(); notify(); }
             else notify();
         }
         function setTextLineup(source) {
@@ -91,7 +151,8 @@
                 state.sync.projection = [];
                 state.sync.songs = [];
                 state.sync.latestPosition = null;
-                if (state.live?.entryId === 'text-sync') state.live = null;
+                state.sync.videoPosition = null;
+                if (['text-sync', 'text-video'].includes(state.live?.entryId)) state.live = null;
                 if (state.sync.enabled) state.sync.status = 'Sync on · Waiting for a text prompter position.';
                 notify();
                 return true;
@@ -110,10 +171,12 @@
                     id: `text-${song.lineupKey}-${block.blockIndex}`,
                     blockIndex: block.blockIndex,
                     title: String(block.title || `Block ${block.blockIndex + 1}`),
-                    lines: Array.isArray(block.lines) ? block.lines.filter(line => Number.isInteger(line?.sourceLineIndex) && line.sourceLineIndex >= 0 && typeof line.text === 'string' && line.text.trim()).map(line => ({
-                        sourceLineIndex: line.sourceLineIndex,
-                        text: line.text.trim(),
-                    })) : [],
+                    lines: Array.isArray(block.lines) ? block.lines.filter(line => Number.isInteger(line?.sourceLineIndex) && line.sourceLineIndex >= 0 && typeof line.text === 'string' && line.text.trim()).map(line => {
+                        const text = line.text.trim();
+                        const cue = { sourceLineIndex: line.sourceLineIndex, text };
+                        markVideoOnlyDisplayCue(cue);
+                        return cue;
+                    }) : [],
                 })),
             }));
             const activeLineupKey = typeof source.activeLineupKey === 'string'
@@ -137,7 +200,12 @@
                 blockIndex: state.live.blockIndex,
                 sourceLineIndex: state.live.index,
             })) state.live = null;
-            if (state.sync.enabled && state.sync.latestPosition) applyTextPosition(state.sync.latestPosition);
+            if (state.sync.videoPosition && !isValidTextPosition(state.sync.videoPosition)) {
+                state.sync.videoPosition = null;
+                if (state.live?.entryId === 'text-video') state.live = null;
+            }
+            if (state.sync.enabled && state.sync.followingText && state.sync.latestPosition) applyTextPosition(state.sync.latestPosition);
+            else if (state.sync.enabled && !state.sync.followingText && !state.sync.videoPosition) { state.sync.videoPosition = getVideoPosition(); notify(); }
             else notify();
             return true;
         }
@@ -153,7 +221,8 @@
                 lineText: position.lineText,
             };
             state.sync.latestPosition = latestPosition;
-            if (state.sync.enabled) applyTextPosition(latestPosition);
+            if (state.sync.enabled && state.sync.followingText) applyTextPosition(latestPosition);
+            else if (state.sync.enabled) notify();
         }
         function updateSettings(patch) {
             const settings = state.settings;
@@ -181,7 +250,7 @@
                 if (state.preparedId === id) state.preparedIndex = wasPreparedOutro ? entry.cues.length - 1 : Math.min(state.preparedIndex, entry.cues.length - 2);
                 if (state.live?.entryId === id) {
                     state.live.index = wasLiveOutro ? entry.cues.length - 1 : Math.min(state.live.index, entry.cues.length - 2);
-                    state.live.text = entry.cues[state.live.index].text;
+                    state.live.text = entry.cues[state.live.index].displayText ?? entry.cues[state.live.index].text;
                     if (state.preparedId === id) state.preparedIndex = state.live.index;
                 }
                 if (state.preparedId === id) applyLatestPositionWhenEnabled();
@@ -189,9 +258,9 @@
             },
             remove(id) { const index = state.lineup.findIndex(entry => entry.id === id); if (index < 0) return; state.lineup.splice(index, 1); if (state.live?.entryId === id) state.live = null; if (state.preparedId === id) { state.preparedId = state.lineup[Math.min(index, state.lineup.length - 1)]?.id ?? null; state.preparedIndex = -1; } if (state.sync.enabled && state.sync.latestPosition) applyLatestPositionWhenEnabled(); else notify(); },
             move(id, delta) { const index = state.lineup.findIndex(entry => entry.id === id), target = index + delta; if (index < 0 || target < 0 || target >= state.lineup.length) return; const [entry] = state.lineup.splice(index, 1); state.lineup.splice(target, 0, entry); notify(); },
-            advance(delta) { if (state.sync.enabled) return false; const entry = prepared(); if (!entry?.cues.length) return false; setCue(Math.max(0, Math.min(entry.cues.length - 1, state.preparedIndex + delta))); notify(); return true; },
-            setSyncEnabled, setTextLineup, updateTextPosition,
-            blankOutput() { if (!state.live) return; state.live = null; notify(); },
+            advance(delta) { if (state.sync.enabled) return advanceTextLine(delta); const entry = prepared(); if (!entry?.cues.length) return false; setCue(Math.max(0, Math.min(entry.cues.length - 1, state.preparedIndex + delta))); notify(); return true; },
+            setSyncEnabled, setTextFollowing, setTextLineup, updateTextPosition, cueTextLine,
+            blankOutput() { state.outputBlanked = !state.outputBlanked; notify(); return state.outputBlanked; },
             setBackground(background) { state.background = background; notify(); },
         };
     }

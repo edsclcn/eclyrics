@@ -32,6 +32,7 @@ const TEXT_BLOCK_SEND_MOVE_TOLERANCE = 8;
 let tabCount = 0;
 let prompterBroadcast = null;
 let lastPrompterSync = null;
+let lastPrompterPosition = null;
 let lastPrompterSyncAt = 0;
 /** Tab id last sent to the prompter — lineup pushes are gated to this tab only. */
 let prompterBoundTabId = null;
@@ -232,7 +233,27 @@ function ingestPrompterSyncBroadcast(normalized) {
     if (contentChanged && getLivePrompterTextarea()) {
         updateLiveViewfinder();
     }
+    updatePreviewFutureLineOpacity();
     updatePreviewAdjacentBlockButtons();
+}
+
+function updatePreviewFutureLineOpacity() {
+    const inner = document.getElementById('lyrics-preview-viewfinder');
+    if (!inner) return;
+
+    const position = lastPrompterPosition;
+    const isCurrentPosition =
+        Number.isInteger(position?.sourceLineIndex) &&
+        position.lineupKey === lastPrompterSync?.lineupKey &&
+        position.blockIndex === lastPrompterSync?.currentIndex;
+
+    inner.querySelectorAll('[data-prompter-source-line]').forEach((line) => {
+        const sourceLineIndex = Number(line.dataset.prompterSourceLine);
+        line.classList.toggle(
+            'is-future-source-line',
+            isCurrentPosition && sourceLineIndex > position.sourceLineIndex,
+        );
+    });
 }
 
 function getPreviewScrollRange(contentH, viewH) {
@@ -993,6 +1014,20 @@ function initPrompterBroadcast() {
     }
     if (prompterBroadcast) {
         prompterBroadcast.onmessage = (ev) => {
+            if (ev.data?.type === 'eclyrics-prompter-position') {
+                const previousPosition = lastPrompterPosition;
+                if (
+                    ev.data.sourceLineIndex === null &&
+                    Number.isInteger(previousPosition?.sourceLineIndex) &&
+                    ev.data.lineupKey === previousPosition.lineupKey &&
+                    ev.data.blockIndex === previousPosition.blockIndex
+                ) {
+                    return;
+                }
+                lastPrompterPosition = ev.data;
+                updatePreviewFutureLineOpacity();
+                return;
+            }
             const guard = getSyncGuardApi();
             const normalized = guard ? guard.normalizeSyncPayload(ev.data) : ev.data;
             ingestPrompterSyncBroadcast(normalized);
@@ -1163,6 +1198,7 @@ function updateLiveViewfinder() {
         }
     }
     applyViewfinderFromPrompterSync();
+    updatePreviewFutureLineOpacity();
 }
 
 function updatePreview() {

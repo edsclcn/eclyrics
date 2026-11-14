@@ -693,69 +693,19 @@ function togglePrompterTheme() {
 }
 
 function handleMainKeys(event) {
+    const speedPreset = window.EclyricsPrompterShortcuts?.getScrollSpeedPreset(event.code);
+    if (speedPreset !== null && speedPreset !== undefined) {
+        event.preventDefault();
+        scrollSpeed = speedPreset;
+        persistScrollSpeed();
+        broadcastPrompterState();
+        return;
+    }
+
     switch (event.code) {
         case 'Space':
             event.preventDefault();
             playPauseScroll();
-            broadcastPrompterState();
-            break;
-        case 'Digit1':
-            event.preventDefault();
-            scrollSpeed = 0.5;
-            persistScrollSpeed();
-            broadcastPrompterState();
-            break;
-        case 'Digit2':
-            event.preventDefault();
-            scrollSpeed = 1;
-            persistScrollSpeed();
-            broadcastPrompterState();
-            break;
-        case 'Digit3':
-            event.preventDefault();
-            scrollSpeed = 1.5;
-            persistScrollSpeed();
-            broadcastPrompterState();
-            break;
-        case 'Digit4':
-            event.preventDefault();
-            scrollSpeed = 2;
-            persistScrollSpeed();
-            broadcastPrompterState();
-            break;
-        case 'Digit5':
-            event.preventDefault();
-            scrollSpeed = 2.5;
-            persistScrollSpeed();
-            broadcastPrompterState();
-            break;
-        case 'Digit6':
-            event.preventDefault();
-            scrollSpeed = 3;
-            persistScrollSpeed();
-            broadcastPrompterState();
-            break;
-        case 'Digit7':
-            event.preventDefault();
-            scrollSpeed = 3.5;
-            persistScrollSpeed();
-            broadcastPrompterState();
-            break;
-        case 'Digit8':
-            event.preventDefault();
-            scrollSpeed = 4;
-            persistScrollSpeed();
-            broadcastPrompterState();
-            break;
-        case 'Digit9':
-            event.preventDefault();
-            scrollSpeed = 4.5;
-            persistScrollSpeed();
-            broadcastPrompterState();
-            break;
-        case 'Digit0':
-            event.preventDefault();
-            pauseScroll();
             broadcastPrompterState();
             break;
         case 'KeyP':

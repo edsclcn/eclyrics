@@ -69,11 +69,12 @@ widths, the editor moves above the preview rows while each stage stays paired
 with its controls. The mirrored Text tabs do not need a separate Video Lyrics
 search or preparation step.
 
-In the synced workspace, the editor shows two lyric blocks per row. The Sync
-switch stays beside the Text preview heading, separate from transient feedback,
-so routine state changes do not move it. Enabling Sync automatically shows the
-embedded Video preview and its full controls; turning Sync off hides that
-embedded panel and restores the standalone Video Lyrics inspector.
+The synced workspace shows two lyric blocks per row; standalone Text Lyrics
+retains three blocks per row. The Sync switch stays
+beside the Text preview heading, separate from transient feedback, so routine
+state changes do not move it. Enabling Sync automatically shows the embedded
+Video preview and its full controls; turning Sync off hides that embedded panel
+and restores the standalone Video Lyrics inspector.
 
 The embedded Video controls use the same page-session settings as the standalone
 Video Lyrics workspace and audience output. Text remains horizontally centered.
@@ -97,15 +98,28 @@ repetitive success messages are suppressed while loading and error feedback
 remain available. Background and appearance changes update the embedded preview
 and the open audience popup. The default background loads only when Video
 Lyrics is activated or Sync/output needs video, so a Text-only synced session
-does not need to visit Video Lyrics. **Blank** clears the lyric while retaining
-its background. Audience popup playback errors appear as transient feedback and
-clear after **Start** succeeds.
+does not need to visit Video Lyrics. **Blank** toggles Video lyric visibility
+while retaining the current cue and background. Navigation continues while
+Blank is active; toggling it off reveals the latest cue. Lines containing
+`Adaptation` are blank only in Video Lyrics; the Text preview and audience Text
+prompter keep those lines visible. Audience popup playback errors appear as
+transient feedback and clear after **Start** succeeds.
 
 The reading marker is a subtle horizontal line over the Text prompter preview.
 It defaults to the vertical midpoint, can be dragged, and supports keyboard
 adjustment when focused. Its position sets where the Text prompter reads the
 current lyric line; the selected position is remembered in browser storage.
-Wrapped text lines remain associated with their source lyric line. Only
+Wrapped text lines remain associated with their source lyric line. When a
+current source line is available, the Text preview dims populated source lines
+after it; the active and earlier lines keep normal opacity. This styling uses
+the existing `sourceLineIndex` position broadcast and is scoped to
+`#lyrics-preview-viewfinder`. It does not change marker line selection,
+broadcast behavior, or the actual Text prompter appearance. As the source
+position advances, opacity transitions over 0.2 seconds; newly active lines
+fade back to normal, while the global reduced-motion rule shortens transitions
+to 0.01 ms. If the marker passes between visual fragments of a wrapped line,
+the preview keeps the last valid styling position; changing the lineup or block
+resets it. Only
 positions from the Text prompter lineup bound to this editor are accepted, and
 Video Lyrics validates the tab, block, and source line against the current
 projection before following it. If a source tab, block, or line is removed, its
@@ -163,7 +177,9 @@ Send button remains available to keyboard users. The Backquote send shortcut
 belongs to Image Lyrics only: `public/js/features/image-lyrics/index.js` handles
 it while the Image Lyrics panel is active, and the Image Lyrics shortcut list
 is documented in [Image Lyrics](../image-lyrics/README.md). It does not trigger
-Text Lyrics sending. Both panels support hold-to-send, but the target is
+Text Lyrics sending. The Text prompter shortcut list also includes speed
+presets: 1–9 set 1.5–5.5 in 0.5 steps, and 0 sets 6.0; presets preserve the
+current play/pause state. Both panels support hold-to-send, but the target is
 panel-specific: Text Lyrics sends the visible text block under the pointer;
 Image Lyrics sends the populated image block under the pointer to its separate
 image prompter.
@@ -183,6 +199,8 @@ image prompter.
   `public/js/features/prompter/prompter.js` — source-line markers, adjustable
   reading position, `goToSourceLine` handling, and the position broadcast that
   drives Video output
+- `public/js/features/prompter/prompter-shortcuts.js` — shared speed presets and
+  the Text prompter shortcut help list
 - `public/js/features/video-lyrics/index.js` and
   `public/js/features/video-lyrics/model.js` — Text-owned Sync toggle,
   populated-block lineup rows, selected-block fallback, row/cue navigation,

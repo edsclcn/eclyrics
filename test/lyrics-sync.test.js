@@ -34,30 +34,36 @@ test('Text Lyrics is the only Sync control and stays the primary workspace', () 
 });
 
 test('the Text to Video sync and preview refinement cache tokens match their entry points', () => {
-    const oneWayToken = '20261017-text-video-one-way';
+    const textFormattingToken = '20261017-lyric-sync';
+    const videoBlankAdaptationToken = '20261114-video-blank-adaptation';
+    const textPreviewCssToken = '20261114-sync-two-column-lineup';
+    const textPreviewHeadingToken = '20261114-text-preview-heading';
+    const textPreviewScriptToken = '20261114-text-preview-future-line-opacity';
     const previewToken = '20261017-sync-preview-refinement';
     const videoPositionToken = '20261017-video-position-controls';
+    const speedPresetToken = '20261114-number-speed-presets';
     const compactVideoRowToken = '20261017-sync-balanced-preview-rows';
     const shell = read('public/index.html');
     const prompter = read('public/prompter.html');
     const bootstrap = read('public/js/core/app-bootstrap.js');
 
-    assert.match(shell, new RegExp(`assets/css/index\\.css\\?v=${compactVideoRowToken}`));
-    assert.match(shell, new RegExp(`assets/css/video-lyrics\\.css\\?v=${compactVideoRowToken}`));
+    assert.match(shell, new RegExp(`assets/css/index\\.css\\?v=${textPreviewCssToken}`));
+    assert.match(shell, new RegExp(`assets/css/video-lyrics\\.css\\?v=${videoBlankAdaptationToken}`));
     assert.match(shell, new RegExp(`assets/css/video-prompter\\.css\\?v=${compactVideoRowToken}`));
-    assert.match(shell, new RegExp(`js/core/app-bootstrap\\.js\\?v=${compactVideoRowToken}`));
-    assert.match(prompter, new RegExp(`js/features/prompter/prompter\\.js\\?v=${oneWayToken}`));
-    assert.ok(bootstrap.includes(`js/features/editor/index.js?v=${oneWayToken}`), 'Text editor uses the one-way sync token');
-    assert.ok(bootstrap.includes(`js/features/video-lyrics/index.js?v=${videoPositionToken}`), 'Video control behavior uses the position and speed token');
+    assert.match(shell, new RegExp(`js/core/app-bootstrap\\.js\\?v=${videoBlankAdaptationToken}`));
+    assert.match(prompter, new RegExp(`js/features/prompter/prompter\\.js\\?v=${speedPresetToken}`));
+    assert.ok(bootstrap.includes(`js/features/editor/index.js?v=${textPreviewScriptToken}`), 'Text editor uses the future-line preview token');
+    assert.ok(bootstrap.includes(`js/features/editor/textformatting.js?v=${textFormattingToken}`), 'Text formatting uses its restored lyric token');
+    assert.ok(bootstrap.includes(`js/features/video-lyrics/index.js?v=${videoBlankAdaptationToken}`), 'Video UI uses the Blank and Adaptation token');
     assert.ok(bootstrap.includes(`js/features/video-lyrics/backgrounds.js?v=${previewToken}`), 'Video backgrounds retain their preview refinement token');
-    assert.ok(bootstrap.includes(`js/features/video-lyrics/model.js?v=${videoPositionToken}`), 'Video model settings use the position and speed token');
+    assert.ok(bootstrap.includes(`js/features/video-lyrics/model.js?v=${videoBlankAdaptationToken}`), 'Video model uses the Blank and Adaptation token');
     assert.ok(bootstrap.includes(`js/features/video-lyrics/stage.js?v=${videoPositionToken}`), 'Video output stage uses the position and speed token');
-    assert.ok(bootstrap.includes(`js/features/video-lyrics/output.js?v=${videoPositionToken}`), 'Video output bridge uses the position and speed token');
-    assert.match(bootstrap, new RegExp(`cacheVersion: '${previewToken}'`));
-    assert.equal((bootstrap.match(new RegExp(`cacheVersion: '${previewToken}'`, 'g')) || []).length, 1,
-        'the Text fragment retains its preview refinement token');
-    assert.ok(bootstrap.includes(`file: 'video-lyrics.html', panelId: 'panel-video', cacheVersion: '${videoPositionToken}'`),
-        'the lazy-loaded Video fragment uses the position and speed token');
+    assert.ok(bootstrap.includes(`js/features/video-lyrics/output.js?v=${videoBlankAdaptationToken}`), 'Video output bridge uses the Blank token');
+    assert.match(bootstrap, new RegExp(`cacheVersion: '${textPreviewHeadingToken}'`));
+    assert.equal((bootstrap.match(new RegExp(`cacheVersion: '${textPreviewHeadingToken}'`, 'g')) || []).length, 1,
+        'the Text fragment retains its preview-heading token');
+    assert.ok(bootstrap.includes(`file: 'video-lyrics.html', panelId: 'panel-video', cacheVersion: '${videoBlankAdaptationToken}'`),
+        'the lazy-loaded Video fragment uses the Blank and Adaptation token');
 });
 
 test('each source lyric line is retained as one semantic span for direct video sync', () => {
@@ -68,6 +74,10 @@ test('each source lyric line is retained as one semantic span for direct video s
 
     assert.equal(context.formatForTest('First source line\nSecond source line'),
         '<span data-prompter-source-line="0">First source line</span>\n<span data-prompter-source-line="1">Second source line</span>');
+    const wrappedLine = context.formatForTest('A wrapped line with (emphasis)');
+    assert.equal(wrappedLine, '<span data-prompter-source-line="0">A wrapped line with <em>(emphasis)</em></span>');
+    assert.equal((wrappedLine.match(/data-prompter-source-line/g) || []).length, 1,
+        'nested formatting remains inside one semantic source-line span');
 });
 
 test('the Video lineup projection includes each Text block and preserves original source line indexes', () => {
@@ -146,4 +156,145 @@ test('the open Text prompter accepts and persists marker changes, then immediate
     context.receive({ data: { type: 'eclyrics-prompter-marker', ratio: 1.4 } });
     assert.equal(context.getRatio(), 0.9, 'the receiving prompter enforces the same safe stage margin');
     assert.deepEqual(context.scans, [true, true]);
+});
+
+test('Text preview future-line dimming follows valid positions, survives rerenders, and stays preview-only', () => {
+    const editor = read('public/js/features/editor/index.js');
+    const updateOpacity = extractFunction(editor, 'updatePreviewFutureLineOpacity');
+    const updateViewfinder = extractFunction(editor, 'updateLiveViewfinder');
+    const initPrompterBroadcast = extractFunction(editor, 'initPrompterBroadcast');
+    let sourceLines = [];
+    const makeLine = sourceLineIndex => {
+        const classes = new Set();
+        return {
+            dataset: { prompterSourceLine: String(sourceLineIndex) },
+            classes,
+            classList: {
+                toggle(name, enabled) { if (enabled) classes.add(name); else classes.delete(name); },
+                contains: name => classes.has(name),
+            },
+        };
+    };
+    sourceLines = [0, 1, 2].map(makeLine);
+    const viewfinder = {
+        className: '',
+        textContent: '',
+        set innerHTML(html) {
+            this.html = html;
+            sourceLines = [...String(html).matchAll(/data-prompter-source-line="(\d+)"/g)].map(match => makeLine(match[1]));
+        },
+        get innerHTML() { return this.html; },
+        querySelectorAll(selector) {
+            assert.equal(selector, '[data-prompter-source-line]');
+            return sourceLines;
+        },
+    };
+    const document = { getElementById: id => id === 'lyrics-preview-viewfinder' ? viewfinder : null };
+    const liveTextarea = { value: 'First line\nCurrent line\nFuture line' };
+    let stageHtml = null;
+    const channel = { onmessage: null };
+    function BroadcastChannel(name) {
+        assert.equal(name, 'eclyrics-prompter');
+        return channel;
+    }
+    document.querySelector = selector => {
+        assert.ok(['.preview-viewfinder-16x9', '.preview-viewfinder-slot'].includes(selector));
+        return null;
+    };
+    const preview = new Function(
+        'document', 'getLivePrompterTextarea', 'isPrompterWindowOpen', 'getPrompterStageBlockHtml',
+        'setLivePreviewHtml', 'applyViewfinderFromPrompterSync', 'window', 'BroadcastChannel', 'PROMPTER_BC_NAME',
+        'handlePrompterWorkspaceShortcutMessage', 'getSyncGuardApi', 'ingestPrompterSyncBroadcast', 'ResizeObserver',
+        `let lastPrompterPosition = null;\nlet lastPrompterSync = null;\nlet prompterBroadcast = null;\n${updateOpacity}\n${updateViewfinder}\n${initPrompterBroadcast}\nreturn {
+            setSync(sync) { lastPrompterSync = sync; },
+            render: updateLiveViewfinder,
+            init: initPrompterBroadcast,
+            channel: () => prompterBroadcast,
+        };`,
+    )(
+        document,
+        () => liveTextarea,
+        () => true,
+        () => stageHtml,
+        (element, text) => {
+            element.className = '';
+            element.innerHTML = text.split('\n').map((line, index) => `<span data-prompter-source-line="${index}">${line}</span>`).join('\n');
+        },
+        () => {},
+        { addEventListener(name, handler) { assert.equal(name, 'message'); assert.equal(typeof handler, 'function'); } },
+        BroadcastChannel,
+        'eclyrics-prompter',
+        () => {},
+        () => { throw new Error('position messages must bypass sync normalization'); },
+        () => { throw new Error('position messages must bypass sync ingestion'); },
+        undefined,
+    );
+    const sync = { lineupKey: 'text-tab-1', currentIndex: 0 };
+    const dimmedIndexes = () => sourceLines.filter(line => line.classList.contains('is-future-source-line'))
+        .map(line => Number(line.dataset.prompterSourceLine));
+    const position = (lineupKey, blockIndex, sourceLineIndex) => ({
+        type: 'eclyrics-prompter-position', lineupKey, blockIndex, sourceLineIndex,
+    });
+    const sendPosition = position => preview.channel().onmessage({ data: position });
+
+    preview.setSync(sync);
+    preview.init();
+    assert.equal(typeof preview.channel().onmessage, 'function', 'initPrompterBroadcast registers the position message handler');
+    sendPosition(position('text-tab-1', 0, null));
+    assert.deepEqual(dimmedIndexes(), [], 'an initial null source-line position leaves the preview undimmed');
+
+    sendPosition(position('text-tab-1', 0, 1));
+    assert.deepEqual(dimmedIndexes(), [2], 'only lines after the current source line are dimmed');
+
+    sendPosition(position('text-tab-1', 0, null));
+    assert.deepEqual(dimmedIndexes(), [2], 'a null position in the same lineup and block preserves the last valid fade');
+
+    sendPosition(position('text-tab-1', 0, 2));
+    assert.deepEqual(dimmedIndexes(), [], 'a newer position restores lines that are no longer in the future');
+
+    for (const otherPosition of [
+        { type: 'eclyrics-prompter-position', lineupKey: 'another-tab', blockIndex: 0, sourceLineIndex: 1 },
+        { type: 'eclyrics-prompter-position', lineupKey: 'text-tab-1', blockIndex: 1, sourceLineIndex: 1 },
+    ]) {
+        sendPosition(position('text-tab-1', 0, 0));
+        assert.deepEqual(dimmedIndexes(), [1, 2], 'a valid position dims only later source lines');
+        sendPosition(otherPosition);
+        assert.deepEqual(dimmedIndexes(), [], 'valid positions from another lineup or block clear prior dimming');
+    }
+
+    for (const changedLocation of [
+        position('text-tab-1', 1, null),
+        position('another-tab', 0, null),
+    ]) {
+        sendPosition(position('text-tab-1', 0, 0));
+        assert.deepEqual(dimmedIndexes(), [1, 2], 'a current valid line dims later lines before the null update');
+        sendPosition(changedLocation);
+        assert.deepEqual(dimmedIndexes(), [], 'a null position for a different block or lineup clears the old fade');
+    }
+
+    sendPosition(position('text-tab-1', 0, 1));
+    assert.deepEqual(dimmedIndexes(), [2], 'a valid line after a cleared location establishes a new fade');
+    preview.render();
+    const firstRenderLines = sourceLines;
+    assert.deepEqual(dimmedIndexes(), [2], 'the raw Text preview render receives the current dimming state');
+
+    stageHtml = '<span data-prompter-source-line="0">First, refreshed</span><span data-prompter-source-line="1">Current, refreshed</span><span data-prompter-source-line="2">Future, refreshed</span><span data-prompter-source-line="3">Later</span>';
+    preview.render();
+    assert.notEqual(sourceLines[0], firstRenderLines[0], 'rerender creates new semantic source spans');
+    assert.deepEqual(dimmedIndexes(), [2, 3], 'the stage HTML render reapplies the position to its new spans');
+
+    const css = read('public/assets/css/index.css');
+    const sourceLineRules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+        .map(([, selector, declarations]) => ({ selector: selector.trim(), declarations }))
+        .filter(rule => rule.selector.includes('[data-prompter-source-line]'));
+    const baseSourceLineRule = sourceLineRules.find(rule => rule.selector === '#lyrics-preview-viewfinder [data-prompter-source-line]');
+    const opacityRules = sourceLineRules.filter(rule => /(?:^|;)\s*opacity\s*:/.test(rule.declarations));
+
+    assert.ok(baseSourceLineRule, 'all Text preview source spans have a base rule');
+    assert.match(baseSourceLineRule.declarations, /transition:\s*opacity 0\.2s ease;/,
+        'the transition remains when the future class is removed');
+    assert.deepEqual(opacityRules.map(rule => rule.selector), [
+        '#lyrics-preview-viewfinder [data-prompter-source-line].is-future-source-line',
+    ], 'opacity is declared only by the preview-scoped future-line rule');
+    assert.match(opacityRules[0].declarations, /opacity:\s*0\.42;/);
 });

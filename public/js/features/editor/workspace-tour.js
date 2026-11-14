@@ -81,7 +81,7 @@
                         <button type="button" class="tour-art__control-button" data-control-name="Narrower lines" data-control-description="Reduce the lyric line width." data-control-shortcut="−"><i class="fa-solid fa-arrows-left-right preview-icon-glyph--narrow"></i><small>Narrower</small></button>
                         <button type="button" class="tour-art__control-button" data-control-name="Wider lines" data-control-description="Increase the lyric line width." data-control-shortcut="="><i class="fa-solid fa-arrows-left-right preview-icon-glyph--wide"></i><small>Wider</small></button>
                         <button type="button" class="tour-art__control-button" data-control-name="Stage theme" data-control-description="Switch between the blue lyrics stage and black-and-white stage." data-control-shortcut="P"><i class="fa-solid fa-palette"></i><small>Theme</small></button>
-                        <button type="button" class="tour-art__speed" data-control-name="Scroll speed" data-control-description="Adjust scrolling speed. 1–9 set speed presets, 0 pauses, and Numpad + / − nudges the speed." data-control-shortcut="1–9, 0, Numpad + / −"><i class="fa-solid fa-gauge-high"></i><b>SPEED</b><i class="tour-art__speed-track"></i></button>
+                        <button type="button" class="tour-art__speed" data-control-name="Scroll speed" data-control-description="1–9 set speeds from 1.5 to 5.5 in 0.5 steps; 0 sets 6.0. Presets keep the current play/pause state. Numpad + / − nudges speed." data-control-shortcut="1–9, 0, Numpad + / −"><i class="fa-solid fa-gauge-high"></i><b>SPEED</b><i class="tour-art__speed-track"></i></button>
                     </div>
                 </div>`,
         },
@@ -93,7 +93,7 @@
                 <div class="tour-art__window tour-art__shortcut-art">
                     <div class="tour-art__shortcut-table-head"><span>Action</span><span>Keys</span><span>What it does</span></div>
                     <div class="tour-art__shortcut-row"><strong>Play / pause</strong><span><kbd>SPACE</kbd></span><span>Starts or pauses auto-scroll</span></div>
-                    <div class="tour-art__shortcut-row"><strong>Scroll speed presets</strong><span><kbd>1–9</kbd><kbd>0</kbd></span><span>1–9 set speed; 0 pauses</span></div>
+                    <div class="tour-art__shortcut-row"><strong>Scroll speed presets</strong><span><kbd>1–9</kbd><kbd>0</kbd></span><span>1–9: 1.5–5.5 by 0.5; 0: 6.0; playback state unchanged</span></div>
                     <div class="tour-art__shortcut-row"><strong>Scroll speed nudge</strong><span><kbd>NUMPAD +</kbd><kbd>NUMPAD −</kbd></span><span>Adjusts speed incrementally</span></div>
                     <div class="tour-art__shortcut-row"><strong>Previous / next block</strong><span><kbd>←</kbd><kbd>←</kbd> / <kbd>→</kbd><kbd>→</kbd></span><span>Double-press the same arrow within 400 ms</span></div>
                     <div class="tour-art__shortcut-row"><strong>Stage theme</strong><span><kbd>P</kbd></span><span>Toggles blue / B&amp;W stage</span></div>
