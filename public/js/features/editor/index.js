@@ -32,6 +32,7 @@ const TEXT_BLOCK_SEND_MOVE_TOLERANCE = 8;
 let tabCount = 0;
 let prompterBroadcast = null;
 let lastPrompterSync = null;
+let lastPrompterPosition = null;
 let lastPrompterSyncAt = 0;
 /** Tab id last sent to the prompter — lineup pushes are gated to this tab only. */
 let prompterBoundTabId = null;
@@ -232,7 +233,27 @@ function ingestPrompterSyncBroadcast(normalized) {
     if (contentChanged && getLivePrompterTextarea()) {
         updateLiveViewfinder();
     }
+    updatePreviewFutureLineOpacity();
     updatePreviewAdjacentBlockButtons();
+}
+
+function updatePreviewFutureLineOpacity() {
+    const inner = document.getElementById('lyrics-preview-viewfinder');
+    if (!inner) return;
+
+    const position = lastPrompterPosition;
+    const isCurrentPosition =
+        Number.isInteger(position?.sourceLineIndex) &&
+        position.lineupKey === lastPrompterSync?.lineupKey &&
+        position.blockIndex === lastPrompterSync?.currentIndex;
+
+    inner.querySelectorAll('[data-prompter-source-line]').forEach((line) => {
+        const sourceLineIndex = Number(line.dataset.prompterSourceLine);
+        line.classList.toggle(
+            'is-future-source-line',
+            isCurrentPosition && sourceLineIndex > position.sourceLineIndex,
+        );
+    });
 }
 
 function getPreviewScrollRange(contentH, viewH) {
@@ -733,6 +754,109 @@ function getLineupKeyForTab(tabId) {
     return `${SESSION_ID}-${tabId}`;
 }
 
+function buildTextLineupProjection(tabId) {
+    const blocks = [];
+    for (let textId = 1; ; textId++) {
+        const textarea = document.getElementById(`textarea-${tabId}-${textId}`);
+        if (!textarea) break;
+        const source = window.eclyricsSmartQuotes?.normalizeSmartQuotes?.(textarea.value) || textarea.value;
+        const lines = source.split(/\r?\n/).map((rawText, sourceLineIndex) => ({
+            sourceLineIndex,
+            text: rawText.replace(/§[rgbyvfznius]/g, '').replace(/\s+/g, ' ').trim(),
+        })).filter((line) => line.text);
+        blocks.push({
+            blockIndex: textId - 1,
+            title: lines[0]?.text || `Block ${textId}`,
+            lines,
+        });
+    }
+    return { lineupKey: getLineupKeyForTab(tabId), blocks };
+}
+
+function buildTextSongsProjection() {
+    const activeTabId = getActiveTabId();
+    const selectedTextarea = activeTabId == null ? null : textNum[activeTabId.toString()]?.[2];
+    const selectedTextareaMatch = selectedTextarea?.id.match(/^textarea-(\d+)-(\d+)$/);
+    const songs = [...document.querySelectorAll('#tabs-list .tab')].map((tab) => {
+        const tabId = parseInt(tab.dataset.tabId, 10);
+        return {
+            ...buildTextLineupProjection(tabId),
+            title: getTabLabel(tab) || `Tab ${tabId}`,
+        };
+    });
+    return {
+        activeLineupKey: activeTabId == null ? null : getLineupKeyForTab(activeTabId),
+        activeBlockIndex: selectedTextareaMatch && parseInt(selectedTextareaMatch[1], 10) === activeTabId
+            ? parseInt(selectedTextareaMatch[2], 10) - 1
+            : null,
+        songs,
+    };
+}
+
+function publishTextLineupProjection() {
+    document.dispatchEvent(new CustomEvent('eclyrics-text-lineup-updated', {
+        detail: buildTextSongsProjection(),
+    }));
+}
+
+window.eclyricsEditorPrompter = {
+    getTextLineupProjection() {
+        return buildTextSongsProjection();
+    },
+    getActiveLineup() {
+        const tabId = getActiveTabId();
+        return tabId == null ? null : buildTextLineupProjection(tabId);
+    },
+    getBoundLineupKey() {
+        if (prompterBoundTabId == null || !isPrompterWindowOpen()) return null;
+        return getLineupKeyForTab(prompterBoundTabId);
+    },
+    getBoundLineup() {
+        if (prompterBoundTabId == null || !isPrompterWindowOpen()) return null;
+        return buildTextLineupProjection(prompterBoundTabId);
+    },
+    navigateToSourceLine({ lineupKey, blockIndex, sourceLineIndex } = {}) {
+        if (!isPrompterWindowOpen()) return false;
+        if (
+            typeof lineupKey !== 'string' ||
+            !Number.isInteger(blockIndex) || blockIndex < 0 ||
+            !Number.isInteger(sourceLineIndex)
+        ) return false;
+
+        const projection = buildTextSongsProjection();
+        const song = projection.songs.find((entry) => entry.lineupKey === lineupKey);
+        const block = song?.blocks.find((entry) => entry.blockIndex === blockIndex);
+        if (!block?.lines.some((line) => line.sourceLineIndex === sourceLineIndex)) return false;
+
+        const targetTab = [...document.querySelectorAll('#tabs-list .tab')].find((tab) => {
+            const tabId = parseInt(tab.dataset.tabId, 10);
+            return getLineupKeyForTab(tabId) === lineupKey;
+        });
+        if (!targetTab) return false;
+
+        const tabId = parseInt(targetTab.dataset.tabId, 10);
+        const currentPosition = lastPrompterSync;
+        const targetBlockMarkup = buildLineupForTab(tabId)[blockIndex];
+        const guard = getSyncGuardApi();
+        const targetContentFingerprint =
+            typeof targetBlockMarkup === 'string' && typeof guard?.hashString === 'function'
+                ? guard.hashString(targetBlockMarkup)
+                : null;
+        const alreadyOnTarget =
+            prompterBoundTabId === tabId &&
+            currentPosition?.lineupKey === lineupKey &&
+            currentPosition.currentIndex === blockIndex &&
+            typeof currentPosition.contentFingerprint === 'string' &&
+            typeof targetContentFingerprint === 'string' &&
+            currentPosition.contentFingerprint === targetContentFingerprint;
+        if (!alreadyOnTarget) {
+            sendPrompt(tabId, blockIndex + 1, { openIfClosed: false, focusWindow: false });
+        }
+
+        return postPrompterControl({ action: 'goToSourceLine', lineupKey, blockIndex, sourceLineIndex });
+    },
+};
+
 function schedulePrompterLineupSync(tabId) {
     const key = String(tabId);
     if (prompterLineupSyncTimers[key]) clearTimeout(prompterLineupSyncTimers[key]);
@@ -748,6 +872,7 @@ function pushLineupToOpenPrompter(tabId) {
     const lineupKey = getLineupKeyForTab(tabId);
     const data = buildLineupForTab(tabId);
     localStorage.setItem(lineupKey, JSON.stringify(data));
+    publishTextLineupProjection();
     postPrompterControl({ action: 'updateLineup', lineupKey, data });
 }
 
@@ -889,6 +1014,20 @@ function initPrompterBroadcast() {
     }
     if (prompterBroadcast) {
         prompterBroadcast.onmessage = (ev) => {
+            if (ev.data?.type === 'eclyrics-prompter-position') {
+                const previousPosition = lastPrompterPosition;
+                if (
+                    ev.data.sourceLineIndex === null &&
+                    Number.isInteger(previousPosition?.sourceLineIndex) &&
+                    ev.data.lineupKey === previousPosition.lineupKey &&
+                    ev.data.blockIndex === previousPosition.blockIndex
+                ) {
+                    return;
+                }
+                lastPrompterPosition = ev.data;
+                updatePreviewFutureLineOpacity();
+                return;
+            }
             const guard = getSyncGuardApi();
             const normalized = guard ? guard.normalizeSyncPayload(ev.data) : ev.data;
             ingestPrompterSyncBroadcast(normalized);
@@ -999,6 +1138,10 @@ function selectTextarea(textarea) {
     const m = textarea.id.match(/^textarea-(\d+)-(\d+)$/);
     if (!m) return;
     const tabId = m[1];
+    const previousSelectedTextarea = textNum[tabId]?.[2];
+    const previousSelectedIndex = previousSelectedTextarea?.id.match(/^textarea-(\d+)-(\d+)$/);
+    const selectionChanged = previousSelectedTextarea !== textarea
+        || previousSelectedIndex?.[2] !== m[2];
 
     document.querySelectorAll(`#tab-${tabId} .textarea-cell.is-selected`).forEach((cell) => {
         cell.classList.remove('is-selected');
@@ -1010,6 +1153,9 @@ function selectTextarea(textarea) {
     textNum[tabId][2] = textarea;
     updateActiveBlockToolbar();
     updatePreview();
+    if (selectionChanged && getActiveTabId() === parseInt(tabId, 10)) {
+        publishTextLineupProjection();
+    }
 }
 
 function getSelectedTextareaForActiveTab() {
@@ -1052,6 +1198,7 @@ function updateLiveViewfinder() {
         }
     }
     applyViewfinderFromPrompterSync();
+    updatePreviewFutureLineOpacity();
 }
 
 function updatePreview() {
@@ -1583,6 +1730,7 @@ function initShell() {
                 } else {
                     schedulePrompterLineupSync(tid);
                 }
+                publishTextLineupProjection();
             }
             const blockTabId = blockTabIdForTextarea(e.target);
             if (blockTabId && blockEditorSession?.blockTabId === blockTabId) {
@@ -1936,6 +2084,7 @@ function removeBlockCell(cell, tabId) {
     cell.remove();
     reflowBlockRows(tabId);
     rearrangeTextAreas(tabId);
+    if (prompterBoundTabId === tabId) schedulePrompterLineupSync(tabId);
     syncLiveBlockBadges();
     maintainEmptySlotForTab(tabId);
     const stillSelected = textNum[tabId.toString()]?.[2];
@@ -1950,6 +2099,7 @@ function removeBlockCell(cell, tabId) {
         updateActiveBlockToolbar();
         updatePreview();
     }
+    publishTextLineupProjection();
 }
 
 function getOrCreateRowForNewBlock(container) {
@@ -2070,6 +2220,8 @@ function addSingleBlock(container, tabId) {
     refreshAllBlockLabelsInTab(tabId);
     syncBlockRemoveButtons(tabId);
     maintainEmptySlotForTab(tabId);
+    if (prompterBoundTabId === tabId) schedulePrompterLineupSync(tabId);
+    if (container.isConnected) publishTextLineupProjection();
 }
 
 function showTabContent(tabId) {
@@ -2090,6 +2242,7 @@ function showTabContent(tabId) {
             updateActiveBlockToolbar();
             updatePreview();
         }
+        publishTextLineupProjection();
     }
 }
 
@@ -2137,6 +2290,7 @@ function handleTabClose(tab) {
             updatePreview();
         }
     }
+    publishTextLineupProjection();
 }
 
 let tabInlineRename = null;
@@ -2206,11 +2360,21 @@ function finishTabInlineRename(save) {
     label.textContent = name;
     tab.classList.remove('is-renaming');
     tabInlineRename = null;
+    if (name !== prevName) publishTextLineupProjection();
 }
 
 window.getActiveTabLabel = function getActiveTabLabel() {
     return getTabLabel(document.querySelector('#tabs-list .tab.active'));
 };
+
+function openVideoPrompterWhenSyncIsEnabled() {
+    if (!isPrompterWindowOpen() || !window.eclyricsVideoLyrics?.getState?.().sync?.enabled) return;
+    const result = window.eclyricsVideoLyrics.openOutputWindow?.();
+    if (result?.ok === false) {
+        window.eclyricsVideoLyrics.showSyncFeedback?.('Sync is on. Allow pop-ups to open the video prompter.');
+    }
+    return result;
+}
 
 function sendPrompt(tabId, textId, options = {}) {
     const openIfClosed = options.openIfClosed !== false;
@@ -2242,6 +2406,7 @@ function sendPrompt(tabId, textId, options = {}) {
     updatePreview();
 
     prompterBoundTabId = tabId;
+    publishTextLineupProjection();
 
     const payload = {
         type: 'eclyrics-prompter-load',
@@ -2259,6 +2424,7 @@ function sendPrompt(tabId, textId, options = {}) {
             textNum[tabId.toString()][1] = prompterPopupWindow;
             updatePreviewPrompterDock();
             postPrompterControl({ action: 'requestSync' });
+            if (openIfClosed) openVideoPrompterWhenSyncIsEnabled();
             return;
         } catch (e) {
             prompterPopupWindow = null;
@@ -2283,7 +2449,9 @@ function sendPrompt(tabId, textId, options = {}) {
     const url = `prompter.html?title=${encodeURIComponent(lineupKey)}&current=${textId - 1}`;
     prompterPopupWindow = window.open(url, PROMPTER_WINDOW_NAME, popupFeatures);
     textNum[tabId.toString()][1] = prompterPopupWindow;
+    if (prompterPopupWindow) publishTextLineupProjection();
     if (prompterPopupWindow) prompterPopupWindow.focus();
+    openVideoPrompterWhenSyncIsEnabled();
     updatePreview();
     updatePreviewPrompterDock();
     setTimeout(() => {

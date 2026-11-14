@@ -5,6 +5,25 @@ const DEFAULT_SCROLL_SPEED = 0.5;
 const STAGE_VW = 1920;
 const STAGE_VH = 1080;
 const DEFAULT_PROMPTER_WIDTH_PX = 1444;
+const PROMPTER_READING_MARKER_STORAGE_KEY = 'eclyrics-prompter-reading-marker-ratio';
+const PROMPTER_READING_MARKER_MIN = 0.1;
+const PROMPTER_READING_MARKER_MAX = 0.9;
+const PROMPTER_POSITION_SCAN_INTERVAL_MS = 90;
+function clampPrompterReadingMarkerRatio(value) {
+    return Math.max(PROMPTER_READING_MARKER_MIN, Math.min(PROMPTER_READING_MARKER_MAX, Number(value)));
+}
+function readPrompterReadingMarkerRatio() {
+    try {
+        const stored = localStorage.getItem(PROMPTER_READING_MARKER_STORAGE_KEY);
+        if (stored !== null && stored.trim() !== '' && Number.isFinite(Number(stored))) {
+            return clampPrompterReadingMarkerRatio(stored);
+        }
+    } catch (e) {
+        /* Keep the default when storage is unavailable. */
+    }
+    return 0.5;
+}
+let prompterReadingMarkerRatio = readPrompterReadingMarkerRatio();
 /** Manual scroll: fixed 100px per keypress (including hold key-repeat); not scaled by scroll speed. */
 const KEYBOARD_ARROW_SCROLL_PX = 100;
 const WHEEL_SCROLL_PX = 50;
@@ -83,6 +102,8 @@ try {
 
 /** Cached visual metrics — refreshed on layout/block/theme changes, not every scroll frame. */
 let cachedPrompterBroadcast = null;
+let lastSemanticPosition = null;
+let lastSemanticPositionScanAt = 0;
 
 function refreshCachedPrompterBroadcast() {
     if (!prompterContent) return null;
@@ -108,8 +129,65 @@ function getPrompterThemeId() {
     return sessionStorage.getItem('prompterType') === 'LYRICS_PROMPTER' ? 'lyrics' : 'bw';
 }
 
+function getActiveSourceLine() {
+    if (!prompterContainer || !prompterContent) return null;
+
+    const stageRect = prompterContainer.getBoundingClientRect();
+    const readingMarkerY = stageRect.top + stageRect.height * prompterReadingMarkerRatio;
+    const sourceLines = prompterContent.querySelectorAll('[data-prompter-source-line]');
+
+    for (const sourceLine of sourceLines) {
+        const lineText = sourceLine.textContent.replace(/\s+/g, ' ').trim();
+        if (!lineText) continue;
+
+        const sourceLineIndex = Number(sourceLine.dataset.prompterSourceLine);
+        if (!Number.isInteger(sourceLineIndex)) continue;
+
+        for (const rect of sourceLine.getClientRects()) {
+            if (rect.width <= 0 || rect.height <= 0) continue;
+            if (rect.top <= readingMarkerY && readingMarkerY < rect.bottom) {
+                return { lineText, sourceLineIndex };
+            }
+        }
+    }
+
+    return null;
+}
+
+function broadcastSemanticPosition(force = false) {
+    if (!prompterBroadcastChannel || !prompterContent) return;
+
+    const now = performance.now();
+    if (!force && now - lastSemanticPositionScanAt < PROMPTER_POSITION_SCAN_INTERVAL_MS) return;
+    lastSemanticPositionScanAt = now;
+
+    const activeLine = getActiveSourceLine();
+    const position = {
+        type: 'eclyrics-prompter-position',
+        lineupKey: lineupKey || null,
+        blockIndex: currentIndex,
+        sourceLineIndex: activeLine?.sourceLineIndex ?? null,
+        lineText: activeLine?.lineText || '',
+    };
+
+    if (
+        !force &&
+        lastSemanticPosition &&
+        lastSemanticPosition.lineupKey === position.lineupKey &&
+        lastSemanticPosition.blockIndex === position.blockIndex &&
+        lastSemanticPosition.sourceLineIndex === position.sourceLineIndex &&
+        lastSemanticPosition.lineText === position.lineText
+    ) {
+        return;
+    }
+
+    lastSemanticPosition = position;
+    prompterBroadcastChannel.postMessage(position);
+}
+
 function broadcastPrompterState(options = {}) {
     if (!prompterBroadcastChannel || !prompterContent) return;
+    broadcastSemanticPosition(options.scrollOnly !== true);
     const scrollOnly = options.scrollOnly === true;
     if (!scrollOnly || !cachedPrompterBroadcast) {
         refreshCachedPrompterBroadcast();
@@ -181,6 +259,9 @@ let scrollingNow = false;
 let animationLoop;
 let scrollPosition = 0;
 let scrollSpeed = 0.5;
+let pendingLoadBroadcastTimer = null;
+let sourceLineSeekVersion = 0;
+let pendingSourceLineSeek = null;
 try {
     const savedSp = sessionStorage.getItem('eclyrics-prompter-scroll-speed');
     if (savedSp) {
@@ -205,7 +286,8 @@ function getScrollBounds() {
     const viewH = STAGE_VH;
     const contentH = prompterContent ? prompterContent.offsetHeight : 0;
     const minTop = -(Math.max(contentH, viewH));
-    return { min: minTop, max: 0 };
+    const maxTop = Math.max(0, viewH * prompterReadingMarkerRatio);
+    return { min: minTop, max: maxTop };
 }
 
 function clampScrollPosition() {
@@ -241,17 +323,68 @@ function pauseScroll() {
     scrollingNow = false;
 }
 
+function cancelPendingLoadBroadcast() {
+    if (pendingLoadBroadcastTimer === null) return;
+    clearTimeout(pendingLoadBroadcastTimer);
+    pendingLoadBroadcastTimer = null;
+}
+
+function deferLoadedTextBroadcast() {
+    cancelPendingLoadBroadcast();
+    pendingLoadBroadcastTimer = setTimeout(() => {
+        pendingLoadBroadcastTimer = null;
+        broadcastPrompterState();
+    }, 50);
+}
+
+function hasSourceLineInBlock(blockMarkup, sourceLineIndex) {
+    const block = document.createElement('div');
+    block.innerHTML = String(blockMarkup);
+    return [...block.querySelectorAll('[data-prompter-source-line]')].some((line) =>
+        Number(line.dataset.prompterSourceLine) === sourceLineIndex && line.textContent.replace(/\s+/g, ' ').trim(),
+    );
+}
+
+function seekSourceLineToReadingMarker(sourceLineIndex) {
+    const sourceLine = [...prompterContent.querySelectorAll('[data-prompter-source-line]')].find((line) =>
+        Number(line.dataset.prompterSourceLine) === sourceLineIndex && line.textContent.replace(/\s+/g, ' ').trim(),
+    );
+    const sourceLineRect = sourceLine && [...sourceLine.getClientRects()].find((rect) => rect.width > 0 && rect.height > 0);
+    if (!sourceLineRect) return false;
+
+    const stageRect = prompterContainer.getBoundingClientRect();
+    const readingMarkerY = stageRect.top + stageRect.height * prompterReadingMarkerRatio;
+    scrollPosition += readingMarkerY - sourceLineRect.top;
+    applyScrollPosition();
+    return true;
+}
+
 setText(currentIndex);
 
-function setText(index) {
+if (prompterBroadcastChannel) {
+    prompterBroadcastChannel.addEventListener('message', event => {
+        if (event.data?.type === 'eclyrics-prompter-position-request') broadcastSemanticPosition(true);
+        if (event.data?.type === 'eclyrics-prompter-marker' && Number.isFinite(event.data.ratio)) {
+            prompterReadingMarkerRatio = clampPrompterReadingMarkerRatio(event.data.ratio);
+            try { localStorage.setItem(PROMPTER_READING_MARKER_STORAGE_KEY, String(prompterReadingMarkerRatio)); }
+            catch (e) { /* Keep the updated position for this window. */ }
+            broadcastSemanticPosition(true);
+        }
+    });
+}
+
+function setText(index, { broadcast = true } = {}) {
     const i = parseInt(index, 10);
     if (Number.isNaN(i)) return;
+    sourceLineSeekVersion++;
+    pendingSourceLineSeek = null;
+    if (broadcast) cancelPendingLoadBroadcast();
     currentIndex = i;
     if (scrollingNow) pauseScroll();
     scrollPosition = 0;
     prompterContent.style.top = "0px";
     prompterContent.innerHTML = data && data[currentIndex] != null ? data[currentIndex] : '\nNo content. Close the window.';
-    broadcastPrompterState();
+    if (broadcast) broadcastPrompterState();
 }
 
 function applyRemoteScrollSpeed(next) {
@@ -409,9 +542,23 @@ window.addEventListener('message', (event) => {
             case 'scrollBy':
                 applyPrompterScrollBy(msg.delta);
                 break;
-            case 'updateLineup':
+            case 'updateLineup': {
                 if (!msg.lineupKey || msg.lineupKey !== lineupKey || !Array.isArray(msg.data)) break;
                 data = msg.data;
+                const pendingSeek = pendingSourceLineSeek;
+                const pendingSeekStillValid = Boolean(
+                    pendingSeek &&
+                    pendingSeek.lineupKey === msg.lineupKey &&
+                    pendingSeek.blockIndex === currentIndex &&
+                    pendingSeek.blockIndex < data.length &&
+                    data[pendingSeek.blockIndex] != null &&
+                    (pendingSeek.sourceLineIndex === null ||
+                        hasSourceLineInBlock(data[pendingSeek.blockIndex], pendingSeek.sourceLineIndex)),
+                );
+                if (pendingSeek && !pendingSeekStillValid) {
+                    pendingSourceLineSeek = null;
+                    sourceLineSeekVersion++;
+                }
                 try {
                     localStorage.setItem(lineupKey, JSON.stringify(data));
                 } catch (e) {
@@ -421,14 +568,62 @@ window.addEventListener('message', (event) => {
                     if (scrollingNow) pauseScroll();
                     prompterContent.innerHTML = data[currentIndex];
                     applyScrollPosition();
-                    broadcastPrompterState();
+                    if (pendingLoadBroadcastTimer === null && !pendingSeekStillValid) broadcastPrompterState();
                 }
                 break;
+            }
+            case 'goToSourceLine': {
+                if (
+                    typeof msg.lineupKey !== 'string' || msg.lineupKey !== lineupKey ||
+                    !Number.isInteger(msg.blockIndex) || msg.blockIndex < 0 ||
+                    !Array.isArray(data) || msg.blockIndex >= data.length || data[msg.blockIndex] == null ||
+                    (msg.sourceLineIndex !== null &&
+                        (!Number.isInteger(msg.sourceLineIndex) || msg.sourceLineIndex < 0))
+                ) break;
+
+                if (
+                    msg.sourceLineIndex !== null &&
+                    !hasSourceLineInBlock(data[msg.blockIndex], msg.sourceLineIndex)
+                ) break;
+
+                cancelPendingLoadBroadcast();
+                if (currentIndex !== msg.blockIndex) setText(msg.blockIndex, { broadcast: false });
+                pauseScroll();
+                const seekVersion = ++sourceLineSeekVersion;
+                const seekTarget = {
+                    lineupKey: msg.lineupKey,
+                    blockIndex: msg.blockIndex,
+                    sourceLineIndex: msg.sourceLineIndex,
+                };
+                pendingSourceLineSeek = seekTarget;
+                requestAnimationFrame(() => {
+                    if (
+                        pendingSourceLineSeek !== seekTarget ||
+                        seekVersion !== sourceLineSeekVersion ||
+                        lineupKey !== msg.lineupKey ||
+                        currentIndex !== msg.blockIndex ||
+                        !Array.isArray(data) || data[msg.blockIndex] == null
+                    ) return;
+                    if (
+                        msg.sourceLineIndex !== null &&
+                        (!hasSourceLineInBlock(data[msg.blockIndex], msg.sourceLineIndex) ||
+                            !seekSourceLineToReadingMarker(msg.sourceLineIndex))
+                    ) {
+                        pendingSourceLineSeek = null;
+                        sourceLineSeekVersion++;
+                        return;
+                    }
+                    applyScrollPosition();
+                    pendingSourceLineSeek = null;
+                    broadcastPrompterState();
+                });
+                break;
+            }
             case 'toggleTheme':
                 togglePrompterTheme();
                 break;
             case 'requestSync':
-                broadcastPrompterState();
+                if (pendingLoadBroadcastTimer === null) broadcastPrompterState();
                 break;
             default:
                 break;
@@ -445,7 +640,8 @@ window.addEventListener('message', (event) => {
     if (!raw) return;
     lineupKey = key;
     data = JSON.parse(raw);
-    setText(idx);
+    setText(idx, { broadcast: false });
+    deferLoadedTextBroadcast();
     document.title = key;
     try {
         const u = new URL(window.location.href);
@@ -497,69 +693,19 @@ function togglePrompterTheme() {
 }
 
 function handleMainKeys(event) {
+    const speedPreset = window.EclyricsPrompterShortcuts?.getScrollSpeedPreset(event.code);
+    if (speedPreset !== null && speedPreset !== undefined) {
+        event.preventDefault();
+        scrollSpeed = speedPreset;
+        persistScrollSpeed();
+        broadcastPrompterState();
+        return;
+    }
+
     switch (event.code) {
         case 'Space':
             event.preventDefault();
             playPauseScroll();
-            broadcastPrompterState();
-            break;
-        case 'Digit1':
-            event.preventDefault();
-            scrollSpeed = 0.5;
-            persistScrollSpeed();
-            broadcastPrompterState();
-            break;
-        case 'Digit2':
-            event.preventDefault();
-            scrollSpeed = 1;
-            persistScrollSpeed();
-            broadcastPrompterState();
-            break;
-        case 'Digit3':
-            event.preventDefault();
-            scrollSpeed = 1.5;
-            persistScrollSpeed();
-            broadcastPrompterState();
-            break;
-        case 'Digit4':
-            event.preventDefault();
-            scrollSpeed = 2;
-            persistScrollSpeed();
-            broadcastPrompterState();
-            break;
-        case 'Digit5':
-            event.preventDefault();
-            scrollSpeed = 2.5;
-            persistScrollSpeed();
-            broadcastPrompterState();
-            break;
-        case 'Digit6':
-            event.preventDefault();
-            scrollSpeed = 3;
-            persistScrollSpeed();
-            broadcastPrompterState();
-            break;
-        case 'Digit7':
-            event.preventDefault();
-            scrollSpeed = 3.5;
-            persistScrollSpeed();
-            broadcastPrompterState();
-            break;
-        case 'Digit8':
-            event.preventDefault();
-            scrollSpeed = 4;
-            persistScrollSpeed();
-            broadcastPrompterState();
-            break;
-        case 'Digit9':
-            event.preventDefault();
-            scrollSpeed = 4.5;
-            persistScrollSpeed();
-            broadcastPrompterState();
-            break;
-        case 'Digit0':
-            event.preventDefault();
-            pauseScroll();
             broadcastPrompterState();
             break;
         case 'KeyP':

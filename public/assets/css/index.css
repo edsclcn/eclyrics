@@ -405,6 +405,18 @@ a:hover {
     flex-shrink: 0;
 }
 
+.lyrics-toolbar-heading-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .75rem;
+    margin-bottom: .35rem;
+}
+
+.lyrics-toolbar-heading-row .lyrics-mode-heading {
+    margin-bottom: 0;
+}
+
 .tabs-toolbar-row {
     display: flex;
     flex-wrap: wrap;
@@ -3615,6 +3627,11 @@ a:hover {
     padding-inline: 0.1rem;
 }
 
+.preview-viewfinder-heading .lyrics-sync-control {
+    flex: 0 0 auto;
+    min-height: 0;
+}
+
 .preview-viewfinder-label {
     display: inline-flex;
     align-items: center;
@@ -3844,6 +3861,173 @@ a:hover {
 .preview-toolbar-group--stage {
     flex: 1 1 160px;
     min-width: 0;
+}
+
+.lyrics-sync-control {
+    display: inline-flex;
+    align-items: center;
+    gap: 0;
+    min-height: 2.5rem;
+    padding: 0;
+}
+
+.lyrics-sync-switch {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--foreground-muted);
+    font-size: .68rem;
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.lyrics-sync-control .lyrics-sync-switch input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    opacity: 0;
+    outline: none;
+}
+
+.lyrics-sync-switch-track {
+    position: relative;
+    display: inline-block;
+    flex: 0 0 2rem;
+    width: 2rem;
+    height: 1.1rem;
+    border: 1px solid var(--border-strong);
+    border-radius: 999px;
+    background: var(--background-subtle);
+    transition: background-color 140ms ease-out, border-color 140ms ease-out;
+}
+
+.lyrics-sync-switch-track::after {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: .78rem;
+    height: .78rem;
+    border-radius: 50%;
+    background: var(--foreground-muted);
+    content: "";
+    transition: transform 140ms ease-out, background-color 140ms ease-out;
+}
+
+.lyrics-sync-switch input:checked + .lyrics-sync-switch-track {
+    border-color: var(--blue-mid);
+    background: color-mix(in srgb, var(--blue-mid) 22%, var(--card));
+}
+
+.lyrics-sync-switch input:checked + .lyrics-sync-switch-track::after {
+    background: var(--blue-mid);
+    transform: translateX(.88rem);
+}
+
+.lyrics-sync-switch input:focus-visible + .lyrics-sync-switch-track {
+    outline: 2px solid var(--blue-mid);
+    outline-offset: 2px;
+}
+
+.lyrics-sync-feedback {
+    max-width: 13rem;
+    color: var(--danger);
+    font-size: .62rem;
+    line-height: 1.3;
+}
+
+.lyrics-sync-feedback[hidden] {
+    display: none !important;
+}
+
+.workspace-preview.is-video-sync-preview > .preview-frame {
+    flex: 1 1 0;
+    min-height: 0;
+}
+
+.lyrics-sync-video-preview {
+    display: flex;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.lyrics-sync-video-preview[hidden] {
+    display: none !important;
+}
+
+.lyrics-sync-video-content {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    gap: 0;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--card);
+    box-shadow: var(--shadow-sm);
+}
+
+.lyrics-sync-video-content[hidden] {
+    display: none !important;
+}
+
+.lyrics-sync-video-content > .video-lyrics-appearance {
+    flex: 0 0 auto;
+}
+
+.lyrics-sync-reading-marker {
+    position: absolute;
+    z-index: 5;
+    top: 50%;
+    right: 0;
+    left: 0;
+    height: 16px;
+    border: 0;
+    background: transparent;
+    cursor: row-resize;
+    touch-action: none;
+    transform: translateY(-50%);
+}
+
+.lyrics-sync-reading-marker::before {
+    position: absolute;
+    top: 50%;
+    right: 0;
+    left: 0;
+    height: 2px;
+    background: color-mix(in srgb, var(--blue-mid) 58%, transparent);
+    box-shadow: 0 0 2px rgba(0, 0, 0, .35);
+    content: "";
+    transform: translateY(-50%);
+}
+
+.lyrics-sync-reading-marker:focus-visible {
+    outline: 2px solid var(--blue-mid);
+    outline-offset: -2px;
+}
+
+.lyrics-sync-reading-marker[hidden] {
+    display: none !important;
+}
+
+@media (max-width: 1200px) {
+    .workspace-preview.is-video-sync-preview {
+        min-height: min(68vh, 640px);
+    }
+
+    .workspace-preview.is-video-sync-preview .preview-viewfinder-slot {
+        min-height: 0;
+    }
 }
 
 #image-lyrics-dock .preview-toolbar-group--stage {
@@ -4431,6 +4615,14 @@ a:hover {
     pointer-events: none;
     box-sizing: border-box;
     padding: 2px;
+}
+
+#lyrics-preview-viewfinder [data-prompter-source-line] {
+    transition: opacity 0.2s ease;
+}
+
+#lyrics-preview-viewfinder [data-prompter-source-line].is-future-source-line {
+    opacity: 0.42;
 }
 
 /* Portrait column — full block, readable scroll */
@@ -5709,4 +5901,270 @@ body.auth-gate-open {
 
 #admin-delete-dialog-confirm:not(:disabled):hover {
     background: color-mix(in srgb, var(--danger) 18%, transparent);
+}
+
+/* Sync workspace: lyric blocks sit beside two stacked preview-and-control rows. */
+.workspace.is-video-sync-workspace {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+    grid-template-rows: minmax(0, 0.9fr) minmax(0, 1.1fr);
+    gap: clamp(0.65rem, 1vw, 1rem);
+    min-height: 0;
+    overflow: hidden;
+}
+
+.workspace.is-video-sync-workspace > .workspace-editor,
+.workspace.is-video-sync-workspace > .workspace-preview,
+.workspace.is-video-sync-workspace > .lyrics-sync-video-preview {
+    width: auto;
+    min-width: 0;
+    min-height: 0;
+    max-width: none;
+}
+
+.workspace.is-video-sync-workspace > .workspace-editor {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+    display: flex;
+    flex-direction: column;
+    flex: initial;
+    overflow: hidden;
+}
+
+.workspace.is-video-sync-workspace .textareas-container {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.workspace.is-video-sync-workspace .textareas-row {
+    display: contents;
+}
+
+.workspace.is-video-sync-workspace > .workspace-preview {
+    grid-column: 2;
+    grid-row: 1;
+    display: flex;
+    flex: initial;
+    flex-direction: column;
+    align-self: stretch;
+}
+
+.workspace.is-video-sync-workspace > .workspace-preview > .preview-frame {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(17rem, 0.85fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    align-items: stretch;
+    flex: 1 1 0;
+    min-height: 0;
+    overflow: hidden;
+    padding: clamp(0.55rem, 0.8vw, 0.8rem);
+}
+
+.workspace.is-video-sync-workspace > .workspace-preview .preview-viewfinder-heading {
+    grid-column: 1 / -1;
+}
+
+.workspace.is-video-sync-workspace > .workspace-preview .preview-viewfinder-slot {
+    grid-column: 1;
+    grid-row: 2;
+}
+
+.workspace.is-video-sync-workspace > .lyrics-sync-video-preview {
+    grid-column: 2;
+    grid-row: 2;
+    display: flex;
+    flex: initial;
+    align-self: stretch;
+    flex-direction: column;
+}
+
+.workspace.is-video-sync-workspace > .workspace-preview .preview-prompter-dock {
+    grid-column: 2;
+    grid-row: 2;
+    align-self: stretch;
+    min-width: 0;
+    min-height: 0;
+    overflow-y: auto;
+    margin: 0;
+    padding: 0 0 0 clamp(0.65rem, 1vw, 1rem);
+    border-top: 0;
+    border-left: 1px solid var(--border);
+}
+
+.workspace.is-video-sync-workspace > .workspace-preview .preview-prompter-dock > :first-child {
+    margin-block-start: auto;
+}
+
+.workspace.is-video-sync-workspace > .workspace-preview .preview-prompter-dock > :last-child {
+    margin-block-end: auto;
+}
+
+/* Keep the primary send action legible in the narrower synced control rail. */
+.workspace.is-video-sync-workspace > .workspace-preview .preview-prompter-toolbar {
+    align-content: start;
+    gap: 0.45rem;
+}
+
+.workspace.is-video-sync-workspace > .workspace-preview .preview-send-btn {
+    flex: 0 0 100%;
+    width: 100%;
+    min-width: 0;
+    height: 2.55rem;
+    border-radius: 0.7rem;
+}
+
+.workspace.is-video-sync-workspace > .workspace-preview .preview-send-btn-label {
+    display: inline;
+}
+
+.workspace.is-video-sync-workspace > .workspace-preview .preview-toolbar-group {
+    min-height: 2.55rem;
+    align-items: center;
+}
+
+.workspace.is-video-sync-workspace > .workspace-preview .preview-viewfinder-slot,
+.workspace.is-video-sync-workspace > .lyrics-sync-video-preview .video-lyrics-preview-stage-slot {
+    flex: 0 0 auto;
+    width: 100%;
+    height: auto;
+    min-height: 0;
+    max-height: none;
+    margin: 0;
+    aspect-ratio: 16 / 9;
+}
+
+.workspace.is-video-sync-workspace > .workspace-preview .preview-viewfinder-slot .preview-viewfinder-16x9,
+.workspace.is-video-sync-workspace > .lyrics-sync-video-preview .video-lyrics-preview-stage {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 16 / 9;
+}
+
+.workspace.is-video-sync-workspace > .lyrics-sync-video-preview .video-lyrics-preview-card {
+    flex: 0 0 auto;
+    overflow: visible;
+}
+
+.workspace.is-video-sync-workspace > .lyrics-sync-video-preview .video-lyrics-preview-stage-slot {
+    flex: 0 0 auto;
+    container-type: normal;
+}
+
+.workspace.is-video-sync-workspace > .lyrics-sync-video-preview .video-lyrics-preview-heading {
+    flex: 1 1 auto;
+    flex-direction: row;
+    align-items: baseline;
+    min-width: 0;
+    gap: .45rem;
+}
+
+.workspace.is-video-sync-workspace > .lyrics-sync-video-preview .video-lyrics-preview-heading h3 {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
+.workspace.is-video-sync-workspace > .lyrics-sync-video-preview .video-lyrics-background-name {
+    display: block;
+    flex: 0 1 auto;
+    min-width: 0;
+    text-overflow: ellipsis;
+    color: var(--foreground-muted);
+    font-size: .58rem;
+    font-weight: 500;
+    letter-spacing: 0;
+    text-transform: none;
+}
+
+.workspace.is-video-sync-workspace > .workspace-preview .preview-viewfinder-label,
+.workspace.is-video-sync-workspace > .lyrics-sync-video-preview .video-lyrics-preview-heading h3 {
+    color: var(--blue-light, var(--blue-mid));
+    font-size: .62rem;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+}
+
+@media (max-width: 1300px) {
+    .workspace.is-video-sync-workspace {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: auto minmax(360px, auto) minmax(420px, auto);
+        overflow: auto;
+    }
+
+    .workspace.is-video-sync-workspace > .workspace-editor {
+        grid-column: 1 / -1;
+        grid-row: 1;
+        min-height: 0;
+        overflow: visible;
+    }
+
+    .workspace.is-video-sync-workspace > .workspace-preview {
+        grid-column: 1;
+        grid-row: 2;
+    }
+
+    .workspace.is-video-sync-workspace > .lyrics-sync-video-preview {
+        grid-column: 1;
+        grid-row: 3;
+        overflow: visible;
+    }
+}
+
+@media (min-width: 1301px) and (max-height: 800px) {
+    .workspace.is-video-sync-workspace {
+        grid-template-rows: minmax(300px, 0.9fr) minmax(420px, 1.1fr);
+        overflow-y: auto;
+    }
+}
+
+@media (max-width: 960px) {
+    .workspace.is-video-sync-workspace {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: auto;
+        grid-auto-rows: auto;
+        flex: none;
+        overflow: visible;
+    }
+
+    .workspace.is-video-sync-workspace > .workspace-editor,
+    .workspace.is-video-sync-workspace > .workspace-preview,
+    .workspace.is-video-sync-workspace > .lyrics-sync-video-preview {
+        grid-column: 1;
+        grid-row: auto;
+    }
+
+    .workspace.is-video-sync-workspace > .workspace-editor {
+        min-height: min(60vh, 620px);
+        overflow: visible;
+    }
+
+    .workspace.is-video-sync-workspace > .workspace-preview {
+        min-height: 0;
+    }
+
+    .workspace.is-video-sync-workspace > .workspace-preview > .preview-frame {
+        display: flex;
+        flex: 0 0 auto;
+        min-height: min(68vw, 520px);
+        overflow: visible;
+    }
+
+    .workspace.is-video-sync-workspace > .workspace-preview .preview-viewfinder-slot,
+    .workspace.is-video-sync-workspace > .workspace-preview .preview-prompter-dock {
+        width: 100%;
+        grid-column: auto;
+        grid-row: auto;
+    }
+
+    .workspace.is-video-sync-workspace > .workspace-preview .preview-prompter-dock {
+        min-height: 0;
+        overflow: visible;
+        padding: 0.75rem 0 0;
+        border-top: 1px solid var(--border);
+        border-left: 0;
+    }
+
+    .workspace.is-video-sync-workspace > .lyrics-sync-video-preview {
+        display: block;
+    }
 }

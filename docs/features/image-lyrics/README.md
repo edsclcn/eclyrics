@@ -32,8 +32,8 @@ Image Lyrics handles shortcuts separately from the text editor (`public/js/featu
 | Double-press Left / Right arrow within 400 ms | Previous / next populated image |
 | Up / Down arrow | Scroll manually |
 | T | Jump to the top |
-| 1–9 | Set speed to the digit × 0.5 |
-| 0 | Pause |
+| 1–9 | Set speed to 1.5–5.5 in 0.5 steps; keep the current play/pause state |
+| 0 | Set speed to 6.0; keep the current play/pause state |
 | Numpad + / − | Increase or decrease speed by 0.1 |
 
 The popup also handles Space, arrows, T, digits 0–9, and numpad +/− when it has keyboard focus. Press the same Left or Right arrow twice within 400 ms to change images; the on-screen previous and next buttons still change images with one click. Held shortcuts are ignored after their initial keydown, except repeated ArrowUp and ArrowDown events, which continue manual scrolling in 100-pixel steps. Manual scrolling pauses automatic scrolling; automatic scrolling pauses at the end of an image.
@@ -63,6 +63,7 @@ The workspace shows the top crop of the selected image in its fixed 16:9 preview
 
 - `public/index.html` — Image Lyrics panel, tabs, block area, preview, and controls
 - `public/js/features/image-lyrics/index.js` — in-memory state, picker/drop handling, JSON import/export, preview, shortcuts, and popup communication
+- `public/js/features/prompter/prompter-shortcuts.js` — shared number-key scroll-speed preset mapping
 - `public/image-prompter.html` and `public/js/features/image-prompter/prompter.js` — separate popup and image rendering/playback
 - `public/assets/css/image-lyrics.css` and `public/assets/css/image-prompter.css` — workspace and popup presentation
 

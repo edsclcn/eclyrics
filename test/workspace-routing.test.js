@@ -126,6 +126,14 @@ test('workspace panels are direct children of the flexing app main container', (
     assert.match(styles, /\.panel\s*\{[^}]*\bflex:\s*1;[^}]*\bmin-height:\s*0;/s);
 });
 
+test('the sidebar Video workspace label is exactly Video Lyrics', () => {
+    const shell = fs.readFileSync(path.join(repoRoot, 'public/index.html'), 'utf8');
+    const videoButton = shell.match(/<button[^>]*data-panel="video"[^>]*>([\s\S]*?)<\/button>/)?.[1] || '';
+    const visibleLabel = videoButton.match(/<span class="nav-label">([^<]*)<\/span>/)?.[1]?.trim();
+
+    assert.equal(visibleLabel, 'Video Lyrics');
+});
+
 test('sign-in fragment mounts into the auth gate before auth scripts load', () => {
     const shell = fs.readFileSync(path.join(repoRoot, 'public/index.html'), 'utf8');
     const bootstrap = fs.readFileSync(path.join(repoRoot, 'public/js/core/app-bootstrap.js'), 'utf8');

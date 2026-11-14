@@ -28,7 +28,7 @@
         {
             id: 'speedPreset',
             label: 'Scroll speed',
-            description: '1–9 presets, 0 pauses',
+            description: '1–9 set 1.5–5.5 in 0.5 steps; 0 sets 6.0. Presets keep the current play/pause state.',
             codes: [
                 'Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5',
                 'Digit6', 'Digit7', 'Digit8', 'Digit9', 'Digit0',
@@ -123,7 +123,7 @@
         if (isTypingInEditableField(target)) return true;
         if (!target || typeof target.closest !== 'function') return false;
         if (target.closest('.textarea-cell textarea, .block-tab-editor')) return true;
-        if (target.closest('.preview-prompter-dock button, .preview-prompter-dock input, .preview-prompter-dock select')) {
+        if (target.closest('.preview-prompter-dock button, .preview-prompter-dock input, .preview-prompter-dock select, .lyrics-sync-reading-marker')) {
             return true;
         }
         return false;
@@ -165,6 +165,12 @@
         const def = CODE_TO_SHORTCUT.get(event.code);
         if (!def) return null;
         return { id: def.id, def, code: event.code, key: event.key || '' };
+    }
+
+    function getScrollSpeedPreset(code) {
+        if (!/^Digit[0-9]$/.test(code)) return null;
+        const digit = Number(code.slice(-1));
+        return digit === 0 ? 6 : 1 + digit * 0.5;
     }
 
     function createDoublePressMatcher(windowMs = 400) {
@@ -322,6 +328,7 @@
         isModalBlockingPrompterShortcuts,
         shouldIgnorePrompterShortcut,
         resolvePrompterShortcut,
+        getScrollSpeedPreset,
         createDoublePressMatcher,
         getRemotePrompterKeyCodes,
         assertRemotePrompterKeySupported,

@@ -56,7 +56,7 @@
         const applied = await stage.update({ ...state, background });
         if (applied && state.revision === revision) send({ type: 'ack', revision: state.revision });
     });
-    start.onclick = async () => { try { await stage.play(); start.hidden = true; } catch { send({ type: 'error', message: 'Video playback could not start. Choose another background.' }); } };
+    start.onclick = async () => { try { await stage.play(); start.hidden = true; send({ type: 'playback-started' }); } catch { send({ type: 'error', message: 'Video playback could not start. Choose another background.' }); } };
     function getFullscreenElement() {
         return document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.mozFullscreenElement;
     }

@@ -102,8 +102,8 @@ test('image workspace exposes only controls and shortcuts relevant to image prom
     assert.match(editor, /event\.code === 'ArrowRight'/);
     assert.match(editor, /event\.code === 'ArrowUp' \|\| event\.code === 'ArrowDown'/);
     assert.match(editor, /event\.code === 'KeyT'/);
-    assert.match(editor, /event\.code === 'Digit0'/);
-    assert.match(editor, /\^Digit\[1-9\]\$/);
+    assert.match(editor, /\^Digit\[0-9\]\$/);
+    assert.match(editor, /getScrollSpeedPreset\(event\.code\)/);
     assert.match(editor, /event\.code === 'NumpadAdd' \|\| event\.code === 'NumpadSubtract'/);
     assert.match(editor, /event\.target\.closest\('button, a, input, textarea, select, \[role="tab"\], \[contenteditable="true"\]'\)/);
     assert.doesNotMatch(editor.match(/const isInteractive = event\.target\.closest\(([^;]+)\)/)?.[1] || '', /\.image-lyrics-block/,
@@ -159,7 +159,7 @@ test('image shortcut reference documents the current Image Lyrics keyboard handl
         ['Previous / next image', 'Double-press the same <kbd>←</kbd> or <kbd>→</kbd> key within 400 ms'],
         ['Manual scroll', '<kbd>↑</kbd> <kbd>↓</kbd> — 100px per step'],
         ['Jump to top', '<kbd>T</kbd>'],
-        ['Scroll speed', '<kbd>1</kbd>–<kbd>9</kbd> presets; <kbd>0</kbd> pauses'],
+        ['Scroll speed', '<kbd>1</kbd>–<kbd>9</kbd> set 1.5–5.5 in 0.5 steps; <kbd>0</kbd> sets 6.0. Presets keep the current play/pause state.'],
         ['Speed increments', 'Numpad <kbd>+</kbd> / <kbd>−</kbd>'],
     ]) {
         const row = dialog.match(new RegExp(`<div><dt>${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}<\\/dt><dd>([\\s\\S]*?)<\\/dd><\\/div>`))?.[0];
@@ -171,8 +171,8 @@ test('image shortcut reference documents the current Image Lyrics keyboard handl
     assert.match(handler, /event\.code === 'ArrowLeft' \|\| event\.code === 'ArrowRight'[\s\S]*?if \(!matchImageArrow\(event\.code, event\.repeat\)\) \{ event\.preventDefault\(\); return; \}[\s\S]*?action = event\.code === 'ArrowLeft' \? 'previous' : 'next'/);
     assert.match(handler, /event\.code === 'ArrowUp' \|\| event\.code === 'ArrowDown'[\s\S]*?values\.delta = event\.code === 'ArrowUp' \? 100 : -100/);
     assert.match(handler, /event\.code === 'KeyT'\) action = 'top'/);
-    assert.match(handler, /event\.code === 'Digit0'\) action = 'pause'/);
-    assert.match(handler, /\^Digit\[1-9\]\$[\s\S]*?speed = Number\(event\.code\.slice\(-1\)\) \* 0\.5[\s\S]*?action = 'speed'/);
+    assert.match(handler, /\^Digit\[0-9\]\$[\s\S]*?getScrollSpeedPreset\(event\.code\)[\s\S]*?action = 'speed'/);
+    assert.doesNotMatch(handler, /Digit0[^\n]*action = 'pause'/, 'Digit0 is a speed preset rather than a pause command');
     assert.match(handler, /event\.code === 'NumpadAdd' \|\| event\.code === 'NumpadSubtract'[\s\S]*?action = 'speedNudge'/);
     assert.match(handler, /if \(event\.repeat && event\.code !== 'ArrowUp' && event\.code !== 'ArrowDown'\) \{ resetImageArrow\(\); return; \}/);
     assert.match(popupHandler, /if \(event\.repeat && event\.code !== 'ArrowUp' && event\.code !== 'ArrowDown'\) \{ resetNavigationArrow\(\); return; \}\s*if \(event\.code !== 'ArrowLeft' && event\.code !== 'ArrowRight'\) resetNavigationArrow\(\);\s*switch \(event\.code\)/);

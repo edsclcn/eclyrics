@@ -15,40 +15,39 @@ function formatText(text) {
 
     for (let i = 0; i < lines.length; i++) {
         let line = italicizePromptText(lines[i]);
-        if (!line || !line.includes(SYMBOL)) {
-            lines[i] = line;
-            continue;
-        }
+        let formattedLine = line;
 
-        let formattedLine = '';
-        let openTags = [];
+        if (line && line.includes(SYMBOL)) {
+            formattedLine = '';
+            let openTags = [];
 
-        for (let j = 0; j < line.length; j++) {
-            if (line[j] === SYMBOL && j + 1 < line.length) {
-                let char = line[j + 1];
-                if (validChars.includes(char)) {
-                    if (char === 's') {
-                        while (openTags.length) {
-                            formattedLine += closeTag;
-                            openTags.pop();
+            for (let j = 0; j < line.length; j++) {
+                if (line[j] === SYMBOL && j + 1 < line.length) {
+                    let char = line[j + 1];
+                    if (validChars.includes(char)) {
+                        if (char === 's') {
+                            while (openTags.length) {
+                                formattedLine += closeTag;
+                                openTags.pop();
+                            }
+                        } else {
+                            formattedLine += `<span class="${char}">`;
+                            openTags.push(char);
                         }
-                    } else {
-                        formattedLine += `<span class="${char}">`;
-                        openTags.push(char);
+                        j++;
+                        continue;
                     }
-                    j++;
-                    continue;
                 }
+                formattedLine += line[j];
             }
-            formattedLine += line[j];
+
+            while (openTags.length) {
+                formattedLine += closeTag;
+                openTags.pop();
+            }
         }
 
-        while (openTags.length) {
-            formattedLine += closeTag;
-            openTags.pop();
-        }
-
-        lines[i] = formattedLine;
+        lines[i] = `<span data-prompter-source-line="${i}">${formattedLine}</span>`;
     }
 
     return lines.join('\n');

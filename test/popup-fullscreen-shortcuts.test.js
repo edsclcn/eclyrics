@@ -27,6 +27,7 @@ function popupKeyHandler(kind) {
     };
     const context = {
         document,
+        window: { EclyricsPrompterShortcuts: { getScrollSpeedPreset: () => null } },
         getFullscreenElement: () => document.fullscreenElement,
         toggleFullscreen() {
             if (document.fullscreenElement) context.exitFullscreen();

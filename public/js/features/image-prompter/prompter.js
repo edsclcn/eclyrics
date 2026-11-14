@@ -355,10 +355,6 @@
                 renderScroll();
                 notifyState();
                 break;
-            case 'Digit0':
-                event.preventDefault();
-                setPaused(true);
-                break;
             case 'NumpadAdd':
                 event.preventDefault();
                 nudgeSpeed(0.1);
@@ -367,13 +363,14 @@
                 event.preventDefault();
                 nudgeSpeed(-0.1);
                 break;
-            default:
-                if (/^Digit[0-9]$/.test(event.code)) {
+            default: {
+                const speedPreset = window.EclyricsPrompterShortcuts?.getScrollSpeedPreset(event.code);
+                if (speedPreset !== null && speedPreset !== undefined) {
                     event.preventDefault();
-                    const digit = Number(event.code.slice(-1));
-                    setSpeed(digit * 0.5);
+                    setSpeed(speedPreset);
                 }
                 break;
+            }
         }
     });
 
