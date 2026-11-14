@@ -50,7 +50,7 @@ test('the Text to Video sync and preview refinement cache tokens match their ent
     assert.match(shell, new RegExp(`assets/css/index\\.css\\?v=${textPreviewCssToken}`));
     assert.match(shell, new RegExp(`assets/css/video-lyrics\\.css\\?v=${videoBlankAdaptationToken}`));
     assert.match(shell, new RegExp(`assets/css/video-prompter\\.css\\?v=${compactVideoRowToken}`));
-    assert.match(shell, new RegExp(`js/core/app-bootstrap\\.js\\?v=${videoBlankAdaptationToken}`));
+    assert.match(shell, new RegExp(`js/core/app-bootstrap\\.js\\?v=${speedPresetToken}`));
     assert.match(prompter, new RegExp(`js/features/prompter/prompter\\.js\\?v=${speedPresetToken}`));
     assert.ok(bootstrap.includes(`js/features/editor/index.js?v=${textPreviewScriptToken}`), 'Text editor uses the future-line preview token');
     assert.ok(bootstrap.includes(`js/features/editor/textformatting.js?v=${textFormattingToken}`), 'Text formatting uses its restored lyric token');
