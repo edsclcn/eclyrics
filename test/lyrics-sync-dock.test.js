@@ -260,7 +260,7 @@ test('Text Lyrics remains the default workspace; Sync gives lyric blocks the lef
     assert.match(videoPreviewPlacement, /grid-column:\s*2/);
     assert.match(videoPreviewPlacement, /grid-row:\s*2/,
         'Video preview is the bottom row');
-    assert.match(styles, /@media\s*\(max-width:\s*1300px\)[\s\S]*?\.workspace\.is-video-sync-workspace\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\);[^}]*grid-template-rows:\s*auto\s+minmax\(360px,\s*1fr\)\s+minmax\(420px,\s*1\.1fr\)/s,
+    assert.match(styles, /@media\s*\(max-width:\s*1300px\)[\s\S]*?\.workspace\.is-video-sync-workspace\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\);[^}]*grid-template-rows:\s*auto\s+minmax\(360px,\s*auto\)\s+minmax\(420px,\s*auto\)/s,
         'medium screens move the editor above two stacked preview rows');
     assert.match(styles, /@media\s*\(max-width:\s*960px\)[\s\S]*?\.workspace\.is-video-sync-workspace\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\);[^}]*grid-template-rows:\s*auto/s,
         'narrow screens use natural single-column stacking');

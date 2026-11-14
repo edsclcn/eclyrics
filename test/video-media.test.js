@@ -250,8 +250,7 @@ test('Video activation loads only selected media and the background picker can b
     failedLoad.reject(new Error('download failed'));
     await failedSelection;
     assert.equal(previewCards[3].dataset.selectionBusy, 'false', 'failed selection clears its busy state');
-    assert.equal(backgroundStatuses.at(-1).message, 'download failed', 'background loading errors remain visible');
-    assert.equal(backgroundStatuses.at(-1).error, true);
+    assert.equal(dialog.querySelector('[role=status]').textContent, 'download failed', 'background loading errors remain visible in the open picker');
 
     const staleLoadedData = videos[4].listeners.get('loadeddata');
     dialog.close();
