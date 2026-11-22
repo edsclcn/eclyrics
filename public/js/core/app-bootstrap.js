@@ -23,7 +23,7 @@
         'js/features/prompter/prompter-shortcuts.js?v=20261114-number-speed-presets',
         'js/features/prompter/prompter-sync-guard.js',
         'js/features/editor/block-source.js?v=20261003-video-lyrics-grid-upload',
-        'js/features/editor/index.js?v=20261114-text-preview-future-line-opacity',
+        'js/features/editor/index.js?v=20261122-preview-marker-active-line',
         'js/features/editor/workspace-tour.js?v=20261114-number-speed-presets',
         'js/features/editor/port.js',
         'js/features/image-lyrics/index.js?v=20261114-number-speed-presets',

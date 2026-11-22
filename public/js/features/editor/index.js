@@ -33,6 +33,7 @@ let tabCount = 0;
 let prompterBroadcast = null;
 let lastPrompterSync = null;
 let lastPrompterPosition = null;
+let lastPreviewMarkerBroadcast = '';
 let lastPrompterSyncAt = 0;
 /** Tab id last sent to the prompter — lineup pushes are gated to this tab only. */
 let prompterBoundTabId = null;
@@ -237,21 +238,50 @@ function ingestPrompterSyncBroadcast(normalized) {
     updatePreviewAdjacentBlockButtons();
 }
 
+function getPreviewMarkerSourceLine(inner) {
+    const workspace = document.getElementById('workspace');
+    const marker = document.getElementById('lyrics-sync-reading-marker');
+    if (!workspace?.classList.contains('is-video-sync-workspace') || !marker || marker.hidden) return null;
+    const markerRect = marker.getBoundingClientRect();
+    const markerY = markerRect.top + markerRect.height / 2;
+    for (const line of inner.querySelectorAll('[data-prompter-source-line]')) {
+        const sourceLineIndex = Number(line.dataset.prompterSourceLine);
+        if (!Number.isInteger(sourceLineIndex)) continue;
+        for (const rect of line.getClientRects()) {
+            if (rect.width > 0 && rect.height > 0 && rect.top <= markerY && markerY < rect.bottom) {
+                return { sourceLineIndex, lineText: line.textContent.replace(/\s+/g, ' ').trim() };
+            }
+        }
+    }
+    return null;
+}
+
 function updatePreviewFutureLineOpacity() {
     const inner = document.getElementById('lyrics-preview-viewfinder');
     if (!inner) return;
 
     const position = lastPrompterPosition;
-    const isCurrentPosition =
-        Number.isInteger(position?.sourceLineIndex) &&
+    const isSameBlock =
+        Boolean(position?.lineupKey) &&
         position.lineupKey === lastPrompterSync?.lineupKey &&
         position.blockIndex === lastPrompterSync?.currentIndex;
+    const isCurrentPosition = isSameBlock && Number.isInteger(position?.sourceLineIndex);
+    const markerLine = getPreviewMarkerSourceLine(inner);
+    const activeSourceLineIndex = markerLine?.sourceLineIndex ?? (isCurrentPosition ? position.sourceLineIndex : null);
+
+    if (markerLine && isSameBlock && markerLine.sourceLineIndex !== position.sourceLineIndex) {
+        const key = `${position.lineupKey}:${position.blockIndex}:${position.sourceLineIndex}:${markerLine.sourceLineIndex}`;
+        if (key !== lastPreviewMarkerBroadcast) {
+            lastPreviewMarkerBroadcast = key;
+            prompterBroadcast?.postMessage({ ...position, ...markerLine, type: 'eclyrics-prompter-position' });
+        }
+    }
 
     inner.querySelectorAll('[data-prompter-source-line]').forEach((line) => {
         const sourceLineIndex = Number(line.dataset.prompterSourceLine);
         line.classList.toggle(
             'is-future-source-line',
-            isCurrentPosition && sourceLineIndex > position.sourceLineIndex,
+            Number.isInteger(activeSourceLineIndex) && sourceLineIndex > activeSourceLineIndex,
         );
     });
 }

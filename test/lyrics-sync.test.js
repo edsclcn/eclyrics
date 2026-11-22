@@ -38,7 +38,7 @@ test('the Text to Video sync and preview refinement cache tokens match their ent
     const videoBlankAdaptationToken = '20261114-video-blank-adaptation';
     const textPreviewCssToken = '20261114-sync-two-column-lineup';
     const textPreviewHeadingToken = '20261114-text-preview-heading';
-    const textPreviewScriptToken = '20261114-text-preview-future-line-opacity';
+    const textPreviewScriptToken = '20261122-preview-marker-active-line';
     const previewToken = '20261017-sync-preview-refinement';
     const videoPositionToken = '20261017-video-position-controls';
     const speedPresetToken = '20261114-number-speed-presets';
@@ -46,11 +46,13 @@ test('the Text to Video sync and preview refinement cache tokens match their ent
     const shell = read('public/index.html');
     const prompter = read('public/prompter.html');
     const bootstrap = read('public/js/core/app-bootstrap.js');
+    assert.match(shell, /js\/core\/app-bootstrap\.js\?v=20261122-preview-marker-active-line/,
+        'the shell refreshes bootstrap to load the marker-driven active line fix');
 
     assert.match(shell, new RegExp(`assets/css/index\\.css\\?v=${textPreviewCssToken}`));
     assert.match(shell, new RegExp(`assets/css/video-lyrics\\.css\\?v=${videoBlankAdaptationToken}`));
     assert.match(shell, new RegExp(`assets/css/video-prompter\\.css\\?v=${compactVideoRowToken}`));
-    assert.match(shell, new RegExp(`js/core/app-bootstrap\\.js\\?v=${speedPresetToken}`));
+    assert.match(shell, /js\/core\/app-bootstrap\.js\?v=20261122-preview-marker-active-line/);
     assert.match(prompter, new RegExp(`js/features/prompter/prompter\\.js\\?v=${speedPresetToken}`));
     assert.ok(bootstrap.includes(`js/features/editor/index.js?v=${textPreviewScriptToken}`), 'Text editor uses the future-line preview token');
     assert.ok(bootstrap.includes(`js/features/editor/textformatting.js?v=${textFormattingToken}`), 'Text formatting uses its restored lyric token');
@@ -160,6 +162,7 @@ test('the open Text prompter accepts and persists marker changes, then immediate
 
 test('Text preview future-line dimming follows valid positions, survives rerenders, and stays preview-only', () => {
     const editor = read('public/js/features/editor/index.js');
+    const getMarkerLine = extractFunction(editor, 'getPreviewMarkerSourceLine');
     const updateOpacity = extractFunction(editor, 'updatePreviewFutureLineOpacity');
     const updateViewfinder = extractFunction(editor, 'updateLiveViewfinder');
     const initPrompterBroadcast = extractFunction(editor, 'initPrompterBroadcast');
@@ -168,6 +171,8 @@ test('Text preview future-line dimming follows valid positions, survives rerende
         const classes = new Set();
         return {
             dataset: { prompterSourceLine: String(sourceLineIndex) },
+            textContent: `Line ${sourceLineIndex}`,
+            getClientRects: () => [{ top: sourceLineIndex * 20, bottom: (sourceLineIndex + 1) * 20, width: 100, height: 20 }],
             classes,
             classList: {
                 toggle(name, enabled) { if (enabled) classes.add(name); else classes.delete(name); },
@@ -189,10 +194,12 @@ test('Text preview future-line dimming follows valid positions, survives rerende
             return sourceLines;
         },
     };
-    const document = { getElementById: id => id === 'lyrics-preview-viewfinder' ? viewfinder : null };
+    const workspace = { enabled: false, classList: { contains: name => workspace.enabled && name === 'is-video-sync-workspace' } };
+    const marker = { hidden: true, top: 0, getBoundingClientRect() { return { top: this.top, height: 2 }; } };
+    const document = { getElementById: id => id === 'lyrics-preview-viewfinder' ? viewfinder : id === 'workspace' ? workspace : id === 'lyrics-sync-reading-marker' ? marker : null };
     const liveTextarea = { value: 'First line\nCurrent line\nFuture line' };
     let stageHtml = null;
-    const channel = { onmessage: null };
+    const channel = { onmessage: null, posted: [], postMessage(message) { this.posted.push(message); } };
     function BroadcastChannel(name) {
         assert.equal(name, 'eclyrics-prompter');
         return channel;
@@ -204,9 +211,11 @@ test('Text preview future-line dimming follows valid positions, survives rerende
     const preview = new Function(
         'document', 'getLivePrompterTextarea', 'isPrompterWindowOpen', 'getPrompterStageBlockHtml',
         'setLivePreviewHtml', 'applyViewfinderFromPrompterSync', 'window', 'BroadcastChannel', 'PROMPTER_BC_NAME',
-        'handlePrompterWorkspaceShortcutMessage', 'getSyncGuardApi', 'ingestPrompterSyncBroadcast', 'ResizeObserver',
-        `let lastPrompterPosition = null;\nlet lastPrompterSync = null;\nlet prompterBroadcast = null;\n${updateOpacity}\n${updateViewfinder}\n${initPrompterBroadcast}\nreturn {
+        'handlePrompterWorkspaceShortcutMessage', 'getSyncGuardApi', 'ingestPrompterSyncBroadcast', 'ResizeObserver', 'workspace', 'marker', 'channel',
+        `let lastPrompterPosition = null;\nlet lastPrompterSync = null;\nlet prompterBroadcast = null;\nlet lastPreviewMarkerBroadcast = '';\n${getMarkerLine}\n${updateOpacity}\n${updateViewfinder}\n${initPrompterBroadcast}\nreturn {
             setSync(sync) { lastPrompterSync = sync; },
+            setMarker({ enabled, top }) { workspace.enabled = enabled; marker.hidden = !enabled; marker.top = top; },
+            posted: () => channel.posted,
             render: updateLiveViewfinder,
             init: initPrompterBroadcast,
             channel: () => prompterBroadcast,
@@ -228,6 +237,9 @@ test('Text preview future-line dimming follows valid positions, survives rerende
         () => { throw new Error('position messages must bypass sync normalization'); },
         () => { throw new Error('position messages must bypass sync ingestion'); },
         undefined,
+        workspace,
+        marker,
+        channel,
     );
     const sync = { lineupKey: 'text-tab-1', currentIndex: 0 };
     const dimmedIndexes = () => sourceLines.filter(line => line.classList.contains('is-future-source-line'))
@@ -283,6 +295,12 @@ test('Text preview future-line dimming follows valid positions, survives rerende
     assert.notEqual(sourceLines[0], firstRenderLines[0], 'rerender creates new semantic source spans');
     assert.deepEqual(dimmedIndexes(), [2, 3], 'the stage HTML render reapplies the position to its new spans');
 
+    preview.setMarker({ enabled: true, top: 29 });
+    sendPosition(position('text-tab-1', 0, 0));
+    assert.deepEqual(dimmedIndexes(), [2, 3], 'only source lines after the blue marker-crossed line remain dimmed');
+    assert.equal(preview.posted().at(-1).sourceLineIndex, 1,
+        'Video Lyrics receives the source line currently crossed by the blue marker');
+
     const css = read('public/assets/css/index.css');
     const sourceLineRules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
         .map(([, selector, declarations]) => ({ selector: selector.trim(), declarations }))
@@ -297,4 +315,27 @@ test('Text preview future-line dimming follows valid positions, survives rerende
         '.workspace.is-video-sync-workspace #lyrics-preview-viewfinder [data-prompter-source-line].is-future-source-line',
     ], 'opacity is declared only by the Text preview future-line rule while Video Sync is active');
     assert.match(opacityRules[0].declarations, /opacity:\s*0\.42;/);
+});
+
+test('the blue Sync marker identifies the crossed Text source line, including wrapped line fragments', () => {
+    const source = read('public/js/features/editor/index.js');
+    const getMarkerLine = extractFunction(source, 'getPreviewMarkerSourceLine');
+    const lines = [
+        { dataset: { prompterSourceLine: '4' }, textContent: 'Previous', getClientRects: () => [{ top: 470, bottom: 520, width: 420, height: 50 }] },
+        { dataset: { prompterSourceLine: '5' }, textContent: 'Current lyric wrapped', getClientRects: () => [
+            { top: 520, bottom: 570, width: 420, height: 50 },
+            { top: 570, bottom: 620, width: 420, height: 50 },
+        ] },
+        { dataset: { prompterSourceLine: '6' }, textContent: 'Future', getClientRects: () => [{ top: 620, bottom: 670, width: 420, height: 50 }] },
+    ];
+    const workspace = { classList: { contains: name => name === 'is-video-sync-workspace' } };
+    const marker = { hidden: false, getBoundingClientRect: () => ({ top: 558, height: 16 }) };
+    const document = { getElementById: id => id === 'workspace' ? workspace : id === 'lyrics-sync-reading-marker' ? marker : null };
+    const getLine = new Function('document', `${getMarkerLine}; return getPreviewMarkerSourceLine;`)(document);
+    assert.deepEqual(getLine({ querySelectorAll: () => lines }), {
+        sourceLineIndex: 5,
+        lineText: 'Current lyric wrapped',
+    });
+    workspace.classList.contains = () => false;
+    assert.equal(getLine({ querySelectorAll: () => lines }), null, 'Text-only preview keeps its normal colors');
 });
