@@ -220,7 +220,9 @@
 
     function applyError(error) {
         if (state.songs.length === 0) state.searchIndex = null;
-        state.error = `Firestore read failed: ${error?.message || String(error)}`;
+        state.error = error?.code === 'permission-denied'
+            ? 'You don’t have permission to read the song database.'
+            : 'Could not load the song database. Check your connection and try again.';
         state.loaded = true;
         state.syncing = false;
         notify();
@@ -256,7 +258,7 @@
         if (!app) {
             state.error = state.songs.length
                 ? ''
-                : 'Firebase is not ready. Check js/core/firebase-config.js.';
+                : 'The song database is unavailable. Please try again later.';
             state.loaded = true;
             state.syncing = false;
             notify();
@@ -322,11 +324,10 @@
         const message = err?.message || String(err);
         if (code === 'permission-denied' || message.includes('Missing or insufficient permissions')) {
             return (
-                'Firestore denied this action. Confirm your email is in rbac/config.adminEmails (lowercase), ' +
-                'sign in with Google (not anonymous), and deploy the latest firestore.rules.'
+                'You need administrator access to change the song database.'
             );
         }
-        return message;
+        return 'Could not update the song database. Please try again.';
     }
 
     async function requireAdminForWrite() {

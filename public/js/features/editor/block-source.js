@@ -59,7 +59,7 @@ function updateSongLibraryStatus() {
     } else if (!state.loaded) {
         renderSongLibraryNote('Loading song library…', true);
     } else if (state.count === 0 && !state.syncing) {
-        renderSongLibraryNote('No songs found in Firestore library.', true);
+        renderSongLibraryNote('No songs found in the database.', true);
     } else if (state.syncing) {
         renderSongLibraryNote('Updating song library…', true);
     } else {

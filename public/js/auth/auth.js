@@ -104,7 +104,7 @@
             console.error('eclyrics: Firebase SDK not loaded');
             if (authErrorEl) {
                 authErrorEl.textContent =
-                    'Firebase SDK failed to load. Check network / ad blockers, or see README.';
+                    'Sign-in is temporarily unavailable. Please try again later.';
             }
             markAuthReadyWithoutUser();
             return;
@@ -113,7 +113,7 @@
         if (window.location.protocol === 'file:') {
             if (authErrorEl) {
                 authErrorEl.textContent =
-                    'Google sign-in does not work from file://. Use http://localhost (e.g. firebase serve).';
+                    'Please open this app from its website to sign in.';
             }
             markAuthReadyWithoutUser();
             return;
@@ -124,7 +124,7 @@
                 console.error('eclyrics: Edit public/js/core/firebase-config.js with Firebase Console values.');
                 if (authErrorEl) {
                     authErrorEl.textContent =
-                        'Paste your web app firebaseConfig into js/core/firebase-config.js (see README).';
+                        'Sign-in is not configured yet. Please contact support.';
                 }
                 markAuthReadyWithoutUser();
                 return;
@@ -145,7 +145,7 @@
             if (authErrorEl) authErrorEl.textContent = '';
         } catch (err) {
             console.error('eclyrics: getRedirectResult', err);
-            if (authErrorEl) authErrorEl.textContent = err.message || String(err);
+            if (authErrorEl) authErrorEl.textContent = 'Sign-in failed. Please try again or contact support.';
         }
 
         auth.onAuthStateChanged(async (user) => {

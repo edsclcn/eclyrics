@@ -527,7 +527,7 @@
         if (!dialog || !input || !confirmBtn) return false;
 
         const title = String(songTitle || '').trim() || 'this song';
-        message.textContent = `“${title}” will be removed from the Firestore library.`;
+        message.textContent = `“${title}” will be removed from the song database.`;
 
         return new Promise((resolve) => {
             let settled = false;
