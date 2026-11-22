@@ -13,11 +13,11 @@
     let signInInProgress = false;
 
     function formatAuthError(err) {
-        if (!err || !err.code) return err?.message || String(err);
+        if (!err || !err.code) return 'We couldn’t sign you in. Please try again or contact support.';
         if (err.code === 'auth/unauthorized-domain') {
-            return 'Add this site’s host to Firebase → Authentication → Settings → Authorized domains (try localhost and 127.0.0.1).';
+            return 'Sign-in is unavailable from this site. Please contact support.';
         }
-        return err.message || String(err);
+        return 'We couldn’t sign you in. Please try again or contact support.';
     }
 
     function shouldShowAuthGate() {
@@ -111,7 +111,7 @@
             if (signInInProgress || btnSignIn.disabled) return;
 
             if (typeof firebase === 'undefined' || typeof firebase.auth !== 'function') {
-                if (authErrorEl) authErrorEl.textContent = 'Firebase Auth is not ready.';
+                if (authErrorEl) authErrorEl.textContent = 'Sign-in is temporarily unavailable. Please try again later.';
                 return;
             }
 

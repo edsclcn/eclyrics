@@ -294,7 +294,7 @@ test('Text preview future-line dimming follows valid positions, survives rerende
     assert.match(baseSourceLineRule.declarations, /transition:\s*opacity 0\.2s ease;/,
         'the transition remains when the future class is removed');
     assert.deepEqual(opacityRules.map(rule => rule.selector), [
-        '#lyrics-preview-viewfinder [data-prompter-source-line].is-future-source-line',
-    ], 'opacity is declared only by the preview-scoped future-line rule');
+        '.workspace.is-video-sync-workspace #lyrics-preview-viewfinder [data-prompter-source-line].is-future-source-line',
+    ], 'opacity is declared only by the Text preview future-line rule while Video Sync is active');
     assert.match(opacityRules[0].declarations, /opacity:\s*0\.42;/);
 });

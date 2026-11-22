@@ -143,7 +143,7 @@
     function appendAuditFields(payload, user, timestampFactory) {
         const email = asNonEmptyString(user?.email);
         if (!email) throw new Error('Signed-in user email is required to save lyrics.');
-        if (typeof timestampFactory !== 'function') throw new Error('Firestore is not ready.');
+        if (typeof timestampFactory !== 'function') throw new Error('The database is unavailable.');
         return {
             ...payload,
             'last-modified': timestampFactory(),

@@ -59,7 +59,7 @@ service cloud.firestore {
     }
 
     match /lyrics/{docId} {
-      allow read: if isAdmin();
+      allow read: if isSignedIn();
       allow create: if isAdmin() && isValidLyricsPayload(request.resource.data);
       allow update: if isAdmin() && isValidLyricsPayload(request.resource.data);
       allow delete: if isAdmin();
