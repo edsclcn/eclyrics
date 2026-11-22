@@ -4621,7 +4621,7 @@ a:hover {
     transition: opacity 0.2s ease;
 }
 
-#lyrics-preview-viewfinder [data-prompter-source-line].is-future-source-line {
+.workspace.is-video-sync-workspace #lyrics-preview-viewfinder [data-prompter-source-line].is-future-source-line {
     opacity: 0.42;
 }
 

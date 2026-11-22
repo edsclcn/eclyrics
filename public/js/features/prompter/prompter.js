@@ -435,7 +435,7 @@ function dispatchResolvedPrompterShortcut(resolved) {
 function applyPrompterScrollBy(delta) {
     if (typeof delta !== 'number' || Number.isNaN(delta)) return;
     pauseScroll();
-    scrollPosition += delta;
+    scrollPosition = delta > 0 ? Math.min(0, scrollPosition + delta) : scrollPosition + delta;
     applyScrollPosition();
     broadcastPrompterState();
 }
@@ -765,9 +765,7 @@ var wheelListener = function (event) {
     event.preventDefault();
     pauseScroll();
     const step = wheelScrollStepPx();
-    if (event.deltaY < 0) scrollPosition += step;
-    else scrollPosition -= step;
-    applyScrollPosition();
+    applyPrompterScrollBy(event.deltaY < 0 ? step : -step);
     broadcastPrompterState();
 };
 document.addEventListener('wheel', wheelListener, { passive: false });
