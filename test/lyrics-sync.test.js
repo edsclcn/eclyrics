@@ -38,7 +38,7 @@ test('the Text to Video sync and preview refinement cache tokens match their ent
     const videoBlankAdaptationToken = '20261114-video-blank-adaptation';
     const textPreviewCssToken = '20261114-sync-two-column-lineup';
     const textPreviewHeadingToken = '20261114-text-preview-heading';
-    const textPreviewScriptToken = '20261122-preview-marker-active-line';
+    const markerHitToken = '20261122-marker-hit-oscillation';
     const previewToken = '20261017-sync-preview-refinement';
     const videoPositionToken = '20261017-video-position-controls';
     const speedPresetToken = '20261114-number-speed-presets';
@@ -46,17 +46,18 @@ test('the Text to Video sync and preview refinement cache tokens match their ent
     const shell = read('public/index.html');
     const prompter = read('public/prompter.html');
     const bootstrap = read('public/js/core/app-bootstrap.js');
-    assert.match(shell, /js\/core\/app-bootstrap\.js\?v=20261122-preview-marker-active-line/,
-        'the shell refreshes bootstrap to load the marker-driven active line fix');
+    assert.match(shell, new RegExp(`js\/core\/app-bootstrap\.js\\?v=${markerHitToken}`),
+        'the shell refreshes bootstrap to load the marker hit and oscillation fix');
 
     assert.match(shell, new RegExp(`assets/css/index\\.css\\?v=${textPreviewCssToken}`));
     assert.match(shell, new RegExp(`assets/css/video-lyrics\\.css\\?v=${videoBlankAdaptationToken}`));
     assert.match(shell, new RegExp(`assets/css/video-prompter\\.css\\?v=${compactVideoRowToken}`));
-    assert.match(shell, /js\/core\/app-bootstrap\.js\?v=20261122-preview-marker-active-line/);
+    assert.ok(bootstrap.includes(`js/features/editor/index.js?v=${markerHitToken}`), 'Text editor uses the marker hit token');
+    assert.ok(bootstrap.includes(`js/features/video-lyrics/index.js?v=${markerHitToken}`), 'Video Lyrics uses the marker hit token');
     assert.match(prompter, new RegExp(`js/features/prompter/prompter\\.js\\?v=${speedPresetToken}`));
-    assert.ok(bootstrap.includes(`js/features/editor/index.js?v=${textPreviewScriptToken}`), 'Text editor uses the future-line preview token');
+    assert.ok(bootstrap.includes(`js/features/editor/index.js?v=${markerHitToken}`), 'Text editor uses the marker hit token');
     assert.ok(bootstrap.includes(`js/features/editor/textformatting.js?v=${textFormattingToken}`), 'Text formatting uses its restored lyric token');
-    assert.ok(bootstrap.includes(`js/features/video-lyrics/index.js?v=${videoBlankAdaptationToken}`), 'Video UI uses the Blank and Adaptation token');
+    assert.ok(bootstrap.includes(`js/features/video-lyrics/index.js?v=${markerHitToken}`), 'Video UI uses the marker hit token');
     assert.ok(bootstrap.includes(`js/features/video-lyrics/backgrounds.js?v=${previewToken}`), 'Video backgrounds retain their preview refinement token');
     assert.ok(bootstrap.includes(`js/features/video-lyrics/model.js?v=${videoBlankAdaptationToken}`), 'Video model uses the Blank and Adaptation token');
     assert.ok(bootstrap.includes(`js/features/video-lyrics/stage.js?v=${videoPositionToken}`), 'Video output stage uses the position and speed token');
@@ -338,4 +339,44 @@ test('the blue Sync marker identifies the crossed Text source line, including wr
     });
     workspace.classList.contains = () => false;
     assert.equal(getLine({ querySelectorAll: () => lines }), null, 'Text-only preview keeps its normal colors');
+});
+
+test('a partial overlap between the blue marker and a lyric fragment activates that line', () => {
+    const source = read('public/js/features/editor/index.js');
+    const getMarkerLine = extractFunction(source, 'getPreviewMarkerSourceLine');
+    const line = {
+        dataset: { prompterSourceLine: '8' },
+        textContent: 'Marker touches this line',
+        getClientRects: () => [{ top: 520, bottom: 570, width: 420, height: 50 }],
+    };
+    const workspace = { classList: { contains: name => name === 'is-video-sync-workspace' } };
+    const marker = { hidden: false, getBoundingClientRect: () => ({ top: 562.5, height: 16 }) };
+    const document = { getElementById: id => id === 'workspace' ? workspace : id === 'lyrics-sync-reading-marker' ? marker : null };
+    const getLine = new Function('document', `${getMarkerLine}; return getPreviewMarkerSourceLine;`)(document);
+
+    assert.deepEqual(getLine({ querySelectorAll: () => [line] }), {
+        sourceLineIndex: 8,
+        lineText: 'Marker touches this line',
+    }, 'a one-pixel overlap activates the source line even though the marker center lies below its bounds');
+});
+
+test('scaled marker hit bounds follow the scaled 2px visible line', () => {
+    const source = read('public/js/features/editor/index.js');
+    const getMarkerLine = extractFunction(source, 'getPreviewMarkerSourceLine');
+    const workspace = { classList: { contains: name => name === 'is-video-sync-workspace' } };
+    const marker = { hidden: false, getBoundingClientRect: () => ({ top: 496, height: 8 }) };
+    const document = { getElementById: id => id === 'workspace' ? workspace : id === 'lyrics-sync-reading-marker' ? marker : null };
+    const getLine = new Function('document', `${getMarkerLine}; return getPreviewMarkerSourceLine;`)(document);
+    const sourceLine = (top, bottom) => ({
+        dataset: { prompterSourceLine: '9' },
+        textContent: 'Scaled line',
+        getClientRects: () => [{ top, bottom, width: 200, height: bottom - top }],
+    });
+
+    assert.deepEqual(getLine({ querySelectorAll: () => [sourceLine(500.25, 520)] }), {
+        sourceLineIndex: 9,
+        lineText: 'Scaled line',
+    }, 'the scaled one-pixel marker line still activates on partial overlap');
+    assert.equal(getLine({ querySelectorAll: () => [sourceLine(500.75, 520)] }), null,
+        'a fragment outside the scaled visible marker line is not activated by the larger drag handle');
 });

@@ -244,11 +244,15 @@ function getPreviewMarkerSourceLine(inner) {
     if (!workspace?.classList.contains('is-video-sync-workspace') || !marker || marker.hidden) return null;
     const markerRect = marker.getBoundingClientRect();
     const markerY = markerRect.top + markerRect.height / 2;
+    const markerHalfHeight = markerRect.height / 16;
     for (const line of inner.querySelectorAll('[data-prompter-source-line]')) {
         const sourceLineIndex = Number(line.dataset.prompterSourceLine);
         if (!Number.isInteger(sourceLineIndex)) continue;
         for (const rect of line.getClientRects()) {
-            if (rect.width > 0 && rect.height > 0 && rect.top <= markerY && markerY < rect.bottom) {
+            if (
+                rect.width > 0 && rect.height > 0 &&
+                rect.top < markerY + markerHalfHeight && rect.bottom > markerY - markerHalfHeight
+            ) {
                 return { sourceLineIndex, lineText: line.textContent.replace(/\s+/g, ' ').trim() };
             }
         }
@@ -269,11 +273,21 @@ function updatePreviewFutureLineOpacity() {
     const markerLine = getPreviewMarkerSourceLine(inner);
     const activeSourceLineIndex = markerLine?.sourceLineIndex ?? (isCurrentPosition ? position.sourceLineIndex : null);
 
-    if (markerLine && isSameBlock && markerLine.sourceLineIndex !== position.sourceLineIndex) {
-        const key = `${position.lineupKey}:${position.blockIndex}:${position.sourceLineIndex}:${markerLine.sourceLineIndex}`;
-        if (key !== lastPreviewMarkerBroadcast) {
-            lastPreviewMarkerBroadcast = key;
-            prompterBroadcast?.postMessage({ ...position, ...markerLine, type: 'eclyrics-prompter-position' });
+    const markerOverrideActive = Boolean(markerLine && isSameBlock);
+    const markerStateKey = isSameBlock
+        ? `${position.lineupKey}:${position.blockIndex}:${markerOverrideActive ? `active:${markerLine.sourceLineIndex}` : 'released'}`
+        : 'released';
+    if (markerStateKey !== lastPreviewMarkerBroadcast) {
+        lastPreviewMarkerBroadcast = markerStateKey;
+        if (prompterBroadcast && (isSameBlock || markerOverrideActive)) {
+            prompterBroadcast.postMessage({
+                type: 'eclyrics-preview-marker-position',
+                active: markerOverrideActive,
+                lineupKey: position?.lineupKey || null,
+                blockIndex: Number.isInteger(position?.blockIndex) ? position.blockIndex : null,
+                sourceLineIndex: markerOverrideActive ? markerLine.sourceLineIndex : position?.sourceLineIndex ?? null,
+                lineText: markerOverrideActive ? markerLine.lineText : position?.lineText || '',
+            });
         }
     }
 

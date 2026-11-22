@@ -275,7 +275,8 @@ test('shortcut help describes presets, Numpad remains a nudge, and changed entry
     assert.match(read('public/js/features/editor/workspace-tour.js'), /1–9: 1\.5–5\.5 by 0\.5; 0: 6\.0; playback state unchanged/);
 
     const token = '20261114-number-speed-presets';
-    assert.match(read('public/index.html'), new RegExp(`js/core/app-bootstrap\\.js\\?v=${token}`));
+    const bootstrapToken = '20261122-marker-hit-oscillation';
+    assert.match(read('public/index.html'), new RegExp(`js/core/app-bootstrap\\.js\\?v=${bootstrapToken}`));
     assert.match(read('public/prompter.html'), new RegExp(`js/features/prompter/prompter-shortcuts\\.js\\?v=${token}`));
     assert.match(read('public/prompter.html'), new RegExp(`js/features/prompter/prompter\\.js\\?v=${token}`));
     assert.match(read('public/image-prompter.html'), new RegExp(`js/features/prompter/prompter-shortcuts\\.js\\?v=${token}`));
