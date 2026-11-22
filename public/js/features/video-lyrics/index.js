@@ -157,6 +157,10 @@
         return model.advance(delta);
     }
     let prompterPositionChannel = null;
+    let markerDrivenTextPosition = null;
+    let markerReleaseCatchup = null;
+    let markerMovementDirection = 0;
+    let lastRawTextPosition = null;
     const getExpectedPrompterLineupKey = () => window.eclyricsEditorPrompter?.getBoundLineupKey?.() || null;
     function getTextLineupProjection() {
         const editor = window.eclyricsEditorPrompter;
@@ -184,8 +188,92 @@
         prompterPositionChannel = new BroadcastChannel('eclyrics-prompter');
         prompterPositionChannel.addEventListener('message', event => {
             const expectedLineupKey = getExpectedPrompterLineupKey();
-            if (event.data?.type === 'eclyrics-prompter-position' && expectedLineupKey && event.data.lineupKey === expectedLineupKey) {
-                model.updateTextPosition(event.data);
+            const position = event.data;
+            if (!expectedLineupKey || position?.lineupKey !== expectedLineupKey) return;
+
+            if (position.type === 'eclyrics-preview-marker-position') {
+                const sameLocation = markerDrivenTextPosition?.lineupKey === position.lineupKey
+                    && markerDrivenTextPosition?.blockIndex === position.blockIndex;
+                if (position.active && Number.isInteger(position.blockIndex) && Number.isInteger(position.sourceLineIndex)) {
+                    if (sameLocation && position.sourceLineIndex !== markerDrivenTextPosition.sourceLineIndex) {
+                        markerMovementDirection = Math.sign(position.sourceLineIndex - markerDrivenTextPosition.sourceLineIndex);
+                    } else if (
+                        lastRawTextPosition?.lineupKey === position.lineupKey &&
+                        lastRawTextPosition?.blockIndex === position.blockIndex &&
+                        Number.isInteger(lastRawTextPosition.sourceLineIndex) &&
+                        Number.isInteger(position.sourceLineIndex) &&
+                        lastRawTextPosition.sourceLineIndex !== position.sourceLineIndex
+                    ) {
+                        markerMovementDirection = Math.sign(position.sourceLineIndex - lastRawTextPosition.sourceLineIndex);
+                    } else if (!sameLocation) {
+                        markerMovementDirection = 0;
+                    }
+                    markerDrivenTextPosition = {
+                        lineupKey: position.lineupKey,
+                        blockIndex: position.blockIndex,
+                        sourceLineIndex: position.sourceLineIndex,
+                    };
+                    markerReleaseCatchup = null;
+                    model.updateTextPosition({ ...position, type: 'eclyrics-prompter-position' });
+                } else if (!position.active && (sameLocation || markerDrivenTextPosition)) {
+                    const releasedPosition = markerDrivenTextPosition;
+                    markerDrivenTextPosition = null;
+                    if (
+                        Number.isInteger(position.sourceLineIndex) && releasedPosition &&
+                        releasedPosition.lineupKey === position.lineupKey &&
+                        releasedPosition.blockIndex === position.blockIndex
+                    ) {
+                        const direction = markerMovementDirection || 1;
+                        const caughtUp = direction > 0
+                            ? position.sourceLineIndex >= releasedPosition.sourceLineIndex
+                            : position.sourceLineIndex <= releasedPosition.sourceLineIndex;
+                        markerReleaseCatchup = caughtUp ? null : { ...releasedPosition, direction };
+                        if (caughtUp) model.updateTextPosition({ ...position, type: 'eclyrics-prompter-position' });
+                    } else if (
+                        releasedPosition && releasedPosition.lineupKey === position.lineupKey &&
+                        releasedPosition.blockIndex === position.blockIndex
+                    ) {
+                        markerReleaseCatchup = { ...releasedPosition, direction: markerMovementDirection || 1 };
+                    }
+                    markerMovementDirection = 0;
+                }
+                return;
+            }
+
+            if (position.type === 'eclyrics-prompter-position') {
+                const previousRawTextPosition = lastRawTextPosition;
+                if (
+                    markerDrivenTextPosition && Number.isInteger(position.sourceLineIndex) &&
+                    previousRawTextPosition?.lineupKey === position.lineupKey &&
+                    previousRawTextPosition?.blockIndex === position.blockIndex &&
+                    Number.isInteger(previousRawTextPosition.sourceLineIndex) &&
+                    previousRawTextPosition.sourceLineIndex !== position.sourceLineIndex
+                ) {
+                    markerMovementDirection = Math.sign(position.sourceLineIndex - previousRawTextPosition.sourceLineIndex);
+                }
+                if (Number.isInteger(position.sourceLineIndex)) lastRawTextPosition = position;
+                if (markerDrivenTextPosition) {
+                    const sameLocation = markerDrivenTextPosition.lineupKey === position.lineupKey
+                        && markerDrivenTextPosition.blockIndex === position.blockIndex;
+                    if (sameLocation) return;
+                    markerDrivenTextPosition = null;
+                    markerReleaseCatchup = null;
+                    markerMovementDirection = 0;
+                }
+                if (markerReleaseCatchup) {
+                    const sameLocation = markerReleaseCatchup.lineupKey === position.lineupKey
+                        && markerReleaseCatchup.blockIndex === position.blockIndex;
+                    if (!sameLocation) markerReleaseCatchup = null;
+                    else if (!Number.isInteger(position.sourceLineIndex)) return;
+                    else {
+                        const caughtUp = markerReleaseCatchup.direction > 0
+                            ? position.sourceLineIndex >= markerReleaseCatchup.sourceLineIndex
+                            : position.sourceLineIndex <= markerReleaseCatchup.sourceLineIndex;
+                        if (!caughtUp) return;
+                        markerReleaseCatchup = null;
+                    }
+                }
+                model.updateTextPosition(position);
             }
         });
     } catch {

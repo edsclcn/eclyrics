@@ -7,7 +7,133 @@ function model() {
     vm.runInNewContext(fs.readFileSync('public/js/features/video-lyrics/model.js', 'utf8'), { window });
     return window.eclyricsVideoModel.create();
 }
+function extractPrompterPositionListener(source) {
+    const anchor = "prompterPositionChannel.addEventListener('message', event => {";
+    const anchorIndex = source.indexOf(anchor);
+    assert.ok(anchorIndex >= 0, 'Video Lyrics registers the prompter position listener');
+    const arrowStart = source.indexOf('event => {', anchorIndex);
+    const bodyStart = source.indexOf('{', arrowStart);
+    let depth = 0;
+    for (let index = bodyStart; index < source.length; index += 1) {
+        if (source[index] === '{') depth += 1;
+        if (source[index] === '}' && --depth === 0) return source.slice(arrowStart, index + 1);
+    }
+    assert.fail('the Video Lyrics position listener has a complete body');
+}
 const song = { id: 'same', title: 'Song', category: ['Original'], lyrics: 'First\r\n\r\nSecond\nThird' };
+
+test('marker-selected Video line ignores stale forward positions and catches up after release', () => {
+    const listenerSource = extractPrompterPositionListener(fs.readFileSync('public/js/features/video-lyrics/index.js', 'utf8'));
+    const accepted = [];
+    const model = { updateTextPosition: position => accepted.push(position.sourceLineIndex) };
+    const listener = new Function(
+        'model', 'getExpectedPrompterLineupKey',
+        `let markerDrivenTextPosition = null;\nlet markerReleaseCatchup = null;\nlet markerMovementDirection = 0;\nlet lastRawTextPosition = null;\nreturn (${listenerSource});`,
+    )(model, () => 'text-tab-a');
+    const send = (type, sourceLineIndex, active) => listener({ data: {
+        type,
+        active,
+        lineupKey: 'text-tab-a',
+        blockIndex: 2,
+        sourceLineIndex,
+        lineText: `Line ${sourceLineIndex}`,
+    } });
+
+    send('eclyrics-prompter-position', 4);
+    send('eclyrics-preview-marker-position', 5, true);
+    send('eclyrics-prompter-position', 4);
+    send('eclyrics-prompter-position', 5);
+    assert.deepEqual(accepted, [4, 5], 'raw updates cannot replace the marker-selected line while it is active');
+
+    send('eclyrics-preview-marker-position', 4, false);
+    send('eclyrics-prompter-position', 4);
+    assert.deepEqual(accepted, [4, 5], 'release waits while the raw position is still behind the marker during downward scrolling');
+    send('eclyrics-prompter-position', 5);
+    assert.deepEqual(accepted, [4, 5, 5], 'raw follow resumes when it catches up to the marker-selected line');
+});
+
+test('marker release preserves upward scrolling and backward navigation', () => {
+    const listenerSource = extractPrompterPositionListener(fs.readFileSync('public/js/features/video-lyrics/index.js', 'utf8'));
+    const accepted = [];
+    const model = { updateTextPosition: position => accepted.push(position.sourceLineIndex) };
+    const listener = new Function(
+        'model', 'getExpectedPrompterLineupKey',
+        `let markerDrivenTextPosition = null;\nlet markerReleaseCatchup = null;\nlet markerMovementDirection = 0;\nlet lastRawTextPosition = null;\nreturn (${listenerSource});`,
+    )(model, () => 'text-tab-a');
+    const send = (type, sourceLineIndex, active) => listener({ data: {
+        type,
+        active,
+        lineupKey: 'text-tab-a',
+        blockIndex: 2,
+        sourceLineIndex,
+        lineText: `Line ${sourceLineIndex}`,
+    } });
+
+    send('eclyrics-prompter-position', 6);
+    send('eclyrics-preview-marker-position', 6, true);
+    send('eclyrics-preview-marker-position', 5, true);
+    send('eclyrics-prompter-position', 6);
+    assert.deepEqual(accepted, [6, 6, 5], 'the marker can move backward while retaining the newer visual cue');
+
+    send('eclyrics-preview-marker-position', 6, false);
+    send('eclyrics-prompter-position', 6);
+    assert.deepEqual(accepted, [6, 6, 5], 'an old later raw position is ignored after upward marker movement');
+    send('eclyrics-prompter-position', 5);
+    assert.deepEqual(accepted, [6, 6, 5, 5], 'raw follow resumes at the backward-scrolled line');
+});
+
+test('marker release with a null raw index keeps stale lines suppressed until catch-up', () => {
+    const listenerSource = extractPrompterPositionListener(fs.readFileSync('public/js/features/video-lyrics/index.js', 'utf8'));
+    const accepted = [];
+    const model = { updateTextPosition: position => accepted.push(position.sourceLineIndex) };
+    const listener = new Function(
+        'model', 'getExpectedPrompterLineupKey',
+        `let markerDrivenTextPosition = null;\nlet markerReleaseCatchup = null;\nlet markerMovementDirection = 0;\nlet lastRawTextPosition = null;\nreturn (${listenerSource});`,
+    )(model, () => 'text-tab-a');
+    const send = (type, sourceLineIndex, active) => listener({ data: {
+        type,
+        active,
+        lineupKey: 'text-tab-a',
+        blockIndex: 2,
+        sourceLineIndex,
+        lineText: Number.isInteger(sourceLineIndex) ? `Line ${sourceLineIndex}` : '',
+    } });
+
+    send('eclyrics-prompter-position', 4);
+    send('eclyrics-preview-marker-position', 5, true);
+    send('eclyrics-preview-marker-position', null, false);
+    send('eclyrics-prompter-position', 4);
+    assert.deepEqual(accepted, [4, 5], 'a null release cannot let the stale previous line replace the marker cue');
+    send('eclyrics-prompter-position', 5);
+    assert.deepEqual(accepted, [4, 5, 5], 'the raw position resumes after catching up');
+});
+
+test('raw direction reversal updates catch-up direction while the marker cue stays active', () => {
+    const listenerSource = extractPrompterPositionListener(fs.readFileSync('public/js/features/video-lyrics/index.js', 'utf8'));
+    const accepted = [];
+    const model = { updateTextPosition: position => accepted.push(position.sourceLineIndex) };
+    const listener = new Function(
+        'model', 'getExpectedPrompterLineupKey',
+        `let markerDrivenTextPosition = null;\nlet markerReleaseCatchup = null;\nlet markerMovementDirection = 0;\nlet lastRawTextPosition = null;\nreturn (${listenerSource});`,
+    )(model, () => 'text-tab-a');
+    const send = (type, sourceLineIndex, active) => listener({ data: {
+        type,
+        active,
+        lineupKey: 'text-tab-a',
+        blockIndex: 2,
+        sourceLineIndex,
+        lineText: `Line ${sourceLineIndex}`,
+    } });
+
+    send('eclyrics-prompter-position', 4);
+    send('eclyrics-preview-marker-position', 5, true);
+    send('eclyrics-prompter-position', 6);
+    send('eclyrics-prompter-position', 4);
+    assert.deepEqual(accepted, [4, 5], 'raw direction changes cannot override the still-active marker cue');
+    send('eclyrics-preview-marker-position', 4, false);
+    assert.deepEqual(accepted, [4, 5, 4], 'release follows the latest upward direction instead of waiting for the stale forward path');
+});
+
 test('duplicate songs retain independent stable identities through reorder and removal', () => {
     const m = model(), a = m.add(song), b = m.add(song), c = m.add(song);
     assert.notEqual(a, b); m.move(c, -1);
